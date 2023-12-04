@@ -1,0 +1,10 @@
+requests
+playwright
+xhs
+psycopg2-binary
+eventlet
+slack_sdk
+biliup
+schedule
+cf_clearance
+qrcode
