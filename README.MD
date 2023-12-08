@@ -34,7 +34,7 @@ playwright install chromium
 
 # 核心模块解释
 
-## 1. 视频文件准备
+### 1. 视频文件准备
 filepath 本地视频目录，目录包含
 - 视频文件
 - 视频meta信息txt文件
@@ -49,6 +49,7 @@ meta_file 内容：
 这位勇敢的男子为了心爱之人每天坚守 🥺❤️‍🩹
 #坚持不懈 #爱情执着 #奋斗使者 #短视频
 ```
+---
 
 ### 2. 抖音
 <img src="media/show/pdf3.gif" alt="douyin show" width="500"/>
@@ -79,7 +80,7 @@ generate_schedule_time_next_day 默认从第二天开始（此举为避免选择
 - https://github.com/Superheroff/douyin_uplod
 - https://github.com/lishang520/DouYin-Auto-Upload.git
 
-
+---
 
 ### 3. 小红书
 该实现，借助ReaJason的[xhs](https://github.com/ReaJason/xhs)，再次感谢。
@@ -95,18 +96,19 @@ generate_schedule_time_next_day 默认从第二天开始（此举为避免选择
 
 #### 解释与注意事项：
 
-##### 上传方式
-- 本地签名
-- 自建签名服务
+```
+xhs签名方式分为两种：
+- 本地签名 sign_locl （默认）
+- 自建签名服务 sign
 
 测试下来发现本地签名，在实际多账号情况下会存在问题
 故如果你有多账号分发，建议采用自建签名服务（todo 上传docker配置）
-
+```
 ##### 疑难杂症
 遇到签名问题，可尝试更新cdn.jsdelivr.net_gh_requireCool_stealth.min.js_stealth.min.js文件
 https://github.com/requireCool/stealth.min.js
 
-参考： https://reajason.github.io/xhs/basic
+关于xhs部分可参考作者： https://reajason.github.io/xhs/basic
 
 ##### todo
 - 扫码登录方式（实验下来发现与浏览器获取的存在区别，会有问题，未来再研究）
@@ -115,10 +117,14 @@ https://github.com/requireCool/stealth.min.js
 参考项目：
 - https://github.com/ReaJason/xhs
 
+---
+
 ### 其余部分(todo)
 整理后上传
 
-# 联系我
+---
+
+## 🐾Communicate
 探讨自动化上传、自动制作视频
 
 <img src="media/group-qr.png" alt="group-qr" width="300"/>
