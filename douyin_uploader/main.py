@@ -162,10 +162,13 @@ class DouYinVideo(object):
         await asyncio.sleep(1)
         await page.locator('div[role="listbox"] [role="option"]').first.click()
 
-        # 頭條
-        if await page.locator('text="今日头条" >> xpath=../following-sibling::div/div[contains(@class, "semi-switch")]').count():
-            if 'semi-switch-checked' not in await page.eval_on_selector('text="今日头条" >> xpath=../following-sibling::div/div[contains(@class, "semi-switch")]', 'div => div.className'):
-                await page.locator('text="今日头条" >> xpath=../following-sibling::div//input[contains(@class, "semi-switch-native-control")]').click()
+        # 頭條/西瓜
+        third_part_element = '[class^="info"] > [class^="first-part"] div div.semi-switch'
+        # 定位是否有第三方平台
+        if await page.locator(third_part_element).count():
+            # 检测是否是已选中状态
+            if 'semi-switch-checked' not in await page.eval_on_selector(third_part_element, 'div => div.className'):
+                await page.locator(third_part_element).locator('input.semi-switch-native-control').click()
 
         if self.publish_date != 0:
             await self.set_schedule_time_douyin(page, self.publish_date)
