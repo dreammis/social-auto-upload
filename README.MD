@@ -5,19 +5,19 @@ social-auto-upload 该项目旨在自动化发布视频到各个社交媒体平�
 ## 💡Feature
 - 中国主流社交媒体平台：
   - 抖音
-  - 视频号
-  - bilibili
+  - 视频号（todo)
+  - bilibili（todo)
   - 小红书
 
 - 部分国外社交媒体：
-  - tiktok
-  - youtube
-- 自动化上传(schedule)
+  - tiktok（todo)
+  - youtube（todo)
+- 自动化上传(schedule)（todo)
 - 定时上传(cron)
-- cookie 管理
-- 国外平台proxy 设置
-- 多线程上传
-- slack 推送
+- cookie 管理（todo)
+- 国外平台proxy 设置（todo)
+- 多线程上传（todo)
+- slack 推送（todo)
 
 
 # 💾Installation
