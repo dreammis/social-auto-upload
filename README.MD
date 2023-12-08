@@ -22,7 +22,7 @@ social-auto-upload 该项目旨在自动化发布视频到各个社交媒体平�
 # 💾Installation
 ```
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-playwright install Chromium
+playwright install chromium
 ```
 
 # 核心模块解释
