@@ -58,7 +58,7 @@ meta_file 内容：
 > 抖音前端实现，诸多css class id 均为随机数，故项目中locator多采用相对定位，而非固定定位
 1. 准备视频目录结构
 2. cookie获取：get_douyin_cookie.py 扫码登录
-3. 上传视频：upload_video_to_douyin.py
+3. 上传视频：upload_video_to_douyin.py 
 
 
 
@@ -73,6 +73,12 @@ generate_schedule_time_next_day 默认从第二天开始（此举为避免选择
 - daily_times 视频发布时间 默认6、11、14、16、22点
 - start_days 从第N天开始
 ```
+
+> 2023年12月15日补充：使用chromium可能会出现无法识别视频封面图片的情况
+> 解决方案：
+> 1. 下载chrome
+> 2. 找到chrome的安装目录
+> 3. 将目录配置到DouYinVideo类中  self.local_executable_path = "xxx/xxx/chrome.exe"
 
 
 参考项目：
