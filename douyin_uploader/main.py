@@ -59,6 +59,7 @@ class DouYinVideo(object):
         self.publish_date = publish_date
         self.account_file = account_file
         self.date_format = '%Y年%m月%d日 %H:%M'
+        self.local_executable_path = ""  # change me
 
     async def set_schedule_time_douyin(self, page, publish_date):
         # 选择包含特定文本内容的 label 元素
@@ -82,7 +83,10 @@ class DouYinVideo(object):
 
     async def upload(self, playwright: Playwright) -> None:
         # 使用 Chromium 浏览器启动一个浏览器实例
-        browser = await playwright.chromium.launch(headless=False)
+        if self.local_executable_path:
+            browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
+        else:
+            browser = await playwright.chromium.launch(headless=False)
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(storage_state=f"{self.account_file}")
 
