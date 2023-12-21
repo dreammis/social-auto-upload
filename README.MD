@@ -8,7 +8,7 @@ social-auto-upload 该项目旨在自动化发布视频到各个社交媒体平�
   - 视频号
   - bilibili（todo)
   - 小红书
-  - 快手
+  - 快手(todo)
 
 - 部分国外社交媒体：
   - tiktok（todo)
