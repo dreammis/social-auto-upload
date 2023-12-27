@@ -155,5 +155,6 @@ https://github.com/requireCool/stealth.min.js
 
 ## 🐾Communicate
 探讨自动化上传、自动制作视频
-
-<img src="media/group-qr.png" alt="group-qr" width="300"/>
+|![Nas](media/mp.jpg)|![赞赏](media/QR.png)|
+|:-:|:-:|
+|后台回复 `上传` 加群交流|如果你觉得有用|
