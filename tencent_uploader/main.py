@@ -93,7 +93,8 @@ class TencentVideo(object):
 
         await page.click('input[placeholder="请选择发表时间"]')
 
-        current_month = str(publish_date.month) + "月"
+        str_month = str(publish_date.month) if publish_date.month > 9 else "0" + str(publish_date.month)
+        current_month = str_month + "月"
         # 获取当前的月份
         page_month = await page.inner_text('span.weui-desktop-picker__panel__label:has-text("月")')
 
