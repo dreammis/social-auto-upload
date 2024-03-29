@@ -158,9 +158,13 @@ https://github.com/requireCool/stealth.min.js
 #### 解释与注意事项：
 
 ```
+bilibili cookie 长期有效（至少我运行2年以来是这样的）
 其他平台 诸如linux mac 服务器运行 请自行研究
 ```
+参考项目：
+- https://github.com/biliup/biliup-rs
 
+---
 
 ### 其余部分(todo)
 整理后上传
