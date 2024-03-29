@@ -149,14 +149,17 @@ https://github.com/requireCool/stealth.min.js
 ---
 
 ### 5. bilibili
-该实现，借助biliup的[biliup](https://github.com/biliup/biliup)，再次感谢。
+该实现，借助biliup的[biliup-rs](https://github.com/biliup/biliup-rs)，再次感谢。
 1. 准备视频目录结构
 2. cookie获取：`biliup.exe -u account.json login` 选项你喜欢的登录方式
 ![登录方式](media/get_bili_cookie.png) 
 3. 上传视频：upload_video_to_bilibili.py
 
+#### 解释与注意事项：
 
-
+```
+其他平台 诸如linux mac 服务器运行 请自行研究
+```
 
 
 ### 其余部分(todo)
