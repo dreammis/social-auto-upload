@@ -6,7 +6,7 @@ social-auto-upload 该项目旨在自动化发布视频到各个社交媒体平�
 - 中国主流社交媒体平台：
   - 抖音
   - 视频号
-  - bilibili（todo)
+  - bilibili
   - 小红书
   - 快手(todo)
 
@@ -147,6 +147,17 @@ https://github.com/requireCool/stealth.min.js
 - https://github.com/ReaJason/xhs
 
 ---
+
+### 5. bilibili
+该实现，借助biliup的[biliup](https://github.com/biliup/biliup)，再次感谢。
+1. 准备视频目录结构
+2. cookie获取：`biliup.exe -u account.json login` 选项你喜欢的登录方式
+![登录方式](media/get_bili_cookie.png) 
+3. 上传视频：upload_video_to_bilibili.py
+
+
+
+
 
 ### 其余部分(todo)
 整理后上传

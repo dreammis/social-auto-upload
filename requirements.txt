@@ -3,3 +3,4 @@ playwright
 eventlet
 schedule
 cf_clearance
+biliup
