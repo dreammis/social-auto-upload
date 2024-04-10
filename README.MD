@@ -1,33 +1,40 @@
 # social-auto-upload
 social-auto-upload 该项目旨在自动化发布视频到各个社交媒体平台
 
+social-auto-upload This project aims to automate the posting of videos to various social media platforms.
+
+<img src="media/show/tkupload.gif" alt="tiktok show" width="800"/>
 
 ## 💡Feature
 - 中国主流社交媒体平台：
-  - 抖音
-  - 视频号
-  - bilibili
-  - 小红书
-  - 快手(todo)
+  - [x] 抖音
+  - [x] 视频号
+  - [x] bilibili
+  - [x] 小红书
+  - [ ] 快手
 
 - 部分国外社交媒体：
-  - tiktok（todo)
-  - youtube（todo)
-- 自动化上传(schedule)（todo)
-- 定时上传(cron)
-- cookie 管理（todo)
-- 国外平台proxy 设置（todo)
-- 多线程上传（todo)
-- slack 推送（todo)
+  - [x] tiktok
+  - [ ] youtube
+- [ ] 自动化上传(schedule)
+- [x] 定时上传(cron)
+- [ ] cookie 管理
+- [ ] 国外平台proxy 设置
+- [ ] 多线程上传
+- [ ] slack 推送
 
 
 # 💾Installation
 ```
-pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-playwright install chromium
+pip install -r requirements.txt
+playwright install chromium firefox
 ```
 
 # 🐇 About
+The project for my own project extracted, my release strategy is timed release (released a day in advance), so the release part of the event are used for the next day time!
+
+If you need to release it immediately, you can study the source code or ask me questions.
+
 该项目为我自用项目抽离出来，我的发布策略是定时发布（提前一天发布），故发布部分采用的事件均为第二天的时间
 
 如果你有需求立即发布，可自行研究源码或者向我提问
@@ -35,17 +42,19 @@ playwright install chromium
 
 # 核心模块解释
 
-### 1. 视频文件准备
-filepath 本地视频目录，目录包含
-- 视频文件
-- 视频meta信息txt文件
+### 1. 视频文件准备(video prepare)
+filepath 本地视频目录，目录包含(filepath Local video directory containing)
 
-举例：
+- 视频文件(video files)
+- 视频meta信息txt文件(video meta information txt file)
+
+举例(for example)：
+
 file：2023-08-24_16-29-52 - 这位勇敢的男子为了心爱之人每天坚守 .mp4
 
 meta_file:2023-08-24_16-29-52 - 这位勇敢的男子为了心爱之人每天坚守 .txt
 
-meta_file 内容：
+meta_file 内容(content)：
 ```angular2html
 这位勇敢的男子为了心爱之人每天坚守 🥺❤️‍🩹
 #坚持不懈 #爱情执着 #奋斗使者 #短视频
@@ -166,12 +175,42 @@ bilibili cookie 长期有效（至少我运行2年以来是这样的）
 
 ---
 
+### 6. tiktok 
+使用playwright模拟浏览器行为(Simulating Browser Behavior with playwright)
+1. 准备视频目录结构(Prepare the video directory structure)
+2. cookie获取(generate your cookie)：get_tk_cookie.py 
+![get tiktok cookie](media/tk_login.png) 
+3. 上传视频(upload video)：upload_video_to_tiktok.py
+
+
+
+其他部分解释：
+```
+参考上面douyin_setup 配置
+```
+
+other part explain(for eng friends)：
+```
+tiktok_setup handle parameter is True to get cookie manually False to check cookie validity
+
+generate_schedule_time_next_day defaults to start on the next day (this is to avoid accidental time selection errors)
+Parameter explanation:
+- total_videos Number of videos uploaded this time
+- videos_per_day Number of videos uploaded per day
+- daily_times The video posting times are 6, 11, 14, 16, 22 by default.
+- start_days Starts on the nth day.
+```
+
+---
+
 ### 其余部分(todo)
 整理后上传
 
 ---
 
 ## 🐾Communicate
+[donate as u like](https://www.buymeacoffee.com/hysn2001m)
+
 探讨自动化上传、自动制作视频
 |![Nas](media/mp.jpg)|![赞赏](media/QR.png)|
 |:-:|:-:|
