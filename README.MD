@@ -146,6 +146,9 @@ xhs签名方式分为两种：
 遇到签名问题，可尝试更新cdn.jsdelivr.net_gh_requireCool_stealth.min.js_stealth.min.js文件
 https://github.com/requireCool/stealth.min.js
 
+24.4.10 大多数人小红书失败的原因在于你的cookie有问题，请参照你cookie是不是如我这样
+![正确的cookie](media/xhs_error_cookie.png)
+
 关于xhs部分可参考作者： https://reajason.github.io/xhs/basic
 
 ##### todo
@@ -200,6 +203,8 @@ Parameter explanation:
 - daily_times The video posting times are 6, 11, 14, 16, 22 by default.
 - start_days Starts on the nth day.
 ```
+参考项目：
+- https://github.com/wkaisertexas/tiktok-uploader
 
 ---
 
@@ -209,7 +214,7 @@ Parameter explanation:
 ---
 
 ## 🐾Communicate
-[donate as u like](https://www.buymeacoffee.com/hysn2001m)
+[Donate as u like](https://www.buymeacoffee.com/hysn2001m)
 
 探讨自动化上传、自动制作视频
 |![Nas](media/mp.jpg)|![赞赏](media/QR.png)|

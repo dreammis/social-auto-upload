@@ -161,8 +161,9 @@ cython_debug/
 
 
 
-# RVM
-#tencent_uploader/*.json
-#youtube_uploader/*.json
-#douyin_uploader/*.json
-#bilibili_uploader/*.json
+# ignore cookie file
+tencent_uploader/*.json
+youtube_uploader/*.json
+douyin_uploader/*.json
+bilibili_uploader/*.json
+tk_uploader/*.json
