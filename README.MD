@@ -115,7 +115,7 @@ generate_schedule_time_next_day 默认从第二天开始（此举为避免选择
 > 解决方案：
 > 1. 下载chrome
 > 2. 找到chrome的安装目录
-> 3. 将目录配置到DouYinVideo类中  self.local_executable_path = "xxx/xxx/chrome.exe"
+> 3. 将目录配置到TencentVideo类中  self.local_executable_path = "xxx/xxx/chrome.exe"
 
 ---
 
