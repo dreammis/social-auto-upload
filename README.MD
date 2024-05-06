@@ -213,6 +213,15 @@ Parameter explanation:
 
 ---
 
+## 其他优秀项目
+- https://github.com/KLordy/auto_publish_videos
+  - db支持
+  - 定期自动发布
+  - cookie db管理
+  - 视频去重
+  - 消息推送
+
+
 ## 🐾Communicate
 [Donate as u like](https://www.buymeacoffee.com/hysn2001m)
 
