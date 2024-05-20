@@ -78,7 +78,7 @@ class TiktokVideo(object):
 
         await page.frame_locator(Tk_Locator.tk_iframe).locator('div.scheduled-container input').click()
         scheduled_picker = page.frame_locator(Tk_Locator.tk_iframe).locator('div.scheduled-picker')
-        await scheduled_picker.locator('div.date-picker-input').click()
+        await scheduled_picker.locator('div.TUXInputBox').nth(0).click()
 
         calendar_month = await page.frame_locator(Tk_Locator.tk_iframe).locator('div.calendar-wrapper span.month-title').inner_text()
 
@@ -104,7 +104,7 @@ class TiktokVideo(object):
                 await day_element.click()
                 break
         # time set
-        await page.frame_locator(Tk_Locator.tk_iframe).locator("div.time-picker-input").click()
+        await page.frame_locator(Tk_Locator.tk_iframe).locator("div.time-picker-container").click()
 
         hour_str = publish_date.strftime("%H")
         correct_minute = int(publish_date.minute / 5)
@@ -141,7 +141,7 @@ class TiktokVideo(object):
         await page.wait_for_url("https://www.tiktok.com/creator-center/upload")
         await page.wait_for_selector('iframe[data-tt="Upload_index_iframe"]')
         upload_button = page.frame_locator(Tk_Locator.tk_iframe).locator(
-            'button:has-text("Select file"):visible')
+            'button:has-text("Select video"):visible')
 
         async with page.expect_file_chooser() as fc_info:
             await upload_button.click()
@@ -188,17 +188,18 @@ class TiktokVideo(object):
         print(f"success add hashtag: {len(self.tags)}")
 
     async def click_publish(self, page):
+        success_flag_div = '#\\:r9\\:'
         while True:
             try:
                 publish_button = page.frame_locator(Tk_Locator.tk_iframe).locator('div.btn-post')
                 if await publish_button.count():
                     await publish_button.click()
 
-                await page.frame_locator(Tk_Locator.tk_iframe).locator("div.uploaded-modal:visible").wait_for(state="visible", timeout=1500)
+                await page.frame_locator(Tk_Locator.tk_iframe).locator(success_flag_div).wait_for(state="visible", timeout=1500)
                 print("  [-] video published success")
                 break
             except Exception as e:
-                if await page.frame_locator(Tk_Locator.tk_iframe).locator("div.uploaded-modal:visible").count():
+                if await page.frame_locator(Tk_Locator.tk_iframe).locator(success_flag_div).count():
                     print("  [-]video published success")
                     break
                 else:
