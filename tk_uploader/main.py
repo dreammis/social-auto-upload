@@ -75,6 +75,7 @@ class TiktokVideo(object):
 
     async def set_schedule_time(self, page, publish_date):
         print("click schedule")
+        await page.frame_locator(Tk_Locator.tk_iframe).wait_for_selector('div.scheduled-container input')
 
         await page.frame_locator(Tk_Locator.tk_iframe).locator('div.scheduled-container input').click()
         scheduled_picker = page.frame_locator(Tk_Locator.tk_iframe).locator('div.scheduled-picker')
