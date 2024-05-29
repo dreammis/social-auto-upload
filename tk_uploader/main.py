@@ -75,7 +75,8 @@ class TiktokVideo(object):
 
     async def set_schedule_time(self, page, publish_date):
         print("click schedule")
-        await page.frame_locator(Tk_Locator.tk_iframe).wait_for_selector('div.scheduled-container input')
+        schedule_input_element = page.frame_locator(Tk_Locator.tk_iframe).locator('div.scheduled-container input')
+        await schedule_input_element.wait_for(state='visible')  # 确保按钮可见
 
         await page.frame_locator(Tk_Locator.tk_iframe).locator('div.scheduled-container input').click()
         scheduled_picker = page.frame_locator(Tk_Locator.tk_iframe).locator('div.scheduled-picker')
@@ -116,6 +117,10 @@ class TiktokVideo(object):
 
         # pick hour first
         await page.frame_locator(Tk_Locator.tk_iframe).locator(hour_selector).click()
+        # click time button again
+        # 等待某个特定的元素出现或状态变化，表明UI已更新
+        await page.wait_for_timeout(1000)  # 等待500毫秒
+        await page.frame_locator(Tk_Locator.tk_iframe).locator("div.time-picker-container").click()
         # pick minutes after
         await page.frame_locator(Tk_Locator.tk_iframe).locator(minute_selector).click()
 
@@ -139,10 +144,11 @@ class TiktokVideo(object):
         await page.goto("https://www.tiktok.com/creator-center/upload")
         print('[+]Uploading-------{}.mp4'.format(self.title))
 
-        await page.wait_for_url("https://www.tiktok.com/creator-center/upload")
+        await page.wait_for_url("https://www.tiktok.com/creator-center/upload", timeout=1500)
         await page.wait_for_selector('iframe[data-tt="Upload_index_iframe"]')
         upload_button = page.frame_locator(Tk_Locator.tk_iframe).locator(
             'button:has-text("Select video"):visible')
+        await upload_button.wait_for(state='visible')  # 确保按钮可见
 
         async with page.expect_file_chooser() as fc_info:
             await upload_button.click()
@@ -180,7 +186,7 @@ class TiktokVideo(object):
         # tag part
         for index, tag in enumerate(self.tags, start=1):
             print("Setting the %s tag" % index)
-            await page.keyboard.type("#" + tag, delay=20)
+            await page.keyboard.type("#" + tag)
             await asyncio.sleep(1)
             await page.keyboard.press("Space")
             # if await page.frame_locator(Tk_Locator.tk_iframe).locator('div.mentionSuggestions').count():
