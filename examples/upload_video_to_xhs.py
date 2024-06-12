@@ -34,7 +34,11 @@ if __name__ == '__main__':
 
     for index, file in enumerate(files):
         title, tags = get_title_and_hashtags(str(file))
+        # 加入到标题 补充标题（xhs 可以填1000字不写白不写）
         tags_str = ' '.join(['#' + tag for tag in tags])
+        hash_tags_str = ''
+        hash_tags = []
+
         # 打印视频文件名、标题和 hashtag
         print(f"视频文件名：{file}")
         print(f"标题：{title}")
@@ -45,9 +49,16 @@ if __name__ == '__main__':
         for i in tags[:3]:
             topic_official = xhs_client.get_suggest_topic(i)
             if topic_official:
-                topics.append(topic_official[0])
+                topic_official[0]['type'] = 'topic'
+                topic_one = topic_official[0]
+                hash_tag_name = topic_one['name']
+                hash_tags.append(hash_tag_name)
+                topics.append(topic_one)
 
-        note = xhs_client.create_video_note(title=title[:20], video_path=str(file), desc=title + tags_str,
+        hash_tags_str = ' ' + ' '.join(['#' + tag + '[话题]#' for tag in hash_tags])
+
+        note = xhs_client.create_video_note(title=title[:20], video_path=str(file),
+                                            desc=title + tags_str + hash_tags_str,
                                             topics=topics,
                                             is_private=False,
                                             post_time=publish_datetimes[index].strftime("%Y-%m-%d %H:%M:%S"))
