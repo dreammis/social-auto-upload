@@ -4,3 +4,5 @@ eventlet
 schedule
 cf_clearance
 biliup
+xhs
+qrcode

@@ -5,11 +5,11 @@ from time import sleep
 
 from xhs import XhsClient
 
-from xhs_uploader.main import sign
+from xhs_uploader.main import sign_local, sign
 
 # pip install qrcode
 if __name__ == '__main__':
-    xhs_client = XhsClient(sign=sign)
+    xhs_client = XhsClient(sign=sign, timeout=60)
     print(datetime.datetime.now())
     qr_res = xhs_client.get_qrcode()
     qr_id = qr_res["qr_id"]
@@ -20,8 +20,7 @@ if __name__ == '__main__':
                        border=1)
     qr.add_data(qr_res["url"])
     qr.make()
-    img = qr.make_image(fill_color="black", back_color="white")
-    img.save('qrcode.png')
+    qr.print_ascii()
 
     while True:
         check_qrcode = xhs_client.check_qrcode(qr_id, qr_code)
