@@ -230,3 +230,9 @@ Parameter explanation:
 |![Nas](media/mp.jpg)|![赞赏](media/QR.png)|
 |:-:|:-:|
 |后台回复 `上传` 加群交流|如果你觉得有用|
+
+
+## Star History
+> 如果这个项目对你有帮助，⭐以表示支持 
+
+[![Star History Chart](https://api.star-history.com/svg?repos=dreammis/social-auto-upload&type=Date)](https://star-history.com/#dreammis/social-auto-upload&Date)
