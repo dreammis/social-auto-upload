@@ -29,6 +29,7 @@ social-auto-upload This project aims to automate the posting of videos to variou
 pip install -r requirements.txt
 playwright install chromium firefox
 ```
+非程序员，[新手级教程](https://juejin.cn/post/7372114027840208911)
 
 # 🐇 About
 The project for my own project extracted, my release strategy is timed release (released a day in advance), so the release part of the event are used for the next day time!
