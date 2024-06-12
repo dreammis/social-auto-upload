@@ -144,7 +144,7 @@ class TiktokVideo(object):
         await page.goto("https://www.tiktok.com/creator-center/upload")
         print('[+]Uploading-------{}.mp4'.format(self.title))
 
-        await page.wait_for_url("https://www.tiktok.com/creator-center/upload", timeout=1500)
+        await page.wait_for_url("https://www.tiktok.com/tiktokstudio/upload", timeout=10000)
         await page.wait_for_selector('iframe[data-tt="Upload_index_iframe"]')
         upload_button = page.frame_locator(Tk_Locator.tk_iframe).locator(
             'button:has-text("Select video"):visible')
@@ -172,27 +172,36 @@ class TiktokVideo(object):
 
     async def add_title_tags(self, page):
 
-        await page.frame_locator(Tk_Locator.tk_iframe).locator(
-            'div.public-DraftEditor-content').click()
-        time.sleep(2)
-        await page.keyboard.press("Control+KeyA")
-        time.sleep(2)
+        editor_locator = page.frame_locator(Tk_Locator.tk_iframe).locator('div.public-DraftEditor-content')
+        await editor_locator.click()
+
+        await page.keyboard.press("End")
+
+        await page.keyboard.press("Control+A")
+
         await page.keyboard.press("Delete")
 
-        # title part
-        await page.keyboard.type(self.title)
+        await page.keyboard.press("End")
+
+        await page.wait_for_timeout(1000)  # 等待1秒
+
+        await page.keyboard.insert_text(self.title)
+        await page.wait_for_timeout(1000)  # 等待1秒
+        await page.keyboard.press("End")
+
         await page.keyboard.press("Enter")
 
         # tag part
         for index, tag in enumerate(self.tags, start=1):
             print("Setting the %s tag" % index)
-            await page.keyboard.type("#" + tag)
-            await asyncio.sleep(1)
+            await page.keyboard.press("End")
+            await page.wait_for_timeout(1000)  # 等待1秒
+            await page.keyboard.insert_text("#" + tag + " ")
             await page.keyboard.press("Space")
-            # if await page.frame_locator(Tk_Locator.tk_iframe).locator('div.mentionSuggestions').count():
-            #     await page.frame_locator(Tk_Locator.tk_iframe).locator('div.mentionSuggestions- > div').nth(0).click()
+            await page.wait_for_timeout(1000)  # 等待1秒
 
-        print(f"success add hashtag: {len(self.tags)}")
+            await page.keyboard.press("Backspace")
+            await page.keyboard.press("End")
 
     async def click_publish(self, page):
         success_flag_div = '#\\:r9\\:'
