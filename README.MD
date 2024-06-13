@@ -226,7 +226,12 @@ Parameter explanation:
 ## 🐾Communicate
 [Donate as u like](https://www.buymeacoffee.com/hysn2001m)
 
-探讨自动化上传、自动制作视频
+如果你也是`一个人`，喜欢`折腾`， 想要在如此恶劣的大环境寻找突破
+
+希望探索 #技术变现 #AI创业 #跨境航海 #自动化上传 #自动化视频 #技术探讨 
+
+可以来群里和大家交流
+
 |![Nas](media/mp.jpg)|![赞赏](media/QR.png)|
 |:-:|:-:|
 |后台回复 `上传` 加群交流|如果你觉得有用|
