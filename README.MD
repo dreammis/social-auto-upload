@@ -16,6 +16,11 @@ social-auto-upload This project aims to automate the posting of videos to variou
 - 部分国外社交媒体：
   - [x] tiktok
   - [ ] youtube
+
+---
+- [ ] 易用版本(支持非开发人员使用)：Gui or Cli
+- [ ] API 封装
+  - [ ] Docker 部署
 - [ ] 自动化上传(schedule)
 - [x] 定时上传(cron)
 - [ ] cookie 管理
