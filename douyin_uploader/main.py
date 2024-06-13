@@ -6,6 +6,8 @@ from playwright.async_api import Playwright, async_playwright
 import os
 import asyncio
 
+from conf import LOCAL_CHROME_PATH
+
 
 async def cookie_auth(account_file):
     async with async_playwright() as playwright:
@@ -45,7 +47,7 @@ async def douyin_cookie_gen(account_file):
         context = await browser.new_context()  # Pass any options
         # Pause the page, and start recording manually.
         page = await context.new_page()
-        await page.goto("https://www.douyin.com/")
+        await page.goto("https://creator.douyin.com/")
         await page.pause()
         # 点击调试器的继续，保存cookie
         await context.storage_state(path=account_file)
@@ -59,7 +61,7 @@ class DouYinVideo(object):
         self.publish_date = publish_date
         self.account_file = account_file
         self.date_format = '%Y年%m月%d日 %H:%M'
-        self.local_executable_path = ""  # change me
+        self.local_executable_path = LOCAL_CHROME_PATH
 
     async def set_schedule_time_douyin(self, page, publish_date):
         # 选择包含特定文本内容的 label 元素
@@ -163,7 +165,8 @@ class DouYinVideo(object):
         await page.keyboard.press("Control+KeyA")
         await page.keyboard.press("Delete")
         await page.keyboard.type("杭州市")
-        await asyncio.sleep(1)
+        # await asyncio.sleep(1)
+        await page.wait_for_timeout(1000)
         await page.locator('div[role="listbox"] [role="option"]').first.click()
 
         # 頭條/西瓜

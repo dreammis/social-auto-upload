@@ -6,6 +6,7 @@ from playwright.async_api import Playwright, async_playwright
 import os
 import asyncio
 
+from conf import LOCAL_CHROME_PATH
 from utils.files_times import get_absolute_path
 
 
@@ -83,7 +84,7 @@ class TencentVideo(object):
         self.publish_date = publish_date
         self.account_file = account_file
         self.category = category
-        self.local_executable_path = ""  # change me necessary！
+        self.local_executable_path = LOCAL_CHROME_PATH
 
     async def set_schedule_time_tencent(self, page, publish_date):
         print("click schedule")
