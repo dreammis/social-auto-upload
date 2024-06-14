@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import pathlib
 from datetime import datetime
 
 from playwright.async_api import Playwright, async_playwright
@@ -7,12 +6,14 @@ import os
 import asyncio
 
 from conf import LOCAL_CHROME_PATH
+from utils.base_social_media import set_init_script
 
 
 async def cookie_auth(account_file):
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True)
         context = await browser.new_context(storage_state=account_file)
+        context = await set_init_script(context)
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
@@ -45,6 +46,7 @@ async def douyin_cookie_gen(account_file):
         browser = await playwright.chromium.launch(**options)
         # Setup context however you like.
         context = await browser.new_context()  # Pass any options
+        context = await set_init_script(context)
         # Pause the page, and start recording manually.
         page = await context.new_page()
         await page.goto("https://creator.douyin.com/")
@@ -91,6 +93,7 @@ class DouYinVideo(object):
             browser = await playwright.chromium.launch(headless=False)
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(storage_state=f"{self.account_file}")
+        context = await set_init_script(context)
 
         # 创建一个新的页面
         page = await context.new_page()

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import json
 from datetime import datetime
 
 from playwright.async_api import Playwright, async_playwright
@@ -7,6 +6,7 @@ import os
 import asyncio
 
 from conf import LOCAL_CHROME_PATH
+from utils.base_social_media import set_init_script
 from utils.files_times import get_absolute_path
 
 
@@ -34,6 +34,7 @@ async def cookie_auth(account_file):
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True)
         context = await browser.new_context(storage_state=account_file)
+        context = await set_init_script(context)
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
@@ -47,20 +48,25 @@ async def cookie_auth(account_file):
             return True
 
 
-async def save_storage_state(account_file: str):
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
-        context = await browser.new_context()
+async def get_tencent_cookie(account_file):
+    async with async_playwright() as playwright:
+        options = {
+            'args': [
+                '--lang en-GB'
+            ],
+            'headless': False,  # Set headless option here
+        }
+        # Make sure to run headed.
+        browser = await playwright.chromium.launch(**options)
+        # Setup context however you like.
+        context = await browser.new_context()  # Pass any options
+        # Pause the page, and start recording manually.
+        context = await set_init_script(context)
         page = await context.new_page()
         await page.goto("https://channels.weixin.qq.com")
-        print("请在浏览器中扫码登录...")
-        await asyncio.sleep(20)  # 给用户60秒时间进行扫码登录
-
-        # 保存存储状态到文件
-        storage_state = await context.storage_state()
-        with open(account_file, 'w') as f:
-            f.write(json.dumps(storage_state))
-        await browser.close()
+        await page.pause()
+        # 点击调试器的继续，保存cookie
+        await context.storage_state(path=account_file)
 
 
 async def weixin_setup(account_file, handle=False):
@@ -70,9 +76,7 @@ async def weixin_setup(account_file, handle=False):
             # Todo alert message
             return False
         print('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        # await save_storage_state(account_file)
-        os.system('python3 -m playwright install')
-        os.system(f'playwright codegen channels.weixin.qq.com --save-storage={account_file}')  # 生成cookie文件
+        await get_tencent_cookie(account_file)
     return True
 
 
@@ -135,6 +139,7 @@ class TencentVideo(object):
         browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(storage_state=f"{self.account_file}")
+        context = await set_init_script(context)
 
         # 创建一个新的页面
         page = await context.new_page()

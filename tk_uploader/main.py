@@ -3,10 +3,10 @@ import re
 from datetime import datetime
 
 from playwright.async_api import Playwright, async_playwright
-import time
 import os
 import asyncio
 from tk_uploader.tk_config import Tk_Locator
+from utils.base_social_media import set_init_script
 from utils.files_times import get_absolute_path
 
 
@@ -14,6 +14,7 @@ async def cookie_auth(account_file):
     async with async_playwright() as playwright:
         browser = await playwright.firefox.launch(headless=True)
         context = await browser.new_context(storage_state=account_file)
+        context = await set_init_script(context)
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
@@ -57,6 +58,7 @@ async def get_tiktok_cookie(account_file):
         browser = await playwright.firefox.launch(**options)
         # Setup context however you like.
         context = await browser.new_context()  # Pass any options
+        context = await set_init_script(context)
         # Pause the page, and start recording manually.
         page = await context.new_page()
         await page.goto("https://www.tiktok.com/creator-center/content")
@@ -138,7 +140,7 @@ class TiktokVideo(object):
     async def upload(self, playwright: Playwright) -> None:
         browser = await playwright.firefox.launch(headless=False)
         context = await browser.new_context(storage_state=f"{self.account_file}")
-
+        context = await set_init_script(context)
         page = await context.new_page()
 
         await page.goto("https://www.tiktok.com/creator-center/upload")

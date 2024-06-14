@@ -196,7 +196,7 @@ xhs签名方式分为两种：
 故如果你有多账号分发，建议采用自建签名服务（todo 上传docker配置）
 ```
 ##### 疑难杂症
-遇到签名问题，可尝试更新cdn.jsdelivr.net_gh_requireCool_stealth.min.js_stealth.min.js文件
+遇到签名问题，可尝试更新 "utils/stealth.min.js"文件
 https://github.com/requireCool/stealth.min.js
 
 24.4.10 大多数人小红书失败的原因在于你的cookie有问题，请参照你cookie是不是如我这样
