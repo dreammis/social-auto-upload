@@ -3,6 +3,8 @@ import pathlib
 import random
 from biliup.plugins.bili_webup import BiliBili, Data
 
+from utils.log import bilibili_logger
+
 
 def extract_keys_from_json(data):
     """Extract specified keys from the provided JSON data."""
@@ -70,8 +72,8 @@ class BilibiliUploader(object):
             self.data.append(video_part)
             ret = bili.submit()  # 提交视频
             if ret.get('code') == 0:
-                print(f'[+] {self.file.name}上传 成功')
+                bilibili_logger.success(f'[+] {self.file.name}上传 成功')
                 return True
             else:
-                print(f'[-] {self.file.name}上传 失败, error messge: {ret.get("message")}')
+                bilibili_logger.error(f'[-] {self.file.name}上传 失败, error messge: {ret.get("message")}')
                 return False

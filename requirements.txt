@@ -6,3 +6,4 @@ cf_clearance
 biliup
 xhs
 qrcode
+loguru
