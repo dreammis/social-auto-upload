@@ -8,6 +8,7 @@ import asyncio
 from conf import LOCAL_CHROME_PATH
 from utils.base_social_media import set_init_script
 from utils.files_times import get_absolute_path
+from utils.log import tencent_logger
 
 
 def format_str_for_short_title(origin_title: str) -> str:
@@ -41,10 +42,10 @@ async def cookie_auth(account_file):
         await page.goto("https://channels.weixin.qq.com/platform/post/create")
         try:
             await page.wait_for_selector('div.title-name:has-text("视频号小店")', timeout=5000)  # 等待5秒
-            print("[+] 等待5秒 cookie 失效")
+            tencent_logger.error("[+] 等待5秒 cookie 失效")
             return False
         except:
-            print("[+] cookie 有效")
+            tencent_logger.success("[+] cookie 有效")
             return True
 
 
@@ -75,7 +76,7 @@ async def weixin_setup(account_file, handle=False):
         if not handle:
             # Todo alert message
             return False
-        print('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
+        tencent_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
         await get_tencent_cookie(account_file)
     return True
 
@@ -91,8 +92,6 @@ class TencentVideo(object):
         self.local_executable_path = LOCAL_CHROME_PATH
 
     async def set_schedule_time_tencent(self, page, publish_date):
-        print("click schedule")
-
         label_element = page.locator("label").filter(has_text="定时").nth(1)
         await label_element.click()
 
@@ -128,7 +127,7 @@ class TencentVideo(object):
         await page.locator("div.input-editor").click()
 
     async def handle_upload_error(self, page):
-        print("视频出错了，重新上传中")
+        tencent_logger.info("视频出错了，重新上传中")
         await page.locator('div.media-status-content div.tag-inner:has-text("删除")').click()
         await page.get_by_role('button', name="删除", exact=True).click()
         file_input = page.locator('input[type="file"]')
@@ -145,7 +144,7 @@ class TencentVideo(object):
         page = await context.new_page()
         # 访问指定的 URL
         await page.goto("https://channels.weixin.qq.com/platform/post/create")
-        print('[+]正在上传-------{}.mp4'.format(self.title))
+        tencent_logger.info(f'[+]正在上传-------{self.title}.mp4')
         # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
         await page.wait_for_url("https://channels.weixin.qq.com/platform/post/create")
         # await page.wait_for_selector('input[type="file"]', timeout=10000)
@@ -160,7 +159,7 @@ class TencentVideo(object):
         # 原创选择
         await self.add_original(page)
         # 检测上传状态
-        await self.detact_upload_status(page)
+        await self.detect_upload_status(page)
         if self.publish_date != 0:
             await self.set_schedule_time_tencent(page, self.publish_date)
         # 添加短标题
@@ -169,12 +168,11 @@ class TencentVideo(object):
         await self.click_publish(page)
 
         await context.storage_state(path=f"{self.account_file}")  # 保存cookie
-        print('  [-]cookie更新完毕！')
+        tencent_logger.success('  [-]cookie更新完毕！')
         await asyncio.sleep(2)  # 这里延迟是为了方便眼睛直观的观看
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
-        print('[+]正在监控执行计划中.......')
 
     async def add_short_title(self, page):
         short_title_element = page.get_by_text("短标题", exact=True).locator("..").locator(
@@ -191,38 +189,37 @@ class TencentVideo(object):
                 if await publish_buttion.count():
                     await publish_buttion.click()
                 await page.wait_for_url("https://channels.weixin.qq.com/platform/post/list", timeout=1500)
-                print("  [-]视频发布成功")
+                tencent_logger.success("  [-]视频发布成功")
                 break
             except Exception as e:
                 current_url = page.url
                 if "https://channels.weixin.qq.com/platform/post/list" in current_url:
-                    print("  [-]视频发布成功")
+                    tencent_logger.success("  [-]视频发布成功")
                     break
                 else:
-                    print(f"  [-] Exception: {e}")
-                    print("  [-] 视频正在发布中...")
-                    await page.screenshot(full_page=True)
+                    tencent_logger.exception(f"  [-] Exception: {e}")
+                    tencent_logger.info("  [-] 视频正在发布中...")
                     await asyncio.sleep(0.5)
 
-    async def detact_upload_status(self, page):
+    async def detect_upload_status(self, page):
         while True:
             # 匹配删除按钮，代表视频上传完毕，如果不存在，代表视频正在上传，则等待
             try:
                 # 匹配删除按钮，代表视频上传完毕
                 if "weui-desktop-btn_disabled" not in await page.get_by_role("button", name="发表").get_attribute(
                         'class'):
-                    print("  [-]视频上传完毕")
+                    tencent_logger.info("  [-]视频上传完毕")
                     break
                 else:
-                    print("  [-] 正在上传视频中...")
+                    tencent_logger.info("  [-] 正在上传视频中...")
                     await asyncio.sleep(2)
                     # 出错了视频出错
                     if await page.locator('div.status-msg.error').count() and await page.locator(
                             'div.media-status-content div.tag-inner:has-text("删除")').count():
-                        print("  [-] 发现上传出错了...")
+                        tencent_logger.error("  [-] 发现上传出错了...准备重试")
                         await self.handle_upload_error(page)
             except:
-                print("  [-] 正在上传视频中...")
+                tencent_logger.info("  [-] 正在上传视频中...")
                 await asyncio.sleep(2)
 
     async def add_title_tags(self, page):
@@ -232,7 +229,7 @@ class TencentVideo(object):
         for index, tag in enumerate(self.tags, start=1):
             await page.keyboard.type("#" + tag)
             await page.keyboard.press("Space")
-        print(f"成功添加hashtag: {len(self.tags)}")
+        tencent_logger.info(f"成功添加hashtag: {len(self.tags)}")
 
     async def add_collection(self, page):
         collection_elements = page.get_by_text("添加到合集").locator("xpath=following-sibling::div").locator(
