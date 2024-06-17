@@ -161,10 +161,10 @@ class DouYinVideo(object):
 
         # 更换可见元素
         await page.locator('div.semi-select span:has-text("输入地理位置")').click()
-        await asyncio.sleep(1)
         await page.keyboard.press("Backspace")
-        await page.keyboard.press("Control+KeyA")
-        await page.keyboard.press("Delete")
+        await page.wait_for_timeout(2000)
+        # await page.keyboard.press("Control+KeyA")
+        # await page.keyboard.press("Delete")
         await page.keyboard.type("杭州市")
         # await asyncio.sleep(1)
         await page.wait_for_timeout(1000)
