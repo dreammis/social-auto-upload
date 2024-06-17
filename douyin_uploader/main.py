@@ -19,12 +19,12 @@ async def cookie_auth(account_file):
         page = await context.new_page()
         # 访问指定的 URL
         await page.goto("https://creator.douyin.com/creator-micro/content/upload")
-        try:
-            await page.wait_for_selector("div.boards-more h3:text('抖音排行榜')", timeout=5000)  # 等待5秒
-            douyin_logger.error(f'等待5秒 cookie 失效')
+        # 2024.06.17 抖音创作者中心改版
+        if await page.get_by_text('手机号登录').count():
+            print("[+] 等待5秒 cookie 失效")
             return False
-        except:
-            douyin_logger.success(f'cookie 有效')
+        else:
+            print("[+] cookie 有效")
             return True
 
 
