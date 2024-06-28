@@ -77,12 +77,12 @@ class TiktokVideo(object):
         self.account_file = account_file
 
     async def set_schedule_time(self, page, publish_date):
-        schedule_input_element = page.frame_locator(Tk_Locator.tk_iframe).locator('div.scheduled-container input')
+        schedule_input_element = page.frame_locator(Tk_Locator.tk_iframe).get_by_label('Schedule')
         await schedule_input_element.wait_for(state='visible')  # 确保按钮可见
 
-        await page.frame_locator(Tk_Locator.tk_iframe).locator('div.scheduled-container input').click()
+        await schedule_input_element.click()
         scheduled_picker = page.frame_locator(Tk_Locator.tk_iframe).locator('div.scheduled-picker')
-        await scheduled_picker.locator('div.TUXInputBox').nth(0).click()
+        await scheduled_picker.locator('div.TUXInputBox').nth(1).click()
 
         calendar_month = await page.frame_locator(Tk_Locator.tk_iframe).locator('div.calendar-wrapper span.month-title').inner_text()
 
@@ -108,7 +108,7 @@ class TiktokVideo(object):
                 await day_element.click()
                 break
         # time set
-        await page.frame_locator(Tk_Locator.tk_iframe).locator("div.time-picker-container").click()
+        await scheduled_picker.locator('div.TUXInputBox').nth(0).click()
 
         hour_str = publish_date.strftime("%H")
         correct_minute = int(publish_date.minute / 5)
@@ -122,7 +122,7 @@ class TiktokVideo(object):
         # click time button again
         # 等待某个特定的元素出现或状态变化，表明UI已更新
         await page.wait_for_timeout(1000)  # 等待500毫秒
-        await page.frame_locator(Tk_Locator.tk_iframe).locator("div.time-picker-container").click()
+        await scheduled_picker.locator('div.TUXInputBox').nth(0).click()
         # pick minutes after
         await page.frame_locator(Tk_Locator.tk_iframe).locator(minute_selector).click()
 
