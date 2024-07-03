@@ -7,7 +7,7 @@ from pathlib import Path
 from conf import BASE_DIR
 from douyin_uploader.main import douyin_setup, DouYinVideo
 from tencent_uploader.main import weixin_setup, TencentVideo
-from tk_uploader.main import tiktok_setup, TiktokVideo
+from tk_uploader.main_chrome import tiktok_setup, TiktokVideo
 from utils.base_social_media import get_supported_social_media, get_cli_action, SOCIAL_MEDIA_DOUYIN, \
     SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK
 from utils.constant import TencentZoneTypes
