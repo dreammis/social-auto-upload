@@ -19,7 +19,7 @@ async def cookie_auth(account_file):
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
-        await page.goto("https://www.tiktok.com/creator-center/content")
+        await page.goto("https://www.tiktok.com/tiktokstudio/upload?lang=en")
         await page.wait_for_load_state('networkidle')
         try:
             # 选择所有的 select 元素
@@ -62,29 +62,31 @@ async def get_tiktok_cookie(account_file):
         context = await set_init_script(context)
         # Pause the page, and start recording manually.
         page = await context.new_page()
-        await page.goto("https://www.tiktok.com/creator-center/content")
+        await page.goto("https://www.tiktok.com/login?lang=en")
         await page.pause()
         # 点击调试器的继续，保存cookie
         await context.storage_state(path=account_file)
 
 
 class TiktokVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file):
+    def __init__(self, title, file_path, tags, publish_date, account_file):
         self.title = title
         self.file_path = file_path
         self.tags = tags
         self.publish_date = publish_date
         self.account_file = account_file
+        self.locator_base = None
+
 
     async def set_schedule_time(self, page, publish_date):
-        schedule_input_element = page.frame_locator(Tk_Locator.tk_iframe).get_by_label('Schedule')
+        schedule_input_element = self.locator_base.get_by_label('Schedule')
         await schedule_input_element.wait_for(state='visible')  # 确保按钮可见
 
         await schedule_input_element.click()
-        scheduled_picker = page.frame_locator(Tk_Locator.tk_iframe).locator('div.scheduled-picker')
+        scheduled_picker = self.locator_base.locator('div.scheduled-picker')
         await scheduled_picker.locator('div.TUXInputBox').nth(1).click()
 
-        calendar_month = await page.frame_locator(Tk_Locator.tk_iframe).locator('div.calendar-wrapper span.month-title').inner_text()
+        calendar_month = await self.locator_base.locator('div.calendar-wrapper span.month-title').inner_text()
 
         n_calendar_month = datetime.strptime(calendar_month, '%B').month
 
@@ -92,13 +94,13 @@ class TiktokVideo(object):
 
         if n_calendar_month != schedule_month:
             if n_calendar_month < schedule_month:
-                arrow = page.frame_locator(Tk_Locator.tk_iframe).locator('div.calendar-wrapper span.arrow').nth(-1)
+                arrow = self.locator_base.locator('div.calendar-wrapper span.arrow').nth(-1)
             else:
-                arrow = page.frame_locator(Tk_Locator.tk_iframe).locator('div.calendar-wrapper span.arrow').nth(0)
+                arrow = self.locator_base.locator('div.calendar-wrapper span.arrow').nth(0)
             await arrow.click()
 
         # day set
-        valid_days_locator = page.frame_locator(Tk_Locator.tk_iframe).locator(
+        valid_days_locator = self.locator_base.locator(
             'div.calendar-wrapper span.day.valid')
         valid_days = await valid_days_locator.count()
         for i in range(valid_days):
@@ -118,20 +120,20 @@ class TiktokVideo(object):
         minute_selector = f"span.tiktok-timepicker-right:has-text('{minute_str}')"
 
         # pick hour first
-        await page.frame_locator(Tk_Locator.tk_iframe).locator(hour_selector).click()
+        await self.locator_base.locator(hour_selector).click()
         # click time button again
         # 等待某个特定的元素出现或状态变化，表明UI已更新
         await page.wait_for_timeout(1000)  # 等待500毫秒
         await scheduled_picker.locator('div.TUXInputBox').nth(0).click()
         # pick minutes after
-        await page.frame_locator(Tk_Locator.tk_iframe).locator(minute_selector).click()
+        await self.locator_base.locator(minute_selector).click()
 
         # click title to remove the focus.
-        await page.frame_locator(Tk_Locator.tk_iframe).locator("h1:has-text('Upload video')").click()
+        await self.locator_base.locator("h1:has-text('Upload video')").click()
 
     async def handle_upload_error(self, page):
         tiktok_logger.info("video upload error retrying.")
-        select_file_button = page.frame_locator(Tk_Locator.tk_iframe).locator('button[aria-label="Select file"]')
+        select_file_button = self.locator_base.locator('button[aria-label="Select file"]')
         async with page.expect_file_chooser() as fc_info:
             await select_file_button.click()
         file_chooser = await fc_info.value
@@ -147,8 +149,16 @@ class TiktokVideo(object):
         tiktok_logger.info(f'[+]Uploading-------{self.title}.mp4')
 
         await page.wait_for_url("https://www.tiktok.com/tiktokstudio/upload", timeout=10000)
-        await page.wait_for_selector('iframe[data-tt="Upload_index_iframe"]')
-        upload_button = page.frame_locator(Tk_Locator.tk_iframe).locator(
+
+        try:
+            await page.wait_for_selector('iframe[data-tt="Upload_index_iframe"], div.upload-container', timeout=10000)
+            tiktok_logger.info("Either iframe or div appeared.")
+        except Exception as e:
+            tiktok_logger.error("Neither iframe nor div appeared within the timeout.")
+
+        await self.choose_base_locator(page)
+
+        upload_button = self.locator_base.locator(
             'button:has-text("Select video"):visible')
         await upload_button.wait_for(state='visible')  # 确保按钮可见
 
@@ -159,7 +169,7 @@ class TiktokVideo(object):
 
         await self.add_title_tags(page)
         # detact upload status
-        await self.detact_upload_status(page)
+        await self.detect_upload_status(page)
         if self.publish_date != 0:
             await self.set_schedule_time(page, self.publish_date)
 
@@ -174,7 +184,7 @@ class TiktokVideo(object):
 
     async def add_title_tags(self, page):
 
-        editor_locator = page.frame_locator(Tk_Locator.tk_iframe).locator('div.public-DraftEditor-content')
+        editor_locator = self.locator_base.locator('div.public-DraftEditor-content')
         await editor_locator.click()
 
         await page.keyboard.press("End")
@@ -209,15 +219,15 @@ class TiktokVideo(object):
         success_flag_div = '#\\:r9\\:'
         while True:
             try:
-                publish_button = page.frame_locator(Tk_Locator.tk_iframe).locator('div.btn-post')
+                publish_button = self.locator_base.locator('div.btn-post')
                 if await publish_button.count():
                     await publish_button.click()
 
-                await page.frame_locator(Tk_Locator.tk_iframe).locator(success_flag_div).wait_for(state="visible", timeout=1500)
+                await self.locator_base.locator(success_flag_div).wait_for(state="visible", timeout=3000)
                 tiktok_logger.success("  [-] video published success")
                 break
             except Exception as e:
-                if await page.frame_locator(Tk_Locator.tk_iframe).locator(success_flag_div).count():
+                if await self.locator_base.locator(success_flag_div).count():
                     tiktok_logger.success("  [-]video published success")
                     break
                 else:
@@ -226,21 +236,28 @@ class TiktokVideo(object):
                     await page.screenshot(full_page=True)
                     await asyncio.sleep(0.5)
 
-    async def detact_upload_status(self, page):
+    async def detect_upload_status(self, page):
         while True:
             try:
-                if await page.frame_locator(Tk_Locator.tk_iframe).locator('div.btn-post > button').get_attribute("disabled") is None:
+                if await self.locator_base.locator('div.btn-post > button').get_attribute("disabled") is None:
                     tiktok_logger.info("  [-]video uploaded.")
                     break
                 else:
                     tiktok_logger.info("  [-] video uploading...")
                     await asyncio.sleep(2)
-                    if await page.frame_locator(Tk_Locator.tk_iframe).locator('button[aria-label="Select file"]').count():
+                    if await self.locator_base.locator('button[aria-label="Select file"]').count():
                         tiktok_logger.info("  [-] found some error while uploading now retry...")
                         await self.handle_upload_error(page)
             except:
                 tiktok_logger.info("  [-] video uploading...")
                 await asyncio.sleep(2)
+
+    async def choose_base_locator(self, page):
+        # await page.wait_for_selector('div.upload-container')
+        if await page.locator('iframe[data-tt="Upload_index_iframe"]').count():
+            self.locator_base = self.locator_base
+        else:
+            self.locator_base = page.locator(Tk_Locator.default) 
 
     async def main(self):
         async with async_playwright() as playwright:
