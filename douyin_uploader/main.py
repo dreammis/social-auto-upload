@@ -188,8 +188,8 @@ class DouYinVideo(object):
                 publish_button = page.get_by_role('button', name="发布", exact=True)
                 if await publish_button.count():
                     await publish_button.click()
-                await page.wait_for_url("https://creator.douyin.com/creator-micro/content/manage",
-                                        timeout=1500)  # 如果自动跳转到作品页面，则代表发布成功
+                await page.wait_for_url("https://creator.douyin.com/creator-micro/content/manage**",
+                                        timeout=3000)  # 如果自动跳转到作品页面，则代表发布成功
                 douyin_logger.success("  [-]视频发布成功")
                 break
             except:
