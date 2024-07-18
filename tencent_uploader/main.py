@@ -254,14 +254,8 @@ class TencentVideo(object):
                 if not await page.locator(
                         'div.declare-original-dialog label.ant-checkbox-wrapper.ant-checkbox-wrapper-checked:visible').count():
                     await page.locator('div.declare-original-dialog input.ant-checkbox-input:visible').click()
-            if await page.locator('div.original-type-form > div.form-label:has-text("原创类型"):visible').count():
-                await page.locator('div.form-content:visible').click()  # 下拉菜单
-                await page.locator(
-                    f'div.form-content:visible ul.weui-desktop-dropdown__list li.weui-desktop-dropdown__list-ele:has-text("{self.category}")').first.click()
-                await asyncio.sleep(1)
-                if await page.locator('button:has-text("声明原创"):visible').count():
-                    await page.locator('button:has-text("声明原创"):visible').click()
-
+            if await page.locator('button:has-text("声明原创"):visible').count():
+                await page.locator('button:has-text("声明原创"):visible').click()
     async def main(self):
         async with async_playwright() as playwright:
             await self.upload(playwright)
