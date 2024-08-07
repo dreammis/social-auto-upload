@@ -68,7 +68,7 @@ class DouYinVideo(object):
 
     async def set_schedule_time_douyin(self, page, publish_date):
         # 选择包含特定文本内容的 label 元素
-        label_element = page.locator("label.radio--4Gpx6:has-text('定时发布')")
+        label_element = page.locator("[class^='radio']:has-text('定时发布')")
         # 在选中的 label 元素下点击 checkbox
         await label_element.click()
         await asyncio.sleep(1)
@@ -105,7 +105,7 @@ class DouYinVideo(object):
         douyin_logger.info(f'[-] 正在打开主页...')
         await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
         # 点击 "上传视频" 按钮
-        await page.locator(".upload-btn--9eZLd").set_input_files(self.file_path)
+        await page.locator("[name='upload-btn']").set_input_files(self.file_path)
 
         # 等待页面跳转到指定的 URL
         while True:
