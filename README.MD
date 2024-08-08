@@ -182,7 +182,7 @@ generate_schedule_time_next_day 默认从第二天开始（此举为避免选择
 ![Alt text](media/20231009111131.png)
 - 导出
 ![Alt text](media/20231009111214.png)
-3. 黏贴至 accounts.ini文件中
+3. 黏贴至 uploader/xhs_uploader/accounts.ini文件中
 
 
 #### 解释与注意事项：

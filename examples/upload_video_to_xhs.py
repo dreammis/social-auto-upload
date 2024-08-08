@@ -6,10 +6,10 @@ from xhs import XhsClient
 
 from conf import BASE_DIR
 from utils.files_times import generate_schedule_time_next_day, get_title_and_hashtags
-from xhs_uploader.main import sign_local, beauty_print
+from uploader.xhs_uploader.main import sign_local, beauty_print
 
 config = configparser.RawConfigParser()
-config.read(Path(BASE_DIR / "xhs_uploader" / "accounts.ini"))
+config.read(Path(BASE_DIR / "uploader" / "xhs_uploader" / "accounts.ini"))
 
 
 if __name__ == '__main__':
