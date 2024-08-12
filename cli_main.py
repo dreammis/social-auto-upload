@@ -6,10 +6,11 @@ from pathlib import Path
 
 from conf import BASE_DIR
 from uploader.douyin_uploader.main import douyin_setup, DouYinVideo
+from uploader.ks_uploader.main import ks_setup, KSVideo
 from uploader.tencent_uploader.main import weixin_setup, TencentVideo
 from uploader.tk_uploader.main_chrome import tiktok_setup, TiktokVideo
 from utils.base_social_media import get_supported_social_media, get_cli_action, SOCIAL_MEDIA_DOUYIN, \
-    SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK
+    SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK, SOCIAL_MEDIA_KUAISHOU
 from utils.constant import TencentZoneTypes
 from utils.files_times import get_title_and_hashtags
 
@@ -63,6 +64,8 @@ async def main():
             await tiktok_setup(str(account_file), handle=True)
         elif args.platform == SOCIAL_MEDIA_TENCENT:
             await weixin_setup(str(account_file), handle=True)
+        elif args.platform == SOCIAL_MEDIA_KUAISHOU:
+            await ks_setup(str(account_file), handle=True)
     elif args.action == 'upload':
         title, tags = get_title_and_hashtags(args.video_file)
         video_file = args.video_file
@@ -84,6 +87,12 @@ async def main():
             await weixin_setup(account_file, handle=True)
             category = TencentZoneTypes.LIFESTYLE.value  # 标记原创需要否则不需要传
             app = TencentVideo(title, video_file, tags, publish_date, account_file, category)
+        elif args.platform == SOCIAL_MEDIA_KUAISHOU:
+            await ks_setup(account_file, handle=True)
+            app = KSVideo(title, video_file, tags, publish_date, account_file)
+        else:
+            print("Wrong platform, please check your input")
+            exit()
 
         await app.main()
 
