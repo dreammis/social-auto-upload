@@ -87,7 +87,7 @@ usage: cli_main.py [-h] platform account_name action ...
 Upload video to multiple social-media.
 
 positional arguments:
-  platform      Choose social-media platform: douyin tencent tiktok
+  platform      Choose social-media platform: douyin tencent tiktok kuaishou
   account_name  Account name for the platform: xiaoA
   action        Choose action
     upload      upload operation
