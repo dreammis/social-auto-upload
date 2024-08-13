@@ -26,7 +26,7 @@ def parse_schedule(schedule_raw):
 async def main():
     # 主解析器
     parser = argparse.ArgumentParser(description="Upload video to multiple social-media.")
-    parser.add_argument("platform", metavar='platform', choices=get_supported_social_media(), help="Choose social-media platform: douyin tencent tiktok")
+    parser.add_argument("platform", metavar='platform', choices=get_supported_social_media(), help="Choose social-media platform: douyin tencent tiktok kuaishou")
 
     parser.add_argument("account_name", type=str, help="Account name for the platform: xiaoA")
     subparsers = parser.add_subparsers(dest="action", metavar='action', help="Choose action", required=True)
