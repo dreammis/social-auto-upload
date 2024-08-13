@@ -11,7 +11,8 @@ social-auto-upload This project aims to automate the posting of videos to variou
   - [x] 视频号
   - [x] bilibili
   - [x] 小红书
-  - [ ] 快手
+  - [x] 快手
+  - [ ] 百家号
 
 - 部分国外社交媒体：
   - [x] tiktok
