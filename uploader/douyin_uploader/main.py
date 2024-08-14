@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
 
-from playwright.async_api import Playwright, async_playwright
+from playwright.async_api import Playwright, async_playwright, Page
 import os
 import asyncio
 
@@ -160,15 +160,7 @@ class DouYinVideo(object):
                 await asyncio.sleep(2)
 
         # 更换可见元素
-        await page.locator('div.semi-select span:has-text("输入地理位置")').click()
-        await page.keyboard.press("Backspace")
-        await page.wait_for_timeout(2000)
-        # await page.keyboard.press("Control+KeyA")
-        # await page.keyboard.press("Delete")
-        await page.keyboard.type("杭州市")
-        # await asyncio.sleep(1)
-        await page.wait_for_timeout(1000)
-        await page.locator('div[role="listbox"] [role="option"]').first.click()
+        await self.set_location(page, "杭州市")
 
         # 頭條/西瓜
         third_part_element = '[class^="info"] > [class^="first-part"] div div.semi-switch'
@@ -203,6 +195,14 @@ class DouYinVideo(object):
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
+
+    async def set_location(self, page: Page, location: str = "杭州市"):
+        await page.locator('div.semi-select span:has-text("输入地理位置")').click()
+        await page.keyboard.press("Backspace")
+        await page.wait_for_timeout(2000)
+        await page.keyboard.type(location)
+        await page.wait_for_selector('div[role="listbox"] [role="option"]', timeout=5000)
+        await page.locator('div[role="listbox"] [role="option"]').first.click()
 
     async def main(self):
         async with async_playwright() as playwright:
