@@ -105,7 +105,7 @@ class DouYinVideo(object):
         douyin_logger.info(f'[-] 正在打开主页...')
         await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
         # 点击 "上传视频" 按钮
-        await page.locator("[name='upload-btn']").set_input_files(self.file_path)
+        await page.locator(".container-F4b8d7 input").set_input_files(self.file_path)
 
         # 等待页面跳转到指定的 URL
         while True:
