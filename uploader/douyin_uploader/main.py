@@ -207,9 +207,6 @@ class DouYinVideo(object):
             # 定位到上传区域并点击
             await page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files('/mnt/NAS/MassStorage/NewsVideo/231/img_cover_v.jpg')
             await page.wait_for_timeout(2000)  # 等待2秒
-            #await page.locator('button:not([disabled]):has-text("完成")').first.click()
-            #await page.wait_for_selector('button:has-text("完成")')
-            #await page.locator('button:has-text("完成"):not([disabled])').click()
             await page.locator('button:has-text("完成")').nth(1).click()
 
     async def set_location(self, page: Page, location: str = "杭州市"):
