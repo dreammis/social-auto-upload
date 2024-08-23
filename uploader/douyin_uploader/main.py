@@ -57,7 +57,7 @@ async def douyin_cookie_gen(account_file):
 
 
 class DouYinVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -65,6 +65,7 @@ class DouYinVideo(object):
         self.account_file = account_file
         self.date_format = '%Y年%m月%d日 %H:%M'
         self.local_executable_path = LOCAL_CHROME_PATH
+        self.thumbnail_path = thumbnail_path
 
     async def set_schedule_time_douyin(self, page, publish_date):
         # 选择包含特定文本内容的 label 元素
@@ -158,6 +159,9 @@ class DouYinVideo(object):
             except:
                 douyin_logger.info("  [-] 正在上传视频中...")
                 await asyncio.sleep(2)
+        
+        #上传视频封面
+        await self.set_thumbnail(page, self.thumbnail_path)
 
         # 更换可见元素
         await self.set_location(page, "杭州市")
@@ -195,6 +199,15 @@ class DouYinVideo(object):
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
+    
+    async def set_thumbnail(self, page: Page, thumbnail_path: str):
+        if thumbnail_path:
+            await page.click('text="选择封面"')
+            await page.click('text="上传封面"')
+            # 定位到上传区域并点击
+            await page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path)
+            await page.wait_for_timeout(2000)  # 等待2秒
+            await page.locator("div[class^='uploadCrop'] button:has-text('完成')").click()
 
     async def set_location(self, page: Page, location: str = "杭州市"):
         await page.locator('div.semi-select span:has-text("输入地理位置")').click()
