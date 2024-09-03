@@ -19,6 +19,13 @@ async def cookie_auth(account_file):
         page = await context.new_page()
         # 访问指定的 URL
         await page.goto("https://creator.douyin.com/creator-micro/content/upload")
+        try:
+            await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=5000)
+        except:
+            print("[+] 等待5秒 cookie 失效")
+            await context.close()
+            await browser.close()
+            return False
         # 2024.06.17 抖音创作者中心改版
         if await page.get_by_text('手机号登录').count():
             print("[+] 等待5秒 cookie 失效")
@@ -203,6 +210,7 @@ class DouYinVideo(object):
     async def set_thumbnail(self, page: Page, thumbnail_path: str):
         if thumbnail_path:
             await page.click('text="选择封面"')
+            await page.wait_for_selector("div.semi-modal-content:visible")
             await page.click('text="上传封面"')
             # 定位到上传区域并点击
             await page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path)
@@ -210,6 +218,9 @@ class DouYinVideo(object):
             await page.locator("div[class^='uploadCrop'] button:has-text('完成')").click()
 
     async def set_location(self, page: Page, location: str = "杭州市"):
+        # todo supoort location later
+        # await page.get_by_text('添加标签').locator("..").locator("..").locator("xpath=following-sibling::div").locator(
+        #     "div.semi-select-single").nth(0).click()
         await page.locator('div.semi-select span:has-text("输入地理位置")').click()
         await page.keyboard.press("Backspace")
         await page.wait_for_timeout(2000)
