@@ -41,7 +41,7 @@ async def cookie_auth(account_file):
         # 访问指定的 URL
         await page.goto("https://channels.weixin.qq.com/platform/post/create")
         try:
-            await page.wait_for_selector('div.title-name:has-text("视频号小店")', timeout=5000)  # 等待5秒
+            await page.wait_for_selector('div.title-name:has-text("微信小店")', timeout=5000)  # 等待5秒
             tencent_logger.error("[+] 等待5秒 cookie 失效")
             return False
         except:
