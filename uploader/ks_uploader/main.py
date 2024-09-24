@@ -89,7 +89,13 @@ class KSVideo(object):
         kuaishou_logger.info('正在打开主页...')
         await page.wait_for_url("https://cp.kuaishou.com/article/publish/video")
         # 点击 "上传视频" 按钮
-        await page.locator("div.vVExjn9O3UQ- input").set_input_files(self.file_path)
+        upload_button = page.locator("button[class^='_upload-btn']")
+        await upload_button.wait_for(state='visible')  # 确保按钮可见
+
+        async with page.expect_file_chooser() as fc_info:
+            await upload_button.click()
+        file_chooser = await fc_info.value
+        await file_chooser.set_files(self.file_path)
 
         await asyncio.sleep(2)
 
