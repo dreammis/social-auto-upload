@@ -134,6 +134,8 @@ class TiktokVideo(object):
         await scheduled_picker.locator('div.TUXInputBox').nth(0).click()
         await page.wait_for_timeout(500)  # 等待500毫秒
         # pick minutes after
+        await scheduled_picker.locator('div.TUXInputBox').nth(0).click()
+        await page.wait_for_timeout(500)  # 等待500毫秒
         await self.locator_base.locator(minute_selector).click()
 
         # click title to remove the focus.
@@ -230,7 +232,7 @@ class TiktokVideo(object):
             await page.keyboard.press("End")
 
     async def upload_thumbnails(self, page):
-        await self.locator_base.locator(".cover-selector-image-container").click()
+        await self.locator_base.locator(".cover-container").click()
         await self.locator_base.locator(".cover-edit-container >> text=Upload cover").click()
         async with page.expect_file_chooser() as fc_info:
             await self.locator_base.locator(".upload-image-upload-area").click()
