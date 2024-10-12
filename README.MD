@@ -38,11 +38,11 @@ playwright install chromium firefox
 非程序员，[新手级教程](https://juejin.cn/post/7372114027840208911)
 
 # 🐇 About
-The project for my own project extracted, my release strategy is timed release (released a day in advance), so the release part of the event are used for the next day time!
+The project for my own project extracted, my release strategy is timed release (released a day in advance), so the release part of the time are used for the next day time!
 
 If you need to release it immediately, you can study the source code or ask me questions.
 
-该项目为我自用项目抽离出来，我的发布策略是定时发布（提前一天发布），故发布部分采用的事件均为第二天的时间
+该项目为我自用项目抽离出来，我的发布策略是定时发布（提前一天发布），故发布部分采用的时间均为第二天的时间
 
 如果你有需求立即发布，可自行研究源码或者向我提问
 
@@ -109,6 +109,9 @@ douyin平台, 账号名为test, 动作为upload, 视频文件（需对应的meta
 
 python cli_main.py douyin test upload "C:\Users\superdog\Videos\2023-11-07_05-27-44 - 这位少女如梦中仙... .mp4" -pt 1 -t "2024-6-14 12:00"
 douyin平台, 账号名为test, 动作为upload, 视频文件, 发布方式（pt）：1 定时发布, 发布时间(t)： 2024-6-14 12:00
+
+python cli_main.py douyin test upload "C:\Users\superdog\Videos\2023-11-07_05-27-44 - 这位少女如梦中仙... .mp4" -pt 1 -t "2024-6-14 12:00" -dt 1
+douyin平台, 账号名为test, 动作为upload, 视频文件, 发布方式（pt）：1 定时发布, 发布时间(t)： 2024-6-14 12:00, 是否允许别人保存视频（dt）：1 不允许
 ```
 
 ---

@@ -42,6 +42,8 @@ async def main():
             action_parser.add_argument("-pt", "--publish_type", type=int, choices=[0, 1],
                                        help="0 for immediate, 1 for scheduled", default=0)
             action_parser.add_argument('-t', '--schedule', help='Schedule UTC time in %Y-%m-%d %H:%M format')
+            action_parser.add_argument("-dt", "--download_type", type=int, choices=[0, 1],
+                                       help="0 for allowed, 1 for not allowed (only for douyin)", default=0)
 
     # 解析命令行参数
     args = parser.parse_args()
@@ -78,8 +80,9 @@ async def main():
             publish_date = parse_schedule(args.schedule)
 
         if args.platform == SOCIAL_MEDIA_DOUYIN:
+            download_type = args.download_type
             await douyin_setup(account_file, handle=False)
-            app = DouYinVideo(title, video_file, tags, publish_date, account_file)
+            app = DouYinVideo(title, video_file, tags, publish_date, account_file, download_type)
         elif args.platform == SOCIAL_MEDIA_TIKTOK:
             await tiktok_setup(account_file, handle=True)
             app = TiktokVideo(title, video_file, tags, publish_date, account_file)
