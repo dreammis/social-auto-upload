@@ -11,6 +11,17 @@ from utils.log import douyin_logger
 
 
 async def cookie_auth(account_file):
+    """
+    功能：验证存储在account_file中的cookie是否有效。
+    执行步骤：
+    1. 使用async_playwright启动一个无头（headless）Chromium浏览器。
+    2. 创建一个新的浏览器上下文，并加载account_file中的cookie。
+    3. 设置初始脚本（通过set_init_script函数）。
+    4. 打开一个新页面并访问抖音创作者中心的上传页面。
+    5. 等待页面加载完成，检查是否成功进入上传页面。
+    6. 如果页面上出现“手机号登录”字样，说明cookie无效，返回False。
+    7. 如果没有出现，说明cookie有效，返回True。
+    """
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True)
         context = await browser.new_context(storage_state=account_file)
@@ -36,6 +47,13 @@ async def cookie_auth(account_file):
 
 
 async def douyin_setup(account_file, handle=False):
+    """
+    功能：检查cookie文件是否存在或有效，并在必要时生成新的cookie。
+    执行步骤：
+    1. 检查account_file是否存在，或者调用cookie_auth验证cookie是否有效。
+    2. 如果cookie无效且handle为True，则调用douyin_cookie_gen生成新的cookie。
+    3. 如果cookie有效或成功生成新的cookie，返回True。
+    """
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
             # Todo alert message
@@ -47,20 +65,57 @@ async def douyin_setup(account_file, handle=False):
 
 async def douyin_cookie_gen(account_file):
     async with async_playwright() as playwright:
-        options = {
+        browser_options = {
             'headless': False
         }
-        # Make sure to run headed.
-        browser = await playwright.chromium.launch(**options)
-        # Setup context however you like.
-        context = await browser.new_context()  # Pass any options
+        browser = await playwright.chromium.launch(**browser_options)
+        
+        context_options = {
+            'viewport': {'width': 1280, 'height': 720}  # 设置更大的视口
+        }
+        context = await browser.new_context(**context_options)
         context = await set_init_script(context)
-        # Pause the page, and start recording manually.
         page = await context.new_page()
+        
         await page.goto("https://creator.douyin.com/")
-        await page.pause()
-        # 点击调试器的继续，保存cookie
+        
+        # 等待登录界面加载完成
+        await page.wait_for_load_state('networkidle')
+        
+        # 尝试定位二维码
+        qr_code_selectors = ['.login-scan-code', 'canvas.qrcode', 'img[alt="二维码"]', '[class*="qrcode"]']
+        qr_code_element = None
+        for selector in qr_code_selectors:
+            try:
+                qr_code_element = await page.wait_for_selector(selector, state='visible', timeout=5000)
+                if qr_code_element:
+                    break
+            except:
+                continue
+        
+        # 如果找到二维码元素，保存图片
+        if qr_code_element:
+            # 确保二维码元素在视口内
+            await qr_code_element.scroll_into_view_if_needed()
+            qr_code_path = os.path.join(os.path.dirname(account_file), 'douyin_login_qr.png')
+            await qr_code_element.screenshot(path=qr_code_path)
+            douyin_logger.info(f'登录二维码已保存至：{qr_code_path}')
+        else:
+            douyin_logger.warning('未能自动定位到登录二维码，请手动查看浏览器窗口')
+            # 保存整个页面截图
+            full_page_path = os.path.join(os.path.dirname(account_file), 'douyin_full_page.png')
+            await page.screenshot(path=full_page_path, full_page=True)
+            douyin_logger.info(f'已保存完整页面截图：{full_page_path}')
+        
+        # 等待用户登录
+        douyin_logger.info('请在浏览器中完成登录操作')
+        await page.wait_for_url("https://creator.douyin.com/**", timeout=300000)  # 等待最多5分钟
+        
+        # 保存cookie
         await context.storage_state(path=account_file)
+        douyin_logger.info(f'Cookie已保存至：{account_file}')
+        
+        await browser.close()
 
 
 class DouYinVideo(object):
@@ -231,5 +286,10 @@ class DouYinVideo(object):
     async def main(self):
         async with async_playwright() as playwright:
             await self.upload(playwright)
+
+
+
+
+
 
 
