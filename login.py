@@ -26,4 +26,4 @@ async def login(platform, account_name):
 
 if __name__ == "__main__":
     # Example usage
-    asyncio.run(login("douyin", "my_name"))
+    asyncio.run(login("douyin", "baobao"))
