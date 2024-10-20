@@ -7,6 +7,7 @@ from uploader.tencent_uploader.main import weixin_setup
 from uploader.tk_uploader.main_chrome import tiktok_setup
 from utils.base_social_media import SOCIAL_MEDIA_DOUYIN, SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK, SOCIAL_MEDIA_KUAISHOU
 
+
 async def login(platform, account_name):
     account_file = Path(BASE_DIR / "cookies" / f"{platform}_{account_name}.json")
     account_file.parent.mkdir(exist_ok=True)
@@ -26,4 +27,4 @@ async def login(platform, account_name):
 
 if __name__ == "__main__":
     # Example usage
-    asyncio.run(login("douyin", "baobao"))
+    asyncio.run(login("douyin", "333"))

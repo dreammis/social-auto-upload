@@ -8,6 +8,8 @@ import asyncio
 from conf import LOCAL_CHROME_PATH
 from utils.base_social_media import set_init_script
 from utils.log import douyin_logger
+from utils.send_wechat import *
+from utils.redis_tools import *
 
 
 async def cookie_auth(account_file):
@@ -97,6 +99,8 @@ async def douyin_cookie_gen(account_file):
             qr_code_path = os.path.join(os.path.dirname(account_file), 'douyin_login_qr.png')
             await qr_code_element.screenshot(path=qr_code_path)
             douyin_logger.info(f'登录二维码已保存至：{qr_code_path}')
+            # 定位到二维码将二维码发送到wx
+            send_image_file(qr_code_path)
         else:
             douyin_logger.warning('未能自动定位到登录二维码，请手动查看浏览器窗口')
             full_page_path = os.path.join(os.path.dirname(account_file), 'douyin_full_page.png')
@@ -129,19 +133,19 @@ async def douyin_cookie_gen(account_file):
                         douyin_logger.info("已点击'获取验证码'")
                         
                         # 读取验证码文件
-                        vcode_file = 'cookies/vcode.txt'
+                        # vcode_file = 'cookies/vcode.txt'
                         max_wait = 60  # 最多等待60秒
                         vcode = ''
                         start_time = asyncio.get_event_loop().time()
                         
                         while asyncio.get_event_loop().time() - start_time < max_wait:
-                            if os.path.exists(vcode_file):
-                                with open(vcode_file, 'r') as f:
-                                    vcode = f.read().strip()
+                            if redis_client.ping():
+                                # with open(vcode_file, 'r') as f:
+                                #     vcode = f.read().strip()
+                                vcode = get_douyin_verification_code("18282513893")
                                 if vcode:
-                                    douyin_logger.info(f"从文件读取到验证码: {vcode}")
+                                    douyin_logger.info(f"从redis读取到验证码: {vcode}")
                                     break
-                                douyin_logger.info("读取文件", vcode_file)
                             await asyncio.sleep(5)  # 等待5秒后重试
                         douyin_logger.info("退出vcode循环")
                         if vcode:
@@ -178,8 +182,8 @@ async def douyin_cookie_gen(account_file):
                             # 等待验证结果
                             await asyncio.sleep(5)
                             
-                            # 删除验证码文件
-                            os.remove(vcode_file)
+                            # # 删除验证码文件
+                            # os.remove(vcode_file)
                         else:
                             douyin_logger.error("未能读取到有效的验证码")
                     else:
