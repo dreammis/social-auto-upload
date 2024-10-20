@@ -2,6 +2,8 @@ from datetime import timedelta
 
 from datetime import datetime
 from pathlib import Path
+import os
+import re
 
 from conf import BASE_DIR
 
@@ -12,30 +14,28 @@ def get_absolute_path(relative_path: str, base_dir: str = None) -> str:
     return str(absolute_path)
 
 
-def get_title_and_hashtags(filename):
-    """
-  获取视频标题和 hashtag
-
-  Args:
-    filename: 视频文件名
-
-  Returns:
-    视频标题和 hashtag 列表
-  """
-
-    # 获取视频标题和 hashtag txt 文件名
-    txt_filename = filename.replace(".mp4", ".txt")
-
-    # 读取 txt 文件
-    with open(txt_filename, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # 获取标题和 hashtag
-    splite_str = content.strip().split("\n")
-    title = splite_str[0]
-    hashtags = splite_str[1].replace("#", "").split(" ")
-
-    return title, hashtags
+def get_title_and_hashtags(file_path):
+    # 获取文件名（不包括扩展名）
+    file_name = os.path.splitext(os.path.basename(file_path))[0]
+    
+    # 将文件名中的下划线和连字符替换为空格
+    title = re.sub(r'[_-]', ' ', file_name)
+    
+    # 将标题中的每个单词首字母大写
+    title = title.title()
+    
+    # 从标题中提取可能的标签（假设标签是以#开头的单词）
+    tags = re.findall(r'#(\w+)', title)
+    
+    # 从标题中移除标签
+    title = re.sub(r'#\w+', '', title).strip()
+    
+    # 如果没有找到标签，可以根据标题生成一些默认标签
+    if not tags:
+        words = title.split()
+        tags = words[:3]  # 使用标题的前三个单词作为标签
+    
+    return title, tags
 
 
 def generate_schedule_time_next_day(total_videos, videos_per_day, daily_times=None, timestamps=False, start_days=0):

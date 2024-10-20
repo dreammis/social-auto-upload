@@ -6,6 +6,7 @@ from pathlib import Path
 
 from conf import BASE_DIR
 from uploader.douyin_uploader.main import douyin_setup, DouYinVideo
+from uploader.douyin_img_uploader.main import DouYinImage
 from uploader.ks_uploader.main import ks_setup, KSVideo
 from uploader.tencent_uploader.main import weixin_setup, TencentVideo
 from uploader.tk_uploader.main_chrome import tiktok_setup, TiktokVideo
@@ -38,16 +39,17 @@ async def main():
             # Login 不需要额外参数
             continue
         elif action == 'upload':
-            action_parser.add_argument("video_file", help="Path to the Video file")
+            action_parser.add_argument("file_paths", nargs='+', help="Path to the Video file or Image files")
+            action_parser.add_argument("-t", "--type", choices=['video', 'image'], default='video', help="Upload type: video or image")
             action_parser.add_argument("-pt", "--publish_type", type=int, choices=[0, 1],
                                        help="0 for immediate, 1 for scheduled", default=0)
-            action_parser.add_argument('-t', '--schedule', help='Schedule UTC time in %Y-%m-%d %H:%M format')
+            action_parser.add_argument('-s', '--schedule', help='Schedule UTC time in %Y-%m-%d %H:%M format')
 
     # 解析命令行参数
     args = parser.parse_args()
     # 参数校验
     if args.action == 'upload':
-        if not exists(args.video_file):
+        if not exists(args.file_paths[0]):
             raise FileNotFoundError(f'Could not find the video file at {args["video_file"]}')
         if args.publish_type == 1 and not args.schedule:
             parser.error("The schedule must must be specified for scheduled publishing.")
@@ -67,29 +69,32 @@ async def main():
         elif args.platform == SOCIAL_MEDIA_KUAISHOU:
             await ks_setup(str(account_file), handle=True)
     elif args.action == 'upload':
-        title, tags = get_title_and_hashtags(args.video_file)
-        video_file = args.video_file
+        title, tags = get_title_and_hashtags(args.file_paths[0])  # 使用第一个文件名作为标题基础
+        file_paths = args.file_paths
 
         if args.publish_type == 0:
-            print("Uploading immediately...")
+            print("立即上传...")
             publish_date = 0
         else:
-            print("Scheduling videos...")
+            print("定时发布...")
             publish_date = parse_schedule(args.schedule)
 
         if args.platform == SOCIAL_MEDIA_DOUYIN:
             await douyin_setup(account_file, handle=False)
-            app = DouYinVideo(title, video_file, tags, publish_date, account_file)
+            if args.type == 'video':
+                app = DouYinVideo(title, file_paths[0], tags, publish_date, account_file)
+            else:
+                app = DouYinImage(title, file_paths, tags, publish_date, account_file)
         elif args.platform == SOCIAL_MEDIA_TIKTOK:
             await tiktok_setup(account_file, handle=True)
-            app = TiktokVideo(title, video_file, tags, publish_date, account_file)
+            app = TiktokVideo(title, file_paths[0], tags, publish_date, account_file)
         elif args.platform == SOCIAL_MEDIA_TENCENT:
             await weixin_setup(account_file, handle=True)
             category = TencentZoneTypes.LIFESTYLE.value  # 标记原创需要否则不需要传
-            app = TencentVideo(title, video_file, tags, publish_date, account_file, category)
+            app = TencentVideo(title, file_paths[0], tags, publish_date, account_file, category)
         elif args.platform == SOCIAL_MEDIA_KUAISHOU:
             await ks_setup(account_file, handle=True)
-            app = KSVideo(title, video_file, tags, publish_date, account_file)
+            app = KSVideo(title, file_paths[0], tags, publish_date, account_file)
         else:
             print("Wrong platform, please check your input")
             exit()
