@@ -10,3 +10,5 @@ loguru
 python-multipart
 fastapi 
 uvicorn
+minio
+redis
