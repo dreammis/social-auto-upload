@@ -2,6 +2,8 @@ from datetime import timedelta
 
 from datetime import datetime
 from pathlib import Path
+import os
+import re
 
 from conf import BASE_DIR
 
@@ -12,30 +14,21 @@ def get_absolute_path(relative_path: str, base_dir: str = None) -> str:
     return str(absolute_path)
 
 
-def get_title_and_hashtags(filename):
-    """
-  获取视频标题和 hashtag
+def get_title_and_hashtags_from_content(content: str):
+    lines = content.split('\n')
+    title = lines[0].strip() if lines else ''
+    tags = [tag.strip() for tag in lines[1:] if tag.strip()]
+    return title, tags
 
-  Args:
-    filename: 视频文件名
 
-  Returns:
-    视频标题和 hashtag 列表
-  """
-
-    # 获取视频标题和 hashtag txt 文件名
-    txt_filename = filename.replace(".mp4", ".txt")
-
-    # 读取 txt 文件
-    with open(txt_filename, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # 获取标题和 hashtag
-    splite_str = content.strip().split("\n")
-    title = splite_str[0]
-    hashtags = splite_str[1].replace("#", "").split(" ")
-
-    return title, hashtags
+def get_title_and_hashtags(file_path):
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"文件不存在：{file_path}")
+    
+    with open(file_path, 'r', encoding='utf-8') as file:
+        content = file.read()
+    
+    return get_title_and_hashtags_from_content(content)
 
 
 def generate_schedule_time_next_day(total_videos, videos_per_day, daily_times=None, timestamps=False, start_days=0):
