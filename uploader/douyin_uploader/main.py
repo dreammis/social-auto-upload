@@ -48,7 +48,7 @@ async def cookie_auth(account_file):
             return True
 
 
-async def douyin_setup(account_file, handle=False):
+async def douyin_setup(account_file, handle=False, phone_number=None):
     """
     功能：检查cookie文件是否存在或有效，并在必要时生成新的cookie。
     执行步骤：
@@ -60,12 +60,15 @@ async def douyin_setup(account_file, handle=False):
         if not handle:
             # Todo alert message
             return False
+        if not phone_number:
+            douyin_logger.error('需要提供电话号码以生成新的cookie')
+            return False
         douyin_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        await douyin_cookie_gen(account_file)
+        await douyin_cookie_gen(account_file, phone_number)
     return True
 
 
-async def douyin_cookie_gen(account_file):
+async def douyin_cookie_gen(account_file, phone_number):
     async with async_playwright() as playwright:
         browser_options = {
             'headless': False
@@ -99,6 +102,7 @@ async def douyin_cookie_gen(account_file):
             qr_code_path = os.path.join(os.path.dirname(account_file), 'douyin_login_qr.png')
             await qr_code_element.screenshot(path=qr_code_path)
             douyin_logger.info(f'登录二维码已保存至：{qr_code_path}')
+            send_message("请扫码登录")
             # 定位到二维码将二维码发送到wx
             send_image_file(qr_code_path)
         else:
@@ -139,10 +143,9 @@ async def douyin_cookie_gen(account_file):
                         start_time = asyncio.get_event_loop().time()
                         
                         while asyncio.get_event_loop().time() - start_time < max_wait:
+                            douyin_logger.info("开始读取验证码")
                             if redis_client.ping():
-                                # with open(vcode_file, 'r') as f:
-                                #     vcode = f.read().strip()
-                                vcode = get_douyin_verification_code("18282513893")
+                                vcode = get_douyin_verification_code(phone_number)
                                 if vcode:
                                     douyin_logger.info(f"从redis读取到验证码: {vcode}")
                                     break
@@ -197,7 +200,7 @@ async def douyin_cookie_gen(account_file):
             except Exception as e:
                 douyin_logger.error(f"发生错误: {str(e)}")
                 retry_count += 1
-                await asyncio.sleep(10)  # 等待10秒后重试
+                await asyncio.sleep(1)  # 等待10秒后重试
         
         if login_success:
             # 登录成功后保存cookie
@@ -310,7 +313,7 @@ class DouYinVideo(object):
                         douyin_logger.error("  [-] 发现上传出错了... 准备重试")
                         await self.handle_upload_error(page)
             except:
-                douyin_logger.info("  [-] 正在上传视频中...")
+                douyin_logger.info("  [-] 正上传视频中...")
                 await asyncio.sleep(2)
         
         #上传视频封面
@@ -377,6 +380,8 @@ class DouYinVideo(object):
     async def main(self):
         async with async_playwright() as playwright:
             await self.upload(playwright)
+
+
 
 
 

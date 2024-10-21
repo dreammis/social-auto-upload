@@ -7,3 +7,6 @@ biliup
 xhs
 qrcode
 loguru
+python-multipart
+fastapi 
+uvicorn

@@ -60,7 +60,37 @@ def get_earliest_receiver():
         return None
 
 
-def send_image_message(image_url: str):
+def send_message(send_message: str):
+    send_text_url = 'http://121.43.145.233:31007/send_text_message'
+    headers = {
+        'accept': 'application/json',
+        'Content-Type': 'application/json'
+    }
+
+    user_id = get_earliest_receiver()
+    if not user_id:
+        print("无法获取有效的 user_id,消息发送失败")
+        return
+
+    send_message = {
+        "user_id": user_id,
+        "message": send_message
+    }
+
+    try:
+        response = requests.post(send_text_url, headers=headers, json=send_message)
+        if response.status_code == 200:
+            print("消息发送成功")
+            print(response.json())
+        else:
+            print(f"发送失败,状态码: {response.status_code}")
+            print(f"错误信息: {response.text}")
+    except Exception as e:
+        print(f"发送消息时发生错误: {str(e)}")
+
+
+
+def send_image_url(image_url: str):
     url = 'http://121.43.145.233:31007/send_image_url'
     send_text_url = 'http://121.43.145.233:31007/send_text_message'
     headers = {

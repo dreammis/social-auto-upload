@@ -1,3 +1,4 @@
+import os
 import argparse
 import asyncio
 from datetime import datetime
@@ -44,6 +45,8 @@ async def main():
             action_parser.add_argument("-pt", "--publish_type", type=int, choices=[0, 1],
                                        help="0 for immediate, 1 for scheduled", default=0)
             action_parser.add_argument('-s', '--schedule', help='Schedule UTC time in %Y-%m-%d %H:%M format')
+            action_parser.add_argument('-l', '--location', default='成都市', help='Location for the post')
+            action_parser.add_argument('-txt', '--text_file', help='Path to the text file containing title and tags')
 
     # 解析命令行参数
     args = parser.parse_args()
@@ -69,7 +72,10 @@ async def main():
         elif args.platform == SOCIAL_MEDIA_KUAISHOU:
             await ks_setup(str(account_file), handle=True)
     elif args.action == 'upload':
-        title, tags = get_title_and_hashtags(args.file_paths[0])  # 使用第一个文件名作为标题基础
+        if args.text_file:
+            title, tags = get_title_and_hashtags(args.text_file)
+        else:
+            title, tags = '', []
         file_paths = args.file_paths
 
         if args.publish_type == 0:
@@ -84,7 +90,7 @@ async def main():
             if args.type == 'video':
                 app = DouYinVideo(title, file_paths[0], tags, publish_date, account_file)
             else:
-                app = DouYinImage(title, file_paths, tags, publish_date, account_file)
+                app = DouYinImage(title, file_paths, tags, publish_date, account_file, location=args.location)
         elif args.platform == SOCIAL_MEDIA_TIKTOK:
             await tiktok_setup(account_file, handle=True)
             app = TiktokVideo(title, file_paths[0], tags, publish_date, account_file)

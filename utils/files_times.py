@@ -14,28 +14,21 @@ def get_absolute_path(relative_path: str, base_dir: str = None) -> str:
     return str(absolute_path)
 
 
-def get_title_and_hashtags(file_path):
-    # 获取文件名（不包括扩展名）
-    file_name = os.path.splitext(os.path.basename(file_path))[0]
-    
-    # 将文件名中的下划线和连字符替换为空格
-    title = re.sub(r'[_-]', ' ', file_name)
-    
-    # 将标题中的每个单词首字母大写
-    title = title.title()
-    
-    # 从标题中提取可能的标签（假设标签是以#开头的单词）
-    tags = re.findall(r'#(\w+)', title)
-    
-    # 从标题中移除标签
-    title = re.sub(r'#\w+', '', title).strip()
-    
-    # 如果没有找到标签，可以根据标题生成一些默认标签
-    if not tags:
-        words = title.split()
-        tags = words[:3]  # 使用标题的前三个单词作为标签
-    
+def get_title_and_hashtags_from_content(content: str):
+    lines = content.split('\n')
+    title = lines[0].strip() if lines else ''
+    tags = [tag.strip() for tag in lines[1:] if tag.strip()]
     return title, tags
+
+
+def get_title_and_hashtags(file_path):
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"文件不存在：{file_path}")
+    
+    with open(file_path, 'r', encoding='utf-8') as file:
+        content = file.read()
+    
+    return get_title_and_hashtags_from_content(content)
 
 
 def generate_schedule_time_next_day(total_videos, videos_per_day, daily_times=None, timestamps=False, start_days=0):
