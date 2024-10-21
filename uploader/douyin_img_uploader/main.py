@@ -137,8 +137,13 @@ class DouYinImage(object):
         await page.keyboard.press("Backspace")
         await page.wait_for_timeout(2000)
         await page.keyboard.type(location)
-        await page.wait_for_selector('div[role="listbox"] [role="option"]', timeout=5000)
-        await page.locator('div[role="listbox"] [role="option"]').first.click()
+        
+        try:
+            await page.wait_for_selector('div[role="listbox"] [role="option"]', timeout=5000)
+            await page.locator('div[role="listbox"] [role="option"]').first.click()
+        except Exception as e:
+            douyin_logger.warning(f'  [-] 设置位置失败: {e}，将跳过位置设置...')
+            # 这里可以选择不设置位置，直接返回
 
     async def main(self):
         async with async_playwright() as playwright:
