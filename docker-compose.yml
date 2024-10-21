@@ -10,7 +10,7 @@ services:
     volumes:
 #      - ./cookies:/app/cookies
 #      - ./data:/app/data
-      - ./:/root/
+      - ./:/app/
     environment:
       - TZ=Asia/Shanghai
 #    command: sleep 24h
