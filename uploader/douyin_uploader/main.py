@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+import traceback
 from datetime import datetime
 
 from playwright.async_api import Playwright, async_playwright, Page
+from playwright._impl._errors import TimeoutError
 import os
 import asyncio
 
@@ -191,16 +193,23 @@ async def douyin_cookie_gen(account_file, phone_number):
                             douyin_logger.error("未能读取到有效的验证码")
                     else:
                         douyin_logger.info("未检测到'接收短信验证'按钮，可能不需要短信验证")
-                
+            except TimeoutError:
+                douyin_logger.info(" [-] 不需要身份验证")
                 # 检查是否已经登录成功
                 if await page.wait_for_selector("text=发布作品"):
                     douyin_logger.info("检测到'发布作品'，登录成功")
                     login_success = True
                     break
+                else:
+                    # 如果没有检测到"发布作品"，则增加重试次数
+                    retry_count += 1
+                    douyin_logger.info("未检测到'发布作品'，重试中...")
+                    await asyncio.sleep(1)  # 等待1秒后重试
             except Exception as e:
+                print(traceback.format_exc())
                 douyin_logger.error(f"发生错误: {str(e)}")
                 retry_count += 1
-                await asyncio.sleep(1)  # 等待10秒后重试
+                await asyncio.sleep(1)  # 等待1秒后重试
         
         if login_success:
             # 登录成功后保存cookie
@@ -380,6 +389,7 @@ class DouYinVideo(object):
     async def main(self):
         async with async_playwright() as playwright:
             await self.upload(playwright)
+
 
 
 
