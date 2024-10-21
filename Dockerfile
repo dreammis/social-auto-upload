@@ -1,9 +1,9 @@
-FROM --platform=linux/arm64 playwright/chromium:playwright-1.48.1
+FROM mcr.microsoft.com/playwright/python:v1.48.0-focal
+
+ENV http_proxy="http://dev.datamatrixai.com:30130"
+ENV https_proxy="http://dev.datamatrixai.com:30130"
 
 WORKDIR /app
-
-# 安装Python和pip
-RUN apt-get update && apt-get install -y python3 python3-pip || true
 
 # 复制项目文件
 COPY . /app
@@ -14,5 +14,8 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # 暴露FastAPI应用的端口
 EXPOSE 8000
 
-# 运行FastAPI应用
-CMD ["python3", "api.py"]
+ENV http_proxy=""
+ENV https_proxy=""
+
+# 运行FastAPI应用 xvfb-run --auto-servernum --server-num=1 --server-args='-screen 0, 1920x1080x24' python login.py
+#CMD ["xvfb-run", "--auto-servernum", "--server-num=1", "--server-args='-screen 0, 1920x1080x24'", "python3", "api.py"]

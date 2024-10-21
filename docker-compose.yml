@@ -3,9 +3,15 @@ version: '3'
 services:
   app:
     build: .
+    image: linyq1/playwright:latest
+    user: root
     ports:
       - "8000:8000"
     volumes:
-      - ./cookies:/app/cookies
+#      - ./cookies:/app/cookies
+#      - ./data:/app/data
+      - ./:/root/
     environment:
       - TZ=Asia/Shanghai
+#    command: sleep 24h
+    command: sh /app/docker-entrypoint.sh
