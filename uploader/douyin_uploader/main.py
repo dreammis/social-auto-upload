@@ -152,7 +152,7 @@ class DouYinVideo(object):
             # 判断重新上传按钮是否存在，如果不存在，代表视频正在上传，则等待
             try:
                 #  新版：定位重新上传
-                number = await page.locator('div label+div:has-text("重新上传")').count()
+                number = await page.locator('[class^="upload-btn"] div:has-text("重新上传")').count()
                 if number > 0:
                     douyin_logger.success("  [-]视频上传完毕")
                     break
