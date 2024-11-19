@@ -1,29 +1,24 @@
 import redis
-from celery import shared_task
 
 r = redis.Redis(host='127.0.0.1', port=6379, decode_responses=True)  
 
-def add_bilibili_login(id):
+def add_to_bilibili_login_list(id):
   r.sadd('bilibili_login', id)
 
-@shared_task()
-def add_bilibili_login_task(id):
-  return add_bilibili_login(id)
-
-def register_bilibili_login(id, value):
+def register_bilibili_login(id: str, value: str):
   r.set(id, value)
 
-def remove_bilibili_login(id):
+def remove_from_bilibili_login_list(id):
   r.srem('bilibili_login', id)
 
 def get_bilibili_login(id):
   return r.get(id)
 
-def set_celery_task(id):
-  r.set('running_celery_task', id)
+def remove_bilibili_login(id):
+  r.delete(id)
 
-def remove_celery_task(id):
-  r.delete('running_celery_task')
+def get_all_bilibili_login_ids():
+  return r.smembers('bilibili_login')
 
-def get_celery_task():
-  return r.get('running_celery_task')
+def clear_bilibili_login_list():
+  r.delete('bilibili_login')
