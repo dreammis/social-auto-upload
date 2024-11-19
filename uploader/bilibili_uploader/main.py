@@ -5,7 +5,6 @@ from biliup.plugins.bili_webup import BiliBili, Data
 
 from utils.log import bilibili_logger
 
-
 def extract_keys_from_json(data):
     """Extract specified keys from the provided JSON data."""
     keys_to_extract = ["SESSDATA", "bili_jct", "DedeUserID__ckMd5", "DedeUserID", "access_token"]
