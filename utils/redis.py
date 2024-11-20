@@ -1,3 +1,4 @@
+import json
 import redis
 
 r = redis.Redis(host='127.0.0.1', port=6379, decode_responses=True)  
@@ -11,8 +12,8 @@ def register_bilibili_login(id: str, value: str):
 def remove_from_bilibili_login_list(id):
   r.srem('bilibili_login', id)
 
-def get_bilibili_login(id):
-  return r.get(id)
+def get_bilibili_login(id) -> dict:
+  return json.loads(r.get(id))
 
 def remove_bilibili_login(id):
   r.delete(id)

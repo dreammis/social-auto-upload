@@ -1,10 +1,15 @@
+from datetime import datetime, timedelta
 import json
+from pathlib import Path
+from typing import List, Optional
 import uuid
-from celery import shared_task
 from fastapi import BackgroundTasks
+from uploader.bilibili_uploader.main import BilibiliUploader, extract_keys_from_json, random_emoji
+from utils.files_times import generate_schedule_time_next_day
 from utils.redis import add_to_bilibili_login_list, get_all_bilibili_login_ids, get_bilibili_login, register_bilibili_login
 import qrcode
-from biliup.plugins.bili_webup import BiliBili, Data
+from biliup.plugins.bili_webup import BiliBili
+import time
 
 async def test_login_by_qrcode():
     with BiliBili('test') as bili:
@@ -24,8 +29,8 @@ async def login_by_qrcode(id: str, value):
     with BiliBili('test') as bili:
         try:
             login_value: dict = await bili.login_by_qrcode(value)
-            if (login_value['code'] == 0):
-                register_bilibili_login(id, json.dumps(login_value))
+            if (login_value['code'] == 0 and login_value['data']):
+                register_bilibili_login(id, json.dumps(login_value["data"]))
                 add_to_bilibili_login_list(id)
         except Exception as e:
             print(e)
@@ -68,3 +73,14 @@ def get_bilibili_login_info(id: str):
 
 def get_bilibili_login_account_ids():
     return get_all_bilibili_login_ids()
+
+def upload_video_to_bilibili(id: str, video_path: str, title: str, description: str, tags: List[str], tid: str, timestamp: Optional[str]):
+    cookie_data = extract_keys_from_json(get_bilibili_login(id))
+    try:
+        tags_list = [tag.replace("#", "") for tag in tags]
+        bili_uploader = BilibiliUploader(cookie_data, Path(video_path), title, description, tid, tags_list, timestamp)
+        bili_uploader.upload()
+    except Exception as e:
+        raise e
+
+    return 
