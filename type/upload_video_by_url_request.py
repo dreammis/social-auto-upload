@@ -4,7 +4,8 @@ from typing import List, Optional
 class Platforms(BaseModel):
     """下面就是每个平台，平台下传递包含id的数组"""
     """bilibili的id"""
-    bilibili: Optional[List[str]]
+    bilibili: Optional[List[str]] = []
+    xiaohongshu: Optional[List[str]] = []
 
     # def __init__(self, bilibili: Optional[List[str]]) -> None:
     #     self.bilibili = bilibili
@@ -13,13 +14,13 @@ class Platforms(BaseModel):
 class UploadVideoByUrlRequest(BaseModel):
     """UploadVideoByUrlRequest"""
     """简介"""
-    description: str
+    description: Optional[str]
     """下面就是每个平台，平台下传递包含id的数组"""
     platforms: Platforms
     """视频tag"""
     tags: List[str]
     """视频分区"""
-    tid: str
+    tid: Optional[str]
     """上传的时间"""
     timestamp: Optional[str]
     """视频标题"""

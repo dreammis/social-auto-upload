@@ -1,15 +1,13 @@
-from datetime import datetime, timedelta
+
 import json
 from pathlib import Path
 from typing import List, Optional
 import uuid
 from fastapi import BackgroundTasks
-from uploader.bilibili_uploader.main import BilibiliUploader, extract_keys_from_json, random_emoji
-from utils.files_times import generate_schedule_time_next_day
+from uploader.bilibili_uploader.main import BilibiliUploader, extract_keys_from_json
 from utils.redis import add_to_bilibili_login_list, get_all_bilibili_login_ids, get_bilibili_login, register_bilibili_login
 import qrcode
 from biliup.plugins.bili_webup import BiliBili
-import time
 
 async def test_login_by_qrcode():
     with BiliBili('test') as bili:
@@ -17,8 +15,8 @@ async def test_login_by_qrcode():
         print(res)
         url = res['data']['url']
         qr = qrcode.QRCode(version=1, error_correction=qrcode.ERROR_CORRECT_L,
-                          box_size=10,
-                          border=1)
+                        box_size=10,
+                        border=1)
         qr.add_data(url)
         qr.make()
         qr.print_ascii()
