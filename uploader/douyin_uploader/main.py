@@ -132,7 +132,6 @@ class DouYinVideo(object):
         await asyncio.sleep(1)
         douyin_logger.info(f'  [-] 正在填充标题和话题...')
         title_container = page.get_by_placeholder('作品标题')
-        douyin_logger.info(f'  [-] 正在填充标题和话题...', title_container.count())
         if await title_container.count():
             await title_container.fill(self.title[:30])
         else:
