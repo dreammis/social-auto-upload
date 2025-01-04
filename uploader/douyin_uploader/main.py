@@ -120,7 +120,7 @@ class DouYinVideo(object):
             # 判断是是否进入视频发布页面，没进入，则自动等待到超时
             try:
                 await page.wait_for_url(
-                    "https://creator.douyin.com/creator-micro/content/publish?enter_from=publish_page")
+                    "https://creator.douyin.com/creator-micro/content/post/video?enter_from=publish_page")
                 break
             except:
                 douyin_logger.info(f'  [-] 正在等待进入视频发布页面...')
@@ -131,7 +131,8 @@ class DouYinVideo(object):
         # 这里为了避免页面变化，故使用相对位置定位：作品标题父级右侧第一个元素的input子元素
         await asyncio.sleep(1)
         douyin_logger.info(f'  [-] 正在填充标题和话题...')
-        title_container = page.get_by_text('作品标题').locator("..").locator("xpath=following-sibling::div[1]").locator("input")
+        title_container = page.get_by_placeholder('作品标题')
+        douyin_logger.info(f'  [-] 正在填充标题和话题...', title_container.count())
         if await title_container.count():
             await title_container.fill(self.title[:30])
         else:
