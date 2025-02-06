@@ -260,5 +260,4 @@ async def multi_thread_upload():
 
 
 if __name__ == '__main__':
-    import sys
-    asyncio.run(multi_thread_upload())
+    asyncio.run(single_thread_upload(account_name="向阳很有米"))
