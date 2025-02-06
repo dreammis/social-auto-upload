@@ -120,7 +120,7 @@ class DouYinVideo(object):
             # 判断是是否进入视频发布页面，没进入，则自动等待到超时
             try:
                 await page.wait_for_url(
-                    "https://creator.douyin.com/creator-micro/content/publish?enter_from=publish_page")
+                    "https://creator.douyin.com/creator-micro/content/post/video?enter_from=publish_page")
                 break
             except:
                 douyin_logger.info(f'  [-] 正在等待进入视频发布页面...')

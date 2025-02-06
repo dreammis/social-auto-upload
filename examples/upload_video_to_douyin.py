@@ -1,9 +1,15 @@
 import asyncio
 from pathlib import Path
+import sys
+
+current_dir = Path(__file__).parent.parent
+sys.path.append(str(current_dir))
 
 from conf import BASE_DIR
 from uploader.douyin_uploader.main import douyin_setup, DouYinVideo
 from utils.files_times import generate_schedule_time_next_day, get_title_and_hashtags
+
+# 添加项目根目录到 Python 路径
 
 
 if __name__ == '__main__':

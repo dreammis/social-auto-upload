@@ -7,3 +7,5 @@ biliup
 xhs
 qrcode
 loguru
+flask
+gevent

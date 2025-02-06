@@ -12,65 +12,73 @@ def get_absolute_path(relative_path: str, base_dir: str = None) -> str:
     return str(absolute_path)
 
 
-def get_title_and_hashtags(filename):
+def get_title_and_hashtags(file_path: str) -> tuple[str, list, list]:
     """
-  获取视频标题和 hashtag
-
-  Args:
-    filename: 视频文件名
-
-  Returns:
-    视频标题和 hashtag 列表
-  """
-
-    # 获取视频标题和 hashtag txt 文件名
-    txt_filename = filename.replace(".mp4", ".txt")
-
-    # 读取 txt 文件
-    with open(txt_filename, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # 获取标题和 hashtag
-    splite_str = content.strip().split("\n")
-    title = splite_str[0]
-    hashtags = splite_str[1].replace("#", "").split(" ")
-
-    return title, hashtags
+    从文件名中提取标题和标签
+    
+    Args:
+        file_path: 文件路径
+        
+    Returns:
+        tuple: (标题, 标签列表, @提及列表)
+    """
+    # 获取文件名（不含扩展名）
+    filename = Path(file_path).stem
+    
+    # 分离标题和标签
+    parts = filename.split('#')
+    title = parts[0].strip()
+    
+    # 提取标签和@提及
+    tags = []
+    mentions = []
+    
+    if len(parts) > 1:
+        # 处理标签部分
+        tag_part = parts[1]
+        # 分离标签和@提及
+        for item in tag_part.split():
+            if item.startswith('@'):
+                mentions.append(item[1:])  # 去掉@符号
+            else:
+                tags.append(item)
+    
+    return title, tags, mentions
 
 
 def generate_schedule_time_next_day(total_videos, videos_per_day, daily_times=None, timestamps=False, start_days=0):
     """
-    Generate a schedule for video uploads, starting from the next day.
+    生成从第二天开始的视频上传时间表。
 
     Args:
-    - total_videos: Total number of videos to be uploaded.
-    - videos_per_day: Number of videos to be uploaded each day.
-    - daily_times: Optional list of specific times of the day to publish the videos.
-    - timestamps: Boolean to decide whether to return timestamps or datetime objects.
-    - start_days: Start from after start_days.
+    - total_videos: 需要上传的视频总数。
+    - videos_per_day: 每天上传的视频数量。
+    - daily_times: 可选的每天发布视频的具体时间列表。
+    - timestamps: 布尔值，决定是返回时间戳还是 datetime 对象。
+    - start_days: 从多少天后开始。
 
     Returns:
-    - A list of scheduling times for the videos, either as timestamps or datetime objects.
+    - 视频的计划时间列表，可以是时间戳或 datetime 对象。
     """
     if videos_per_day <= 0:
-        raise ValueError("videos_per_day should be a positive integer")
+        raise ValueError("videos_per_day 应该是一个正整数")
 
     if daily_times is None:
-        # Default times to publish videos if not provided
+        # 如果未提供发布时间,使用默认时间
         daily_times = [6, 11, 14, 16, 22]
 
     if videos_per_day > len(daily_times):
-        raise ValueError("videos_per_day should not exceed the length of daily_times")
+        raise ValueError("每天上传的视频数量不能超过每日发布时间点的数量")
 
-    # Generate timestamps
+    # 生成时间戳
     schedule = []
     current_time = datetime.now()
 
     for video in range(total_videos):
-        day = video // videos_per_day + start_days + 1  # +1 to start from the next day
+        day = video // videos_per_day + start_days + 1  # +1 表示从第二天开始
         daily_video_index = video % videos_per_day
 
-        # Calculate the time for the current video
+        # 计算当前视频的发布时间
         hour = daily_times[daily_video_index]
         time_offset = timedelta(days=day, hours=hour - current_time.hour, minutes=-current_time.minute,
                                 seconds=-current_time.second, microseconds=-current_time.microsecond)

@@ -1,6 +1,11 @@
 import configparser
 from pathlib import Path
 from time import sleep
+import sys
+
+# 添加项目根目录到 Python 路径
+current_dir = Path(__file__).parent.parent
+sys.path.append(str(current_dir))
 
 from xhs import XhsClient
 

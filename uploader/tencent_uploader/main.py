@@ -9,11 +9,24 @@ from conf import LOCAL_CHROME_PATH
 from utils.base_social_media import set_init_script
 from utils.files_times import get_absolute_path
 from utils.log import tencent_logger
+from ai_module import generate_hashtags  # 改回绝对导入
 
 
 def format_str_for_short_title(origin_title: str) -> str:
+    """
+    格式化标题字符串，用于生成短标题。
+
+    该函数会移除标题中的非字母数字字符和特定的特殊字符，然后根据长度要求进行截断或填充，
+    以生成符合规范的短标题。
+
+    参数:
+    origin_title: 原始标题字符串。
+
+    返回值:
+    格式化后的短标题字符串。
+    """
     # 定义允许的特殊字符
-    allowed_special_chars = "《》“”:+?%°"
+    allowed_special_chars = "《》""+?%°"
 
     # 移除不允许的特殊字符
     filtered_chars = [char if char.isalnum() or char in allowed_special_chars else ' ' if char == ',' else '' for
@@ -32,36 +45,63 @@ def format_str_for_short_title(origin_title: str) -> str:
 
 
 async def cookie_auth(account_file):
+    """
+    使用 account_file 中的 cookie 进行微信渠道平台的登录验证。
+
+    Args:
+        account_file (str): 包含 cookie 信息的文件路径。
+
+    Returns:
+        bool: 如果 cookie 有效，返回 True；否则返回 False。
+    """
+    # 启动一个无头的 Chromium 浏览器实例。
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True)
+        # 创建一个新的浏览器上下文，并加载账户文件中的存储状态（cookie）。
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
-        # 创建一个新的页面
+        # 创建一个新的页面。
         page = await context.new_page()
-        # 访问指定的 URL
+        # 访问指定的 URL。
         await page.goto("https://channels.weixin.qq.com/platform/post/create")
         try:
+            # 等待页面上出现特定的元素，以验证 cookie 是否有效。
             await page.wait_for_selector('div.title-name:has-text("微信小店")', timeout=5000)  # 等待5秒
+            # 如果元素出现，说明 cookie 失效。
             tencent_logger.error("[+] 等待5秒 cookie 失效")
             return False
         except:
+            # 如果元素未出现，说明 cookie 有效。
             tencent_logger.success("[+] cookie 有效")
             return True
 
 
 async def get_tencent_cookie(account_file):
+    """
+    异步获取腾讯的cookie，通过启动浏览器并手动登录实现。
+
+    该函数使用Playwright启动Chromium浏览器，导航到腾讯登录页面，并暂停以便手动完成登录过程。
+    登录成功后，它将浏览器的cookie保存到指定文件中。
+
+    参数:
+    - account_file: str, 保存cookie的文件路径。
+
+    返回值:
+    该函数不直接返回任何值，但会将cookie信息保存到指定文件中。
+    """
+    # 初始化Playwright并准备浏览器启动选项。
     async with async_playwright() as playwright:
         options = {
             'args': [
                 '--lang en-GB'
             ],
-            'headless': False,  # Set headless option here
+            'headless': False,  # 设置无头模式选项
         }
-        # Make sure to run headed.
+        # 确保以有头模式运行。
         browser = await playwright.chromium.launch(**options)
-        # Setup context however you like.
-        context = await browser.new_context()  # Pass any options
-        # Pause the page, and start recording manually.
+        # 根据需要设置上下文。
+        context = await browser.new_context()  # 传递任何选项
+        # 暂停页面，手动开始记录。
         context = await set_init_script(context)
         page = await context.new_page()
         await page.goto("https://channels.weixin.qq.com")
@@ -82,16 +122,23 @@ async def weixin_setup(account_file, handle=False):
 
 
 class TencentVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_files: list, category=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
         self.publish_date = publish_date
-        self.account_file = account_file
+        self.account_files = account_files
         self.category = category
         self.local_executable_path = LOCAL_CHROME_PATH
 
     async def set_schedule_time_tencent(self, page, publish_date):
+        """
+        设置腾讯视频的定时发布时间
+        Args:
+            page: 浏览器页面
+            publish_date: 发布时间
+        """
+        # 点击定时发布
         label_element = page.locator("label").filter(has_text="定时").nth(1)
         await label_element.click()
 
@@ -127,64 +174,88 @@ class TencentVideo(object):
         await page.locator("div.input-editor").click()
 
     async def handle_upload_error(self, page):
+        """
+        处理视频上传错误
+        Args:
+            page: 浏览器页面
+        """
         tencent_logger.info("视频出错了，重新上传中")
         await page.locator('div.media-status-content div.tag-inner:has-text("删除")').click()
         await page.get_by_role('button', name="删除", exact=True).click()
         file_input = page.locator('input[type="file"]')
+
         await file_input.set_input_files(self.file_path)
 
     async def upload(self, playwright: Playwright) -> None:
-        # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
-        browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
-        # 创建一个浏览器上下文，使用指定的 cookie 文件
-        context = await browser.new_context(storage_state=f"{self.account_file}")
-        context = await set_init_script(context)
+        """
+        上传视频
+        Args:
+            playwright: Playwright对象
+        """
+        for account_file in self.account_files:
+            context = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
+            # 创建一个浏览器上下文，使用指定的 cookie 文件
+            context = await context.new_context(storage_state=account_file)
+            context = await set_init_script(context)
 
-        # 创建一个新的页面
-        page = await context.new_page()
-        # 访问指定的 URL
-        await page.goto("https://channels.weixin.qq.com/platform/post/create")
-        tencent_logger.info(f'[+]正在上传-------{self.title}.mp4')
-        # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
-        await page.wait_for_url("https://channels.weixin.qq.com/platform/post/create")
-        # await page.wait_for_selector('input[type="file"]', timeout=10000)
-        file_input = page.locator('input[type="file"]')
-        await file_input.set_input_files(self.file_path)
-        # 填充标题和话题
-        await self.add_title_tags(page)
-        # 添加商品
-        # await self.add_product(page)
-        # 合集功能
-        await self.add_collection(page)
-        # 原创选择
-        await self.add_original(page)
-        # 检测上传状态
-        await self.detect_upload_status(page)
-        if self.publish_date != 0:
-            await self.set_schedule_time_tencent(page, self.publish_date)
-        # 添加短标题
-        await self.add_short_title(page)
 
-        await self.click_publish(page)
+            # 创建一个新的页面
+            page = await context.new_page()
+            # 访问指定的 URL
+            await page.goto("https://channels.weixin.qq.com/platform/post/create")
+            tencent_logger.info(f'[+]正在上传-------{self.title}.mp4')
+            # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
+            await page.wait_for_url("https://channels.weixin.qq.com/platform/post/create")
+            # await page.wait_for_selector('input[type="file"]', timeout=10000)
+            file_input = page.locator('input[type="file"]')
+            await file_input.set_input_files(self.file_path)
+            # 填充标题和话题
+            await self.add_title_tags(page)
+            # 添加商品
+            # await self.add_product(page)
+            # 合集功能
+            await self.add_collection(page)
+            # 原创选择
+            await self.add_original(page)
+            # 检测上传状态
+            await self.detect_upload_status(page)
+            if self.publish_date != 0:
+                await self.set_schedule_time_tencent(page, self.publish_date)
+            # 添加短标题
+            await self.add_short_title(page)
 
-        await context.storage_state(path=f"{self.account_file}")  # 保存cookie
-        tencent_logger.success('  [-]cookie更新完毕！')
-        await asyncio.sleep(2)  # 这里延迟是为了方便眼睛直观的观看
-        # 关闭浏览器上下文和浏览器实例
-        await context.close()
-        await browser.close()
+            await self.click_publish(page)
+
+            await context.storage_state(path=account_file)  # 保存cookie
+            tencent_logger.success('  [-]cookie更新完毕！')
+            await asyncio.sleep(2)  # 这里延迟是为了方便眼睛直观的观看
+            # 关闭浏览器上下文和浏览器实例
+            await context.close()
+            await playwright.close()
 
     async def add_short_title(self, page):
+        """
+        添加短标题
+        Args:
+            page: 浏览器页面
+        """
         short_title_element = page.get_by_text("短标题", exact=True).locator("..").locator(
             "xpath=following-sibling::div").locator(
             'span input[type="text"]')
+
         if await short_title_element.count():
             short_title = format_str_for_short_title(self.title)
             await short_title_element.fill(short_title)
 
     async def click_publish(self, page):
+        """
+        点击发表
+        Args:
+            page: 浏览器页面
+        """
         while True:
             try:
+
                 publish_buttion = page.locator('div.form-btns button:has-text("发表")')
                 if await publish_buttion.count():
                     await publish_buttion.click()
@@ -202,9 +273,15 @@ class TencentVideo(object):
                     await asyncio.sleep(0.5)
 
     async def detect_upload_status(self, page):
+        """
+        检测视频上传状态
+        Args:
+            page: 浏览器页面
+        """
         while True:
             # 匹配删除按钮，代表视频上传完毕，如果不存在，代表视频正在上传，则等待
             try:
+
                 # 匹配删除按钮，代表视频上传完毕
                 if "weui-desktop-btn_disabled" not in await page.get_by_role("button", name="发表").get_attribute(
                         'class'):
@@ -223,24 +300,49 @@ class TencentVideo(object):
                 await asyncio.sleep(2)
 
     async def add_title_tags(self, page):
+        """
+        添加标题和话题
+        Args:
+            page: 浏览器页面
+        """
         await page.locator("div.input-editor").click()
         await page.keyboard.type(self.title)
         await page.keyboard.press("Enter")
-        for index, tag in enumerate(self.tags, start=1):
+        smart_tags = generate_hashtags(self.title)
+        # 确保 smart_tags 是列表
+        if not smart_tags or smart_tags is ...:
+
+            smart_tags = []
+        elif isinstance(smart_tags, str):
+            smart_tags = [smart_tags]
+        combined_tags = list(set(self.tags + smart_tags))
+        for index, tag in enumerate(combined_tags, start=1):
             await page.keyboard.type("#" + tag)
             await page.keyboard.press("Space")
-        tencent_logger.info(f"成功添加hashtag: {len(self.tags)}")
+        tencent_logger.info(f"成功添加hashtag: {len(combined_tags)}")
 
     async def add_collection(self, page):
+        """
+        添加合集
+        Args:
+            page: 浏览器页面
+        """
         collection_elements = page.get_by_text("添加到合集").locator("xpath=following-sibling::div").locator(
             '.option-list-wrap > div')
+
         if await collection_elements.count() > 1:
             await page.get_by_text("添加到合集").locator("xpath=following-sibling::div").click()
             await collection_elements.first.click()
 
     async def add_original(self, page):
+        """
+        添加原创
+        Args:
+            page: 浏览器页面
+        """
         if await page.get_by_label("视频为原创").count():
             await page.get_by_label("视频为原创").check()
+
         # 检查 "我已阅读并同意 《视频号原创声明使用条款》" 元素是否存在
         label_locator = await page.locator('label:has-text("我已阅读并同意 《视频号原创声明使用条款》")').is_visible()
         if label_locator:
@@ -261,7 +363,7 @@ class TencentVideo(object):
                 await page.wait_for_timeout(1000)
             if await page.locator('button:has-text("声明原创"):visible').count():
                 await page.locator('button:has-text("声明原创"):visible').click()
-
+    
     async def main(self):
         async with async_playwright() as playwright:
             await self.upload(playwright)
