@@ -299,3 +299,91 @@ Parameter explanation:
 > 如果这个项目对你有帮助，⭐以表示支持 
 
 [![Star History Chart](https://api.star-history.com/svg?repos=dreammis/social-auto-upload&type=Date)](https://star-history.com/#dreammis/social-auto-upload&Date)
+
+# 视频管理工具
+
+一个简单高效的视频文件管理工具，帮助你管理多平台视频发布状态。
+
+## 项目愿景
+
+帮助内容创作者高效管理视频文件和多平台发布状态，提高工作效率。
+
+## 快速开始
+
+1. 克隆项目
+```bash
+git clone [项目地址]
+cd video-manager
+```
+
+2. 创建虚拟环境
+```bash
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# 或
+.\venv\Scripts\activate  # Windows
+```
+
+3. 安装依赖
+```bash
+pip install -r requirements.txt
+```
+
+4. 配置环境变量
+```bash
+cp .env.example .env
+# 编辑 .env 文件，设置必要的配置
+```
+
+5. 运行程序
+```bash
+streamlit run src/frontend/app.py
+```
+
+## 功能地图
+
+```
+视频管理工具
+├── 文件管理
+│   ├── 视频扫描
+│   ├── 元数据管理
+│   └── 文件监控
+├── 发布管理
+│   ├── 多平台配置
+│   ├── 发布状态跟踪
+│   └── 定时发布
+└── 数据统计
+    ├── 发布统计
+    └── 状态分析
+```
+
+## 典型使用场景
+
+1. **批量视频管理**
+   - 扫描指定目录下的所有视频文件
+   - 自动生成和管理 info.json 文件
+   - 查看和编辑视频元数据
+
+2. **多平台发布跟踪**
+   - 管理不同平台的发布状态
+   - 设置发布时间和标签
+   - 记录发布URL和笔记
+
+3. **数据统计分析**
+   - 查看发布统计数据
+   - 分析发布效果
+   - 导出数据报告
+
+## 技术栈
+
+- Frontend: Streamlit
+- Backend: Python 3.10+
+- Data Validation: Pydantic
+- File Monitoring: Watchdog
+
+## 开发规范
+
+- 使用 mypy 进行静态类型检查
+- 使用 pytest 进行单元测试
+- 遵循 PEP 8 编码规范
+- 保持代码覆盖率在 80% 以上
