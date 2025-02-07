@@ -6,12 +6,12 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 
-# 将项目根目录添加到Python路径
-project_root = Path(__file__).parent.parent
-sys.path.append(str(project_root))
+# 添加项目根目录到 Python 路径
+current_dir = Path(__file__).parent.parent
+sys.path.append(str(current_dir))
 
 from conf import BASE_DIR
-from uploader.tencent_uploader.main import weixin_setup, TencentVideo
+from uploader.tencent_uploader import weixin_setup, TencentVideo
 from utils.constant import TencentZoneTypes
 from utils.files_times import generate_schedule_time_next_day
 from utils.log import tencent_logger
