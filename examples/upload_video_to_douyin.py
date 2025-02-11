@@ -23,8 +23,9 @@ if __name__ == '__main__':
         print(f"视频文件名：{file}")
         print(f"标题：{title}")
         print(f"Hashtag：{tags}")
-        if thumbnail_path.exists():
-            app = DouYinVideo(title, file, tags, publish_datetimes[index], account_file, thumbnail_path=thumbnail_path)
-        else:
-            app = DouYinVideo(title, file, tags, publish_datetimes[index], account_file)
+        # 暂时没有时间修复封面上传，故先隐藏掉该功能
+        # if thumbnail_path.exists():
+            # app = DouYinVideo(title, file, tags, publish_datetimes[index], account_file, thumbnail_path=thumbnail_path)
+        # else:
+        app = DouYinVideo(title, file, tags, publish_datetimes[index], account_file)
         asyncio.run(app.main(), debug=False)
