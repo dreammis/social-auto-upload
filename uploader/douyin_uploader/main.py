@@ -64,12 +64,13 @@ async def douyin_cookie_gen(account_file):
 
 
 class DouYinVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, download_type, thumbnail_path=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
         self.publish_date = publish_date
         self.account_file = account_file
+        self.download_type = download_type
         self.date_format = '%Y年%m月%d日 %H:%M'
         self.local_executable_path = LOCAL_CHROME_PATH
         self.thumbnail_path = thumbnail_path
@@ -193,6 +194,9 @@ class DouYinVideo(object):
         if self.publish_date != 0:
             await self.set_schedule_time_douyin(page, self.publish_date)
 
+        if self.download_type != 0:
+            await self.set_download_type(page)
+
         # 判断视频是否发布成功
         while True:
             # 判断视频是否发布成功
@@ -241,6 +245,10 @@ class DouYinVideo(object):
         await page.keyboard.type(location)
         await page.wait_for_selector('div[role="listbox"] [role="option"]', timeout=5000)
         await page.locator('div[role="listbox"] [role="option"]').first.click()
+
+    async def set_download_type(self, page: Page):
+        # 选择下载类型
+        await page.locator("[class^='radio']:has-text('不允许')").click()
 
     async def main(self):
         async with async_playwright() as playwright:
