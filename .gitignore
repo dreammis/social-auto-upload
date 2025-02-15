@@ -168,3 +168,4 @@ douyin_uploader/*.json
 bilibili_uploader/*.json
 tk_uploader/*.json
 cookies
+video_file_manager/ffmpeg/

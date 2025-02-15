@@ -12,16 +12,18 @@ from video_file_manager.core.file_manager import FileManager
 from video_file_manager.core.metadata_manager import MetadataManager
 from video_file_manager.ui.components.file_tree import create_file_tree
 from video_file_manager.ui.components.video_info import create_video_info
+from video_file_manager.utils.helpers import extract_text_from_video
 
 logger = logging.getLogger(__name__)
 
 class VideoManagerApp:
     def __init__(self):
         """初始化应用"""
-        self.file_manager = FileManager()
+        self.default_dir = Path("F:/向阳也有米/24版本/12月")
+        self.file_manager = FileManager(self.default_dir) if self.default_dir.exists() else FileManager()
         self.metadata_manager = MetadataManager()
         self.selected_file: Optional[Path] = None
-        logger.info("初始化应用完成")
+        logger.info(f"初始化应用完成，默认目录：{self.default_dir}")
     
     def on_directory_select(self, directory: str) -> Tuple[str, list]:
         """
@@ -51,7 +53,7 @@ class VideoManagerApp:
             evt: 选择事件数据
             
         Returns:
-            tuple: (视频预览, 文件名, 完整路径, 标题, 标签, 描述, 平台信息)
+            tuple: (视频预览, 文本内容, 提取按钮状态, 文件名, 完整路径, 标题, 标签, 描述, 平台信息)
         """
         try:
             logger.debug(f"选择事件数据: {evt}")
@@ -63,7 +65,7 @@ class VideoManagerApp:
             videos = self.file_manager.scan_videos()  # 获取当前的视频列表
             if not videos or row_index >= len(videos):
                 logger.error(f"无效的行索引: {row_index}")
-                return None, "", "", "", "", "", {}
+                return None, "", False, "", "", "", "", "", {}  # 注意这里返回9个值
                 
             video = videos[row_index]  # 获取选中的视频信息
             logger.debug(f"选中的视频信息: {video}")
@@ -91,6 +93,8 @@ class VideoManagerApp:
                 # 返回文件信息和元数据
                 return (
                     str(full_path),  # 视频预览路径
+                    "",  # 文本内容（初始为空）
+                    True,  # 提取按钮状态（可用）
                     file_name,  # 文件名
                     str(full_path),  # 完整路径
                     metadata.get("video_info", {}).get("title", ""),  # 标题
@@ -102,7 +106,7 @@ class VideoManagerApp:
             logger.exception(f"处理文件选择失败: {str(e)}")
             
         # 如果出现错误，返回空值
-        return None, "", "", "", "", "", {}
+        return None, "", False, "", "", "", "", "", {}  # 注意这里返回9个值
     
     def refresh_files(self) -> list:
         """
@@ -134,14 +138,64 @@ class VideoManagerApp:
         Returns:
             str: 选中的目录路径
         """
-        root = tk.Tk()
-        root.withdraw()  # 隐藏主窗口
+        try:
+            root = tk.Tk()
+            root.withdraw()  # 隐藏主窗口
+            root.attributes('-topmost', True)  # 确保对话框在最前面
+            
+            directory = filedialog.askdirectory(
+                title="选择视频目录",
+                initialdir=str(self.file_manager.base_dir),
+                parent=root
+            )
+            
+            logger.debug(f"选择的目录: {directory}")
+            
+            if directory:
+                return directory
+            return str(self.file_manager.base_dir)
+        except Exception as e:
+            logger.exception(f"打开目录选择对话框失败: {str(e)}")
+            return str(self.file_manager.base_dir)
+        finally:
+            try:
+                root.destroy()  # 确保窗口被销毁
+            except Exception:
+                pass
+    
+    def extract_text(self, video_path: str) -> str:
+        """
+        提取视频文字
         
-        directory = filedialog.askdirectory(
-            title="选择视频目录",
-            initialdir=str(self.file_manager.base_dir)
-        )
-        return directory if directory else str(self.file_manager.base_dir)
+        Args:
+            video_path: 视频文件路径
+            
+        Returns:
+            str: 提取的文字内容
+        """
+        try:
+            if not video_path:
+                logger.warning("未提供视频路径")
+                return "请先选择视频文件"
+            
+            logger.info(f"开始提取视频文字，输入路径: {video_path}")
+            logger.debug(f"路径类型: {type(video_path)}")
+            
+            # 确保路径是字符串类型
+            if not isinstance(video_path, str):
+                video_path = str(video_path)
+            
+            # 检查路径是否存在
+            video_file = Path(video_path)
+            logger.debug(f"转换后的路径: {video_file.resolve()}")
+            logger.debug(f"文件是否存在: {video_file.exists()}")
+            
+            text = extract_text_from_video(video_path)
+            logger.info("文字提取完成")
+            return text
+        except Exception as e:
+            logger.exception(f"提取文字失败: {str(e)}")
+            return f"提取失败: {str(e)}"
     
     def create_ui(self) -> gr.Blocks:
         """
@@ -162,7 +216,7 @@ class VideoManagerApp:
                         dir_input = gr.Textbox(
                             label="视频目录",
                             placeholder="请选择或输入视频目录路径",
-                            value=str(self.file_manager.base_dir),
+                            value=str(self.default_dir),
                             show_label=True
                         )
                         dir_button = gr.Button("选择目录", variant="secondary")
@@ -178,13 +232,13 @@ class VideoManagerApp:
             # 事件处理
             dir_button.click(
                 fn=self.select_directory,
-                outputs=[dir_input]
-            )
-            
-            dir_input.change(
+                outputs=dir_input,
+                api_name="select_directory"
+            ).then(
                 fn=self.on_directory_select,
-                inputs=[dir_input],
-                outputs=[dir_input, file_list]
+                inputs=dir_input,
+                outputs=[dir_input, file_list],
+                api_name="update_directory"
             )
             
             refresh_btn.click(
@@ -195,6 +249,13 @@ class VideoManagerApp:
             file_list.select(
                 fn=self.on_file_select,
                 outputs=info_components
+            )
+            
+            # 提取文字按钮事件
+            info_components[2].click(  # extract_btn
+                fn=self.extract_text,
+                inputs=[info_components[4]],  # file_path
+                outputs=[info_components[1]]  # transcript_text
             )
             
             logger.info("用户界面创建完成")
@@ -210,6 +271,18 @@ def create_app() -> gr.Blocks:
     app = VideoManagerApp()
     return app.create_ui()
 
+# 创建全局demo实例
+demo = create_app()
+
+# 仅在直接运行时启动服务器
 if __name__ == "__main__":
-    app = create_app()
-    app.launch() 
+    # 使用标准配置启动
+    demo.queue().launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        share=False,
+        show_api=False,
+        show_error=True,
+        debug=True,
+        prevent_thread_lock=True
+    )

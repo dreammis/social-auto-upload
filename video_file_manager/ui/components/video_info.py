@@ -18,15 +18,33 @@ def create_video_info() -> List[gr.Component]:
     with gr.Group():
         gr.Markdown("### 基本信息")
         
-        # 视频预览
+        # 视频预览和文本显示
         with gr.Row():
-            video_preview = gr.Video(
-                label="视频预览",
-                interactive=False,
-                height=400,  # 增加视频预览高度
-                width=600   # 增加视频预览宽度
-            )
-            components.append(video_preview)
+            with gr.Column(scale=1):
+                video_preview = gr.Video(
+                    label="视频预览",
+                    interactive=False,
+                    height=400,
+                    width=600
+                )
+                components.append(video_preview)
+            
+            with gr.Column(scale=1):
+                transcript_text = gr.Textbox(
+                    label="视频文字",
+                    value="",
+                    interactive=True,
+                    show_copy_button=True,
+                    lines=25,  # 增加行数以匹配视频预览高度
+                    container=True,  # 使用容器样式
+                    scale=1  # 填充整个列宽
+                )
+                extract_btn = gr.Button(
+                    "提取文字",
+                    variant="primary",
+                    scale=1  # 填充整个列宽
+                )
+                components.extend([transcript_text, extract_btn])  # 添加到组件列表
         
         # 文件信息
         with gr.Row():
