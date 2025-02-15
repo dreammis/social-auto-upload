@@ -51,7 +51,7 @@ class VideoManagerApp:
             evt: 选择事件数据
             
         Returns:
-            tuple: (文件信息, 元数据信息)
+            tuple: (视频预览, 文件名, 完整路径, 标题, 标签, 描述, 平台信息)
         """
         try:
             logger.debug(f"选择事件数据: {evt}")
@@ -63,7 +63,7 @@ class VideoManagerApp:
             videos = self.file_manager.scan_videos()  # 获取当前的视频列表
             if not videos or row_index >= len(videos):
                 logger.error(f"无效的行索引: {row_index}")
-                return ("", "", "", "", "", "", "", {})
+                return None, "", "", "", "", "", {}
                 
             video = videos[row_index]  # 获取选中的视频信息
             logger.debug(f"选中的视频信息: {video}")
@@ -71,13 +71,9 @@ class VideoManagerApp:
             # 使用文件管理器中的完整信息
             file_name = video["name"]
             relative_path = video["relative_path"]
-            file_size = video["size"]
-            modified_time = video["modified"].strftime("%Y-%m-%d %H:%M:%S")
             
             logger.debug(f"文件名: {file_name}")
             logger.debug(f"相对路径: {relative_path}")
-            logger.debug(f"文件大小: {file_size}")
-            logger.debug(f"修改时间: {modified_time}")
             
             # 确保使用绝对路径
             base_dir = self.file_manager.base_dir.resolve()
@@ -94,9 +90,8 @@ class VideoManagerApp:
                 
                 # 返回文件信息和元数据
                 return (
+                    str(full_path),  # 视频预览路径
                     file_name,  # 文件名
-                    file_size,  # 大小
-                    modified_time,  # 修改时间
                     str(full_path),  # 完整路径
                     metadata.get("video_info", {}).get("title", ""),  # 标题
                     ", ".join(metadata.get("video_info", {}).get("tags", [])),  # 标签
@@ -107,7 +102,7 @@ class VideoManagerApp:
             logger.exception(f"处理文件选择失败: {str(e)}")
             
         # 如果出现错误，返回空值
-        return ("", "", "", "", "", "", "", {})
+        return None, "", "", "", "", "", {}
     
     def refresh_files(self) -> list:
         """

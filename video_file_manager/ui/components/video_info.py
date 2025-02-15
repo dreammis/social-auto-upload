@@ -17,32 +17,32 @@ def create_video_info() -> List[gr.Component]:
     # 基本信息
     with gr.Group():
         gr.Markdown("### 基本信息")
+        
+        # 视频预览
         with gr.Row():
-            with gr.Column():
-                file_name = gr.Textbox(
-                    label="文件名",
-                    value="",
-                    interactive=False,
-                    show_copy_button=True
-                )
-                file_size = gr.Textbox(
-                    label="大小",
-                    value="",
-                    interactive=False
-                )
-            with gr.Column():
-                file_modified = gr.Textbox(
-                    label="修改时间",
-                    value="",
-                    interactive=False
-                )
-                file_path = gr.Textbox(
-                    label="完整路径",
-                    value="",
-                    interactive=False,
-                    show_copy_button=True
-                )
-        components.extend([file_name, file_size, file_modified, file_path])
+            video_preview = gr.Video(
+                label="视频预览",
+                interactive=False,
+                height=400,  # 增加视频预览高度
+                width=600   # 增加视频预览宽度
+            )
+            components.append(video_preview)
+        
+        # 文件信息
+        with gr.Row():
+            file_name = gr.Textbox(
+                label="文件名",
+                value="",
+                interactive=False,
+                show_copy_button=True
+            )
+            file_path = gr.Textbox(
+                label="完整路径",
+                value="",
+                interactive=False,
+                show_copy_button=True
+            )
+        components.extend([file_name, file_path])
     
     # 元数据信息
     with gr.Group():
