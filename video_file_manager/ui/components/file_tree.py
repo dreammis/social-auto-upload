@@ -4,59 +4,54 @@
 import gradio as gr
 from pathlib import Path
 from typing import Dict, Callable, Optional
+from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 def create_file_tree(
     directory_data: Dict,
     on_select: Optional[Callable] = None
 ) -> gr.Dataframe:
     """
-    创建文件树组件
+    创建文件列表组件
     
     Args:
-        directory_data: 目录数据
+        directory_data: 目录数据（未使用）
         on_select: 选择回调函数
         
     Returns:
-        gr.Dataframe: 文件树组件
+        gr.Dataframe: 文件列表组件
     """
-    # 将目录数据转换为表格数据
-    rows = []
+    from video_file_manager.config import settings
+    from video_file_manager.core.file_manager import FileManager
     
-    def process_node(node: Dict, level: int = 0, parent: str = ""):
-        for name, content in node.items():
-            if isinstance(content, dict):
-                # 这是一个文件夹
-                rows.append({
-                    "type": "📁",
-                    "name": "  " * level + name,
-                    "path": f"{parent}/{name}" if parent else name,
-                    "size": "",
-                    "modified": ""
-                })
-                process_node(content, level + 1, f"{parent}/{name}" if parent else name)
-            else:
-                # 这是一个文件
-                path = Path(content)
-                stat = path.stat()
-                rows.append({
-                    "type": "📹",
-                    "name": "  " * level + name,
-                    "path": str(path),
-                    "size": _format_size(stat.st_size),
-                    "modified": _format_time(stat.st_mtime)
-                })
+    # 扫描视频文件
+    file_manager = FileManager()
+    videos = file_manager.scan_videos()
     
-    process_node(directory_data)
+    # 准备表格数据
+    headers = ["名称", "相对路径", "大小", "修改时间"]
+    rows = [
+        [
+            video["name"],
+            video["relative_path"],  # 使用从 file_manager 获取的相对路径
+            video["size"],
+            video["modified"].strftime("%Y-%m-%d %H:%M:%S")
+        ]
+        for video in videos
+        if video  # 只处理有效的文件信息
+    ]
     
-    # 创建数据表格
+    logger.debug(f"表格数据: {rows}")
+    
     return gr.Dataframe(
-        headers=["类型", "名称", "路径", "大小", "修改时间"],
-        datatype=["str", "str", "str", "str", "str"],
-        row_count=len(rows),
-        col_count=5,
-        value=[[row["type"], row["name"], row["path"], row["size"], row["modified"]] for row in rows],
-        interactive=True,
-        elem_id="file_tree"
+        headers=headers,
+        datatype=["str", "str", "str", "str"],
+        value=rows,
+        interactive=False,  # 设置为只读
+        wrap=True,  # 允许文本换行
+        row_count=len(rows)  # 显示所有行并启用选择功能
     )
 
 def _format_size(size: int) -> str:
@@ -69,5 +64,4 @@ def _format_size(size: int) -> str:
 
 def _format_time(timestamp: float) -> str:
     """格式化时间戳"""
-    from datetime import datetime
     return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S") 

@@ -23,39 +23,47 @@ def format_size(size_in_bytes: Union[int, float]) -> str:
         size_in_bytes /= 1024
     return f"{size_in_bytes:.1f} TB"
 
-def setup_logging(log_file: Path = None, level: str = "INFO"):
+def setup_logging(
+    log_file: Union[str, Path],
+    level: str = "INFO",
+    console_level: str = "INFO",
+    format_str: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+) -> None:
     """
-    设置日志
+    配置日志
     
     Args:
         log_file: 日志文件路径
-        level: 日志级别
+        level: 文件日志级别
+        console_level: 控制台日志级别
+        format_str: 日志格式
     """
-    # 创建日志格式
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    # 设置根日志器
+    # 创建根日志记录器
     root_logger = logging.getLogger()
-    root_logger.setLevel(level)
+    root_logger.setLevel(logging.DEBUG)  # 设置为最低级别，让处理器决定要显示的级别
     
-    # 添加控制台处理器
+    # 清除现有的处理器
+    root_logger.handlers.clear()
+    
+    # 创建格式化器
+    formatter = logging.Formatter(format_str)
+    
+    # 文件处理器
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setLevel(getattr(logging, level.upper()))
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+    
+    # 控制台处理器
     console_handler = logging.StreamHandler()
+    console_handler.setLevel(getattr(logging, console_level.upper()))
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
     
-    # 如果指定了日志文件，添加文件处理器
-    if log_file:
-        try:
-            # 确保日志目录存在
-            log_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            file_handler = logging.FileHandler(log_file, encoding='utf-8')
-            file_handler.setFormatter(formatter)
-            root_logger.addHandler(file_handler)
-        except Exception as e:
-            logger.error(f"设置日志文件失败: {str(e)}")
+    # 设置第三方库的日志级别
+    logging.getLogger("gradio").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
 
 def is_video_file(file_path: Path) -> bool:
     """
