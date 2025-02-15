@@ -33,13 +33,14 @@ def main():
     
     # 创建并启动应用
     app = create_app()
-    app.launch(
+    app.queue().launch(
         server_name=settings.HOST,
         server_port=settings.PORT,
         share=False,            # 不创建公共链接
         show_api=False,         # 不显示API文档
         show_error=True,        # 显示错误信息
-        debug=True             # 启用调试模式
+        debug=True,             # 启用调试模式
+        prevent_thread_lock=True,  # 防止线程锁
     )
 
 if __name__ == "__main__":
