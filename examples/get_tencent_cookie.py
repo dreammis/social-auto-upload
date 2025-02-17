@@ -22,7 +22,7 @@ async def add_new_account():
     cookies_folder.mkdir(parents=True, exist_ok=True)
     
     tencent_logger.info("[+]请扫码登录新账号")
-    if new_cookie_file := await get_tencent_cookie(str(cookies_folder / "temp.json")):
+    if new_cookie_file := await get_tencent_cookie(str(cookies_folder)):
         account_name = Path(new_cookie_file).stem
         tencent_logger.success(f"[+]成功添加账号: {account_name}")
 

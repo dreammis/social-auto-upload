@@ -2,9 +2,17 @@
 from pathlib import Path
 import asyncio
 from playwright.async_api import async_playwright
+import sys
+from pathlib import Path
+
+# 添加项目根目录到Python路径
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
+sys.path.append(str(ROOT_DIR))
+
 from utils.base_social_media import set_init_script
 from utils.log import tencent_logger
 from utils.social_media_db import SocialMediaDB
+from typing import Optional
 
 async def get_account_info(page) -> dict:
     """
@@ -157,4 +165,82 @@ async def batch_cookie_auth(cookie_files: list) -> dict:
     results = await asyncio.gather(*tasks)
 
     # 转换为字典格式返回
-    return dict(results) 
+    return dict(results)
+
+
+async def get_tencent_cookie(save_dir: str) -> Optional[str]:
+    """
+    获取腾讯视频号的cookie
+    通过扫码登录获取新账号的cookie并保存账号信息
+    
+    Args:
+        save_dir: cookie保存目录
+        
+    Returns:
+        Optional[str]: 成功返回cookie文件路径，失败返回None
+    """
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=False)
+            context = await browser.new_context()
+            context = await set_init_script(context)
+            page = await context.new_page()
+            
+            # 访问登录页面
+            await page.goto("https://channels.weixin.qq.com/platform/login")
+            tencent_logger.info("请使用微信扫码登录...")
+            
+            # 等待登录成功并跳转到首页
+            await page.wait_for_url("https://channels.weixin.qq.com/platform", timeout=300000)  # 5分钟超时
+            await page.wait_for_load_state("networkidle")
+            
+            # 使用get_account_info获取账号信息
+            account_info = await get_account_info(page)
+            if not account_info:
+                raise Exception("无法获取账号信息")
+            
+            # 使用昵称作为文件名
+            nickname = account_info['nickname']
+            save_path = str(Path(save_dir) / f"{nickname}.json")
+            
+            # 保存cookie
+            await context.storage_state(path=save_path)
+            tencent_logger.success(f"Cookie已保存到: {save_path}")
+            
+            # 确保账号信息正确添加到数据库
+            db = SocialMediaDB()
+            try:
+                # 检查账号是否存在
+                account = db.get_account("tencent", account_info['id'])
+                
+                if account:
+                    # 更新现有账号信息
+                    db.update_account("tencent", account_info['id'], {
+                        'nickname': nickname,
+                        'video_count': int(account_info['video_count']),
+                        'follower_count': int(account_info['follower_count'])
+                    })
+                else:
+                    # 添加新账号
+                    db.add_account(
+                        platform="tencent",
+                        platform_id=account_info['id'],
+                        nickname=nickname,
+                        video_count=int(account_info['video_count']),
+                        follower_count=int(account_info['follower_count'])
+                    )
+                
+                # 添加或更新cookie
+                db.add_cookie("tencent", account_info['id'], save_path)
+                
+                # 更新cookie状态
+                db.update_cookie_status("tencent", account_info['id'], save_path, True)
+                
+            finally:
+                db.close()
+            
+            return save_path
+            
+    except Exception as e:
+        tencent_logger.error(f"获取Cookie失败: {str(e)}")
+        return None 

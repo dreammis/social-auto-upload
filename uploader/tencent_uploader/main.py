@@ -3,9 +3,9 @@ from pathlib import Path
 
 from utils.files_times import get_absolute_path
 from utils.log import tencent_logger
-from .modules.account import cookie_auth, batch_cookie_auth
+from .modules.account import cookie_auth, batch_cookie_auth, get_tencent_cookie
 
-__all__ = ['weixin_setup']
+__all__ = ['weixin_setup', 'batch_cookie_auth', 'get_tencent_cookie']
 
 async def weixin_setup(account_file, handle=False):
     """
