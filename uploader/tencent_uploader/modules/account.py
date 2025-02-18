@@ -3,6 +3,8 @@ from pathlib import Path
 import asyncio
 from playwright.async_api import async_playwright
 import sys
+import json
+from datetime import datetime
 from pathlib import Path
 
 # 添加项目根目录到Python路径
@@ -50,8 +52,8 @@ async def get_account_info(page) -> dict:
             'id': await page.locator('#finder-uid-copy').get_attribute('data-clipboard-text') or '',
             'video_count': await page.locator('.finder-content-info .finder-info-num').first.inner_text() or '0',
             'follower_count': await page.locator('.second-info .finder-info-num').inner_text() or '0',
+            'updated_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
-        
         # 更新数据库
         try:
             db = SocialMediaDB()
@@ -98,6 +100,7 @@ async def cookie_auth(account_file):
     from .cookie import get_tencent_cookie  # 避免循环导入
     
     account_name = Path(account_file).stem
+    tencent_logger.info(f"[+][{account_name}] 开始验证cookie...")
 
     # 启动一个无头的 Chromium 浏览器实例。
     async with async_playwright() as playwright:
@@ -109,6 +112,7 @@ async def cookie_auth(account_file):
         page = await context.new_page()
         # 访问指定的 URL。
         await page.goto("https://channels.weixin.qq.com/platform/post/create")
+        tencent_logger.info(f"访问指定的 URL。{account_file}- cookie 验证")
         try:
             # 等待页面上出现特定的元素，以验证 cookie 是否有效。
             await page.wait_for_selector('div.title-name:has-text("微信小店")', timeout=5000)  # 等待5秒

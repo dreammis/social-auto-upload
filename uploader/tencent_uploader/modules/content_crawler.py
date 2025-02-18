@@ -15,12 +15,12 @@ from playwright.async_api import async_playwright, Browser, Page, BrowserContext
 from conf import LOCAL_CHROME_PATH
 from utils.video_content_db import VideoContentDB
 from utils.social_media_db import SocialMediaDB
+from utils.content_deduplication import ContentDeduplication
+from utils.log import tencent_logger as logger
 import sqlite3
 
 # 忽略ResourceWarning
 warnings.filterwarnings("ignore", category=ResourceWarning)
-
-logger = logging.getLogger(__name__)
 
 def convert_number_text(text: str) -> int:
     """
@@ -96,41 +96,74 @@ class VideoContentCrawler:
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
         self._playwright = None
-        self.db = VideoContentDB()
-        
-        # 验证账号ID是否存在
-        social_db = SocialMediaDB()
-        try:
-            # 获取所有账号
-            accounts = social_db.get_all_accounts("tencent")
-            # 检查ID是否存在
-            if not any(acc.get('id') == self.account_id for acc in accounts):
-                raise ValueError(f"账号ID {self.account_id} 不存在")
-        finally:
-            social_db.close()
+        self.db: Optional[VideoContentDB] = None  # 初始化为None
         
     async def __aenter__(self):
         """异步上下文管理器入口"""
-        await self.init()
-        return self
+        logger.info("=== 进入异步上下文管理器 ===")
+        try:
+            logger.info("开始调用init方法...")
+            await self.init()
+            logger.info("init方法调用完成")
+            logger.info("=== 异步上下文管理器初始化完成，返回self ===")
+            return self
+        except Exception as e:
+            logger.error(f"异步上下文管理器初始化失败: {str(e)}")
+            # 确保资源被清理
+            await self.close()
+            raise
         
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """异步上下文管理器出口"""
-        await self.close()
+        logger.info("=== 退出异步上下文管理器 ===")
+        try:
+            await self.close()
+            logger.info("=== 异步上下文管理器清理完成 ===")
+        except Exception as e:
+            logger.error(f"异步上下文管理器清理失败: {str(e)}")
+            raise
         
     async def init(self):
         """初始化浏览器和上下文"""
         try:
+            # 首先验证账号ID是否存在
+            logger.info("验证账号ID...")
+            social_db = SocialMediaDB()
+            try:
+                accounts = social_db.get_all_accounts("tencent")
+                if not any(acc.get('id') == self.account_id for acc in accounts):
+                    raise ValueError(f"账号ID {self.account_id} 不存在")
+                logger.info("账号ID验证通过")
+            finally:
+                social_db.close()
+            
+            # 创建数据库连接
+            logger.info("创建数据库连接...")
+            self.db = VideoContentDB()
+            logger.info("数据库连接创建成功")
+            
+            logger.info("开始初始化Playwright...")
             self._playwright = await async_playwright().start()
+            logger.info("Playwright启动成功")
+            
+            logger.info("开始启动浏览器...")
             self.browser = await self._playwright.chromium.launch(
                 headless=self.headless,
                 executable_path=self.local_executable_path
             )
+            logger.info("浏览器启动成功")
+            
+            logger.info("开始创建浏览器上下文...")
             self.context = await self.browser.new_context(storage_state=self.account_file)
+            logger.info("浏览器上下文创建成功")
+            
+            logger.info("开始创建新页面...")
             self.page = await self.context.new_page()
+            logger.info("新页面创建成功")
             
         except Exception as e:
             logger.error(f"初始化失败: {str(e)}")
+            # 确保资源被正确清理
             await self.close()
             raise
         
@@ -152,6 +185,7 @@ class VideoContentCrawler:
             # 关闭数据库连接
             if self.db:
                 self.db.close()
+                self.db = None
         except Exception as e:
             logger.error(f"关闭资源时出错: {str(e)}")
         
@@ -318,27 +352,79 @@ class VideoContentCrawler:
             List[Dict]: 视频信息列表
         """
         videos = []
+        logger.info("=== 进入get_video_list方法 ===")
+        logger.info(f"参数: max_pages = {max_pages}")
         
+        # 检查组件状态
+        if not self.page or not self.context or not self.browser or not self._playwright:
+            logger.error("爬虫组件未完全初始化")
+            return videos
+            
         try:
             # 访问列表页
+            logger.info("正在访问视频列表页面...")
             await self.page.goto("https://channels.weixin.qq.com/platform/post/list")
+            logger.info("页面导航完成，等待加载...")
             await self.page.wait_for_load_state("networkidle")
-            
-            # 等待页面内容加载，使用更通用的选择器
+            logger.info("页面加载完成，检查登录状态...")
+        
+            # 等待页面内容加载，使用多个可能的选择器
+            logger.info("等待页面内容加载...")
             try:
-                await self.page.wait_for_selector("div[class*='post-feed-item']", timeout=20000)
+                # 尝试等待可能的内容选择器
+                selectors = [
+                    "div[class*='post-feed-item']",
+                    ".post-feed-item",
+                    ".post-item",
+                    "div[class*='weui-desktop-card__bd']"
+                ]
+                
+                content_found = False
+                for selector in selectors:
+                    try:
+                        logger.info(f"尝试查找选择器: {selector}")
+                        await self.page.wait_for_selector(selector, timeout=5000)
+                        logger.info(f"找到内容元素: {selector}")
+                        content_found = True
+                        break
+                    except Exception as e:
+                        logger.warning(f"选择器 {selector} 未找到: {str(e)}")
+                        continue
+                
+                if not content_found:
+                    # 如果所有选择器都失败，截图并记录页面内容
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    screenshot_path = f"error_screenshot_{timestamp}.png"
+                    await self.page.screenshot(path=screenshot_path)
+                    page_content = await self.page.content()
+                    logger.error(f"页面内容加载失败，已保存截图: {screenshot_path}")
+                    logger.debug(f"页面HTML: {page_content[:500]}...")  # 只记录前500个字符
+                    return videos
+                    
             except Exception as e:
-                logger.error("页面内容加载失败")
+                logger.error(f"页面内容加载失败: {str(e)}")
                 return videos
+                
+            # 检查页面状态
+            logger.info("检查页面状态...")
+            if not await self.check_page_status():
+                logger.error("页面状态异常")
+                return videos
+                
+            # 等待页面完全稳定
+            logger.info("等待页面稳定...")
+            await self.random_delay()
             
             # 如果是倒序爬取，先跳转到最后一页
             if self.reverse:
+                logger.info("开始倒序爬取，尝试跳转到最后一页...")
                 # 获取最后一页的页码
                 last_page_num = await self.page.query_selector(".weui-desktop-pagination__num:last-child")
                 if last_page_num:
                     last_page_text = await last_page_num.text_content()
+                    logger.info(f"找到页码元素，内容为: {last_page_text}")
                     if last_page_text.isdigit():
-                        logger.info(f"正在跳转到最后一页: {last_page_text}")
+                        logger.info(f"找到最后一页页码: {last_page_text}")
                         if not await self.jump_to_page(int(last_page_text)):
                             logger.error("跳转到最后一页失败")
                             return videos
@@ -347,10 +433,41 @@ class VideoContentCrawler:
                         
                         # 等待新页面内容加载
                         try:
+                            logger.info("等待最后一页内容加载...")
                             await self.page.wait_for_selector("div[class*='post-feed-item']", timeout=20000)
+                            # 检查是否真的加载到了内容
+                            items = await self.page.query_selector_all("div[class*='post-feed-item']")
+                            logger.info(f"最后一页内容已加载，找到 {len(items)} 个视频项")
+                            
+                            # 检查页面URL和当前页码
+                            current_url = self.page.url
+                            current_page = await self.get_current_page()
+                            logger.info(f"当前页面URL: {current_url}")
+                            logger.info(f"当前页码: {current_page}")
+                            
+                            # 检查页面状态
+                            page_status = await self.check_page_status()
+                            logger.info(f"页面状态检查结果: {'正常' if page_status else '异常'}")
+                            
+                            if not items:
+                                logger.error("最后一页未找到任何视频内容")
+                                # 获取页面源码以供调试
+                                page_content = await self.page.content()
+                                logger.debug(f"页面源码片段: {page_content[:500]}...")
+                                
                         except Exception as e:
-                            logger.error("最后一页内容加载失败")
+                            logger.error(f"最后一页内容加载失败: {str(e)}")
+                            # 记录当前页面状态
+                            try:
+                                screenshot_path = f"error_screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                                await self.page.screenshot(path=screenshot_path)
+                                logger.error(f"已保存错误截图: {screenshot_path}")
+                            except Exception as screenshot_error:
+                                logger.error(f"保存错误截图失败: {str(screenshot_error)}")
                             return videos
+                else:
+                    logger.error("未找到最后一页页码元素")
+                    return videos
             
             # 获取总页数和已爬取页数
             total_pages = await self.get_total_pages()
@@ -370,17 +487,20 @@ class VideoContentCrawler:
             # 确定起始页和结束页
             if self.reverse:
                 start_page = max_pages
-                end_page = max(1, max_pages - crawled_pages + 1)
+                end_page = 1  # 修改这里：倒序爬取时，结束页永远是第1页
                 step = -1
+                logger.info(f"倒序爬取: 从第 {start_page} 页到第 {end_page} 页")
             else:
                 start_page = 1
                 end_page = max_pages
                 step = 1
+                logger.info(f"正序爬取: 从第 {start_page} 页到第 {end_page} 页")
                 
             current_page = start_page
             
             # 如果是倒序且不是最后一页，先跳转到起始页
             if self.reverse and current_page != total_pages:
+                logger.info(f"尝试跳转到起始页: {start_page}")
                 if not await self.jump_to_page(start_page):
                     logger.error(f"跳转到第 {start_page} 页失败")
                     return videos
@@ -388,8 +508,9 @@ class VideoContentCrawler:
                 # 等待新页面内容加载
                 try:
                     await self.page.wait_for_selector("div[class*='post-feed-item']", timeout=20000)
+                    logger.info("起始页内容已加载")
                 except Exception as e:
-                    logger.error("页面内容加载失败")
+                    logger.error(f"起始页内容加载失败: {str(e)}")
                     return videos
             
             while (step > 0 and current_page <= end_page) or (step < 0 and current_page >= end_page):
@@ -414,36 +535,46 @@ class VideoContentCrawler:
                     break
                 
                 # 处理当前页的视频
-                for item in items:
+                for idx, item in enumerate(items, 1):
                     try:
+                        logger.info(f"正在处理第 {idx}/{len(items)} 个视频...")
                         video_info = await self.retry_on_error(self._extract_video_info, item)
                         if video_info:
                             videos.append(video_info)
+                            logger.info(f"成功提取视频信息: {video_info['title']}")
                             # 每处理一个视频后短暂延迟
                             await asyncio.sleep(random.uniform(0.5, 1.5))
+                        else:
+                            logger.warning(f"第 {idx} 个视频信息提取失败或已存在")
                     except Exception as e:
-                        logger.error(f"提取视频信息失败: {str(e)}")
+                        logger.error(f"处理第 {idx} 个视频时出错: {str(e)}")
                         continue
                 
                 # 处理翻页
                 if current_page != end_page:
+                    logger.info(f"准备翻页: 当前第 {current_page} 页")
                     if step > 0:
                         has_next = await self._goto_next_page()
+                        logger.info("尝试前往下一页...")
                     else:
                         has_next = await self._goto_prev_page()
+                        logger.info("尝试前往上一页...")
                         
                     if not has_next:
                         logger.info("没有更多页面了")
                         break
                         
                     # 翻页后等待
+                    logger.info("翻页成功，等待页面稳定...")
                     await self.random_delay()
                     
                 current_page += step
+                logger.info(f"页码更新: {current_page}")
                 
         except Exception as e:
             logger.error(f"获取视频列表失败: {str(e)}")
             
+        logger.info(f"爬取任务完成，共获取 {len(videos)} 个视频信息")
         return videos
         
     async def _get_image_as_base64(self, url: str) -> Optional[str]:
@@ -490,53 +621,47 @@ class VideoContentCrawler:
         """
         try:
             # 获取视频标题，使用更通用的选择器
-            title = await item.query_selector("div[class*='post-title']")
-            title_text = await title.text_content() if title else ""
+            title_element = await item.query_selector("div[class*='post-title']")
+            full_text = await title_element.text_content() if title_element else ""
+            full_text = full_text.strip()
             
-            # 解析标题内容、标签和艾特用户
-            title_parts = title_text.strip().split("\n")
-            main_title = title_parts[0] if title_parts else ""
+            # 从完整文本中提取标签和@用户
+            # 使用正则表达式提取所有@用户
+            mentions = re.findall(r'@([a-zA-Z0-9\u4e00-\u9fa5]+?)(?=[@#]|\s|$)', full_text)
+            mentions = [mention.strip() for mention in mentions if mention.strip()]
             
-            # 如果有第二部分，解析标签和艾特用户
-            tags = []
-            mentions = []
-            if len(title_parts) > 1:
-                # 先提取@用户
-                mentions_parts = title_parts[1].split("@")[1:]  # 跳过第一个（分割前的部分）
-                for mention in mentions_parts:
-                    # 找到下一个分隔符（空格或#）的位置
-                    space_pos = mention.find(" ")
-                    hash_pos = mention.find("#")
-                    
-                    # 确定用户名的结束位置
-                    end_pos = -1
-                    if space_pos != -1 and hash_pos != -1:
-                        end_pos = min(space_pos, hash_pos)
-                    elif space_pos != -1:
-                        end_pos = space_pos
-                    elif hash_pos != -1:
-                        end_pos = hash_pos
-                        
-                    # 提取用户名
-                    if end_pos != -1:
-                        username = mention[:end_pos].strip()
-                    else:
-                        username = mention.strip()
-                        
-                    if username:
-                        mentions.append(username)
+            # 使用正则表达式提取所有#标签
+            tags = re.findall(r'#([a-zA-Z0-9\u4e00-\u9fa5]+?)(?=[@#]|\s|$)', full_text)
+            tags = [tag.strip() for tag in tags if tag.strip()]
+            
+            # 提取标题（@或#前的所有内容）
+            main_title = ""
+            first_special_char_index = -1
+            
+            # 查找第一个@或#的位置
+            at_index = full_text.find('@')
+            hash_index = full_text.find('#')
+            
+            if at_index >= 0 and hash_index >= 0:
+                first_special_char_index = min(at_index, hash_index)
+            elif at_index >= 0:
+                first_special_char_index = at_index
+            elif hash_index >= 0:
+                first_special_char_index = hash_index
                 
-                # 再提取标签
-                for part in title_parts[1].split("#"):
-                    part = part.strip()
-                    if not part:
-                        continue
-                    # 移除可能包含的@用户部分
-                    if "@" in part:
-                        part = part.split("@")[0]
-                    part = part.strip()
-                    if part:
-                        tags.append(part)
+            # 如果找到了@或#，且它们前面有内容，则提取标题
+            if first_special_char_index > 0:
+                main_title = full_text[:first_special_char_index].strip()
+            
+            # 如果标题为空，设置默认值为"null"
+            if not main_title:
+                main_title = "null"
+                logger.info("标题为空，使用默认值: null")
+            
+            logger.info(f"解析结果 - 完整文本: {full_text}")
+            logger.info(f"解析结果 - 标题: {main_title}")
+            logger.info(f"解析结果 - 标签: {tags}")
+            logger.info(f"解析结果 - 艾特用户: {mentions}")
             
             # 获取封面图片，使用更通用的选择器
             thumb = await item.query_selector("div[class*='media'] img")
@@ -577,29 +702,52 @@ class VideoContentCrawler:
                 comments = convert_number_text(comment_text)
                 shares = convert_number_text(share_text)
                 
-                # 尝试保存到数据库
-                video_id = self.db.add_video_content(
-                    account_id=self.account_id,
-                    title=main_title.strip(),
-                    thumb_base64=thumb_base64,
-                    publish_time=publish_time.strip(),
-                    status=status.strip(),
-                    plays=plays,
-                    likes=likes,
-                    comments=comments,
-                    shares=shares,
-                    tags=tags,
-                    mentions=mentions
-                )
-                logger.info(f"成功保存视频内容: {main_title.strip()}")
-                return {
-                    "id": video_id,
-                    "title": main_title.strip(),
-                    "tags": tags,
-                    "mentions": mentions,
+                # 构建新的内容数据
+                new_content = {
+                    "account_id": self.account_id,
+                    "title": main_title,
                     "thumb_base64": thumb_base64,
                     "publish_time": publish_time.strip(),
                     "status": status.strip(),
+                    "plays": plays,
+                    "likes": likes,
+                    "comments": comments,
+                    "shares": shares,
+                    "tags": tags,
+                    "mentions": mentions
+                }
+                
+                # 从数据库获取已存在的内容
+                existing_content = self.db.get_video_content_by_title(self.account_id, main_title)
+                
+                # 使用去重工具判断
+                dedup = ContentDeduplication()
+                if existing_content:
+                    if dedup.is_content_duplicate(new_content, existing_content):
+                        # 检查是否需要更新
+                        if dedup.should_update_content(new_content, existing_content):
+                            # 更新内容
+                            video_id = self.db.update_video_content(
+                                existing_content['id'],
+                                **new_content
+                            )
+                            logger.info(f"更新视频内容: {main_title}")
+                        else:
+                            logger.info(f"内容无变化，跳过: {main_title}")
+                            return None
+                    else:
+                        # 内容不重复，作为新内容保存
+                        video_id = self.db.add_video_content(**new_content)
+                        logger.info(f"保存新视频内容: {main_title}")
+                else:
+                    # 不存在，直接保存
+                    video_id = self.db.add_video_content(**new_content)
+                    logger.info(f"保存新视频内容: {main_title}")
+                
+                # 为了保持返回数据的一致性，重新构建带有 stats 的内容
+                return_content = {
+                    **new_content,
+                    "id": video_id,
                     "stats": {
                         "plays": plays,
                         "likes": likes,
@@ -607,10 +755,13 @@ class VideoContentCrawler:
                         "shares": shares
                     }
                 }
-            except sqlite3.IntegrityError:
-                # 如果是唯一约束冲突,说明数据已存在,跳过
-                logger.info(f"视频内容已存在,跳过: {main_title.strip()}")
-                return None
+                del return_content["plays"]
+                del return_content["likes"]
+                del return_content["comments"]
+                del return_content["shares"]
+                
+                return return_content
+                
             except Exception as e:
                 logger.error(f"保存视频内容失败: {str(e)}")
                 return None

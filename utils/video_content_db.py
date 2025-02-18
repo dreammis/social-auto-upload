@@ -183,4 +183,139 @@ class VideoContentDB:
             return self.cursor.fetchone()[0]
         except Exception as e:
             logger.error(f"获取视频数量失败: {str(e)}")
-            return 0 
+            return 0
+            
+    def get_video_content_by_title(
+        self,
+        account_id: int,
+        title: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        根据账号ID和标题获取视频内容
+        
+        Args:
+            account_id: 账号ID
+            title: 视频标题
+            
+        Returns:
+            Optional[Dict[str, Any]]: 视频内容信息，如果不存在则返回None
+        """
+        try:
+            # 获取视频基本信息
+            self.cursor.execute(
+                """
+                SELECT v.*, a.platform, a.nickname
+                FROM video_contents v
+                JOIN social_media_accounts a ON v.account_id = a.id
+                WHERE v.account_id = ? AND v.title = ?
+                """,
+                (account_id, title)
+            )
+            row = self.cursor.fetchone()
+            if not row:
+                return None
+                
+            # 解析JSON数据
+            tags = json.loads(row[10] or '[]')  # tags列
+            mentions = json.loads(row[11] or '[]')  # mentions列
+                
+            # 构建返回数据
+            return {
+                "id": row[0],
+                "account_id": row[1],
+                "title": row[2],
+                "thumb_base64": row[3],
+                "publish_time": row[4],
+                "status": row[5],
+                "stats": {
+                    "plays": row[6],
+                    "likes": row[7],
+                    "comments": row[8],
+                    "shares": row[9]
+                },
+                "tags": tags,
+                "mentions": mentions,
+                "created_at": row[12],
+                "updated_at": row[13],
+                "platform": row[14],
+                "nickname": row[15]
+            }
+            
+        except Exception as e:
+            logger.error(f"根据标题获取视频内容失败: {str(e)}")
+            return None
+            
+    def update_video_content(
+        self,
+        video_id: int,
+        account_id: int,
+        title: str,
+        thumb_base64: Optional[str] = None,
+        publish_time: Optional[str] = None,
+        status: Optional[str] = None,
+        stats: Optional[Dict[str, int]] = None,
+        tags: Optional[List[str]] = None,
+        mentions: Optional[List[str]] = None
+    ) -> bool:
+        """
+        更新视频内容
+        
+        Args:
+            video_id: 视频ID
+            account_id: 账号ID
+            title: 视频标题
+            thumb_base64: 封面图片base64数据
+            publish_time: 发布时间
+            status: 视频状态
+            stats: 统计数据字典，包含 plays, likes, comments, shares
+            tags: 标签列表
+            mentions: 提及用户列表
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        try:
+            # 将标签和提及用户列表转换为JSON字符串
+            tags_json = json.dumps(tags or [], ensure_ascii=False)
+            mentions_json = json.dumps(mentions or [], ensure_ascii=False)
+            
+            # 准备统计数据
+            stats = stats or {}
+            plays = stats.get('plays', 0)
+            likes = stats.get('likes', 0)
+            comments = stats.get('comments', 0)
+            shares = stats.get('shares', 0)
+            
+            # 更新时间
+            updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+            
+            # 更新视频内容
+            self.cursor.execute(
+                """
+                UPDATE video_contents
+                SET account_id = ?,
+                    title = ?,
+                    thumb_base64 = ?,
+                    publish_time = ?,
+                    status = ?,
+                    plays = ?,
+                    likes = ?,
+                    comments = ?,
+                    shares = ?,
+                    tags = ?,
+                    mentions = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (account_id, title, thumb_base64, publish_time,
+                 status, plays, likes, comments, shares,
+                 tags_json, mentions_json, updated_at, video_id)
+            )
+            
+            self.conn.commit()
+            return True
+            
+        except Exception as e:
+            self.conn.rollback()
+            logger.error(f"更新视频内容失败: {str(e)}")
+            return False 

@@ -410,6 +410,31 @@ class SocialMediaDB:
         
         return self.db.query_one(sql, params) or {}
     
+    
+    def get_account_verification_time(self, platform: str, nickname: str) -> Optional[datetime]:
+        """获取账号的验证时间
+        
+        Args:
+            platform: 平台名称
+            nickname: 账号昵称
+            
+        Returns:
+            Optional[datetime]: 验证时间，未找到返回None
+        """
+        sql = """
+        SELECT ac.last_check  
+        FROM account_cookies ac
+        INNER JOIN social_media_accounts sma
+            ON ac.platform = sma.platform 
+            AND ac.account_id = sma.account_id
+        WHERE ac.platform = ? AND sma.nickname = ?
+        ORDER BY ac.last_check DESC
+        LIMIT 1
+        """
+        result = self.db.query_one(sql, (platform, nickname))
+        return result['last_check'] if result else None
+    
+
     def close(self):
         """关闭数据库连接"""
         self.db.close() 
