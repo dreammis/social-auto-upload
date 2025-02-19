@@ -453,15 +453,7 @@ class SocialMediaDB:
             updates = {
                 'nickname': info.get('username', ''),
                 'follower_count': info.get('followers', 0),
-                'extra': json.dumps({
-                    'kwai_id': info.get('kwai_id', ''),
-                    'username': info.get('username', ''),
-                    'following': info.get('following', 0),
-                    'likes': info.get('likes', 0),
-                    'description': info.get('description', ''),
-                    'avatar': info.get('avatar', ''),
-                    'updated_at': info.get('updated_at', datetime.now().isoformat())
-                })
+                'extra': json.dumps(info, ensure_ascii=False)
             }
             
             # 查找账号

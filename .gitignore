@@ -172,3 +172,4 @@ video_file_manager/ffmpeg/
 data/
 data/video_list_*.json
 data/*.db
+.playwright/
