@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
+from typing import List, Dict, Any, Optional
 
 from playwright.async_api import Playwright, async_playwright
 import os
@@ -9,6 +10,9 @@ from conf import LOCAL_CHROME_PATH
 from utils.base_social_media import set_init_script
 from utils.files_times import get_absolute_path
 from utils.log import kuaishou_logger
+from .modules.account import account_manager
+from .modules.video import KSVideoUploader, KSBatchUploader
+from .modules.validator import validator
 
 
 async def cookie_auth(account_file):
@@ -212,3 +216,131 @@ class KSVideo(object):
         await page.keyboard.type(str(publish_date_hour))
         await page.keyboard.press("Enter")
         await asyncio.sleep(1)
+
+
+async def upload_video(
+    title: str,
+    file_path: str,
+    tags: List[str],
+    account_file: str,
+    publish_date: Optional[datetime] = None
+) -> Dict[str, Any]:
+    """
+    上传单个视频
+    Args:
+        title: 视频标题
+        file_path: 视频文件路径
+        tags: 视频标签列表
+        account_file: cookie文件路径
+        publish_date: 定时发布时间
+    Returns:
+        Dict[str, Any]: 上传结果
+    """
+    try:
+        # 验证参数
+        validation_result = validator.validate_video_params(
+            title=title,
+            tags=tags,
+            file_path=file_path,
+            publish_date=publish_date
+        )
+        
+        if not validation_result['valid']:
+            return {
+                'success': False,
+                'errors': validation_result['errors']
+            }
+
+        # 验证账号
+        if not await account_manager.setup_account(account_file, handle=True):
+            return {
+                'success': False,
+                'errors': ['账号设置失败']
+            }
+
+        # 创建上传器并开始上传
+        uploader = KSVideoUploader(
+            title=title,
+            file_path=file_path,
+            tags=tags,
+            publish_date=publish_date,
+            account_file=account_file
+        )
+
+        success = await uploader.start()
+        
+        return {
+            'success': success,
+            'errors': [] if success else ['上传失败']
+        }
+
+    except Exception as e:
+        kuaishou_logger.error(f"上传视频时发生错误: {str(e)}")
+        return {
+            'success': False,
+            'errors': [str(e)]
+        }
+
+async def batch_upload_videos(
+    videos: List[Dict[str, Any]],
+    account_file: str,
+    max_concurrent: int = 3
+) -> Dict[str, Any]:
+    """
+    批量上传视频
+    Args:
+        videos: 视频信息列表，每个元素包含 title, file_path, tags, publish_date
+        account_file: cookie文件路径
+        max_concurrent: 最大并发数
+    Returns:
+        Dict[str, Any]: 批量上传结果
+    """
+    try:
+        # 验证账号
+        if not await account_manager.setup_account(account_file, handle=True):
+            return {
+                'success': False,
+                'errors': ['账号设置失败'],
+                'results': {}
+            }
+
+        # 创建上传器列表
+        uploaders = []
+        for video in videos:
+            # 验证参数
+            validation_result = validator.validate_video_params(
+                title=video['title'],
+                tags=video['tags'],
+                file_path=video['file_path'],
+                publish_date=video.get('publish_date')
+            )
+            
+            if not validation_result['valid']:
+                continue
+
+            uploader = KSVideoUploader(
+                title=video['title'],
+                file_path=video['file_path'],
+                tags=video['tags'],
+                publish_date=video.get('publish_date'),
+                account_file=account_file
+            )
+            uploaders.append(uploader)
+
+        # 创建批量上传器
+        batch_uploader = KSBatchUploader(max_concurrent=max_concurrent)
+        results = await batch_uploader.batch_upload(uploaders)
+
+        return {
+            'success': True,
+            'errors': [],
+            'results': results
+        }
+
+    except Exception as e:
+        kuaishou_logger.error(f"批量上传视频时发生错误: {str(e)}")
+        return {
+            'success': False,
+            'errors': [str(e)],
+            'results': {}
+        }
