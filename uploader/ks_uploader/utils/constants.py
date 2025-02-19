@@ -23,6 +23,7 @@ BASE_URL = "https://cp.kuaishou.com"
 UPLOAD_URL = f"{BASE_URL}/article/publish/video"
 MANAGE_URL = f"{BASE_URL}/article/manage/video"
 LOGIN_URL = f"{BASE_URL}/login"
+PROFILE_URL = f"{BASE_URL}/profile"  # 个人资料页面
 
 # Cookie相关常量
 COOKIE_VALID_TIME = 24 * 60 * 60  # 24小时
@@ -75,5 +76,13 @@ SELECTORS = {
     'schedule_time': {
         'radio': "label:text('发布时间') xpath=following-sibling::div .ant-radio-input",
         'input': 'div.ant-picker-input input[placeholder="选择日期时间"]'
+    },
+    'profile': {
+        'info_card': "div.header-info-card",
+        'avatar': "div.header-info-card img.user-image",
+        'username': "div.header-info-card div.user-name",
+        'kwai_id': "div.header-info-card div.user-kwai-id",
+        'stats': "div.header-info-card div.user-cnt__item",
+        'description': "div.header-info-card div.user-desc"
     }
 } 
