@@ -199,15 +199,13 @@ async def multi_thread_upload():
     多线程上传视频 - 每个账号一个浏览器实例并发上传
     """
     # 设置基础路径
-    videos_folder = Path(r"F:\向阳也有米\24版本\12月\1125-19-教人7")
     cookies_folder = Path(BASE_DIR) / "cookies" / "tencent_uploader"
-    
     # 获取所有账号文件
     account_files = list(cookies_folder.glob("*.json"))
     if not account_files:
         tencent_logger.error("未找到任何账号文件")
         return
-    
+    videos_folder = Path(r"F:\向阳也有米\24版本\12月\1125-19-教人7")
     # 获取所有视频资源
     video_assets = find_video_assets(videos_folder)
     if not video_assets:

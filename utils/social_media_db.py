@@ -10,7 +10,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 
 from utils.sqlite_helper import SQLiteHelper
 from utils.log import logger
@@ -434,6 +434,54 @@ class SocialMediaDB:
         result = self.db.query_one(sql, (platform, nickname))
         return result['last_check'] if result else None
     
+    def update_account_info(self, platform: str, username: str, info: Dict[str, Any]) -> bool:
+        """更新账号信息
+        
+        Args:
+            platform: 平台名称
+            username: 用户名
+            info: 账号信息字典
+            
+        Returns:
+            bool: 是否更新成功
+        """
+        try:
+            # 获取 kwai_id，如果不存在则使用用户名
+            account_id = info.get('kwai_id') or username
+            
+            # 构建更新数据
+            updates = {
+                'nickname': info.get('username', ''),
+                'follower_count': info.get('followers', 0),
+                'extra': json.dumps({
+                    'kwai_id': info.get('kwai_id', ''),
+                    'username': info.get('username', ''),
+                    'following': info.get('following', 0),
+                    'likes': info.get('likes', 0),
+                    'description': info.get('description', ''),
+                    'avatar': info.get('avatar', ''),
+                    'updated_at': info.get('updated_at', datetime.now().isoformat())
+                })
+            }
+            
+            # 查找账号
+            account = self.get_account(platform, account_id)
+            if not account:
+                # 如果账号不存在，创建新账号
+                return self.add_account(
+                    platform=platform,
+                    account_id=account_id,
+                    nickname=updates['nickname'],
+                    follower_count=updates['follower_count'],
+                    extra=json.loads(updates['extra'])
+                )
+            
+            # 更新现有账号
+            return self.update_account(platform, account_id, updates)
+            
+        except Exception as e:
+            logger.error(f"更新账号信息失败: {str(e)}")
+            return False
 
     def close(self):
         """关闭数据库连接"""
