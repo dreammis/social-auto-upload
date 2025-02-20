@@ -68,7 +68,7 @@ async def get_account_info(page) -> dict:
                 })
             else:
                 # 如果账号不存在，添加新账号
-                db.add_account(
+                db.add_or_update_account(
                     "tencent",
                     info['id'],
                     info['nickname'],
@@ -226,7 +226,7 @@ async def get_tencent_cookie(save_dir: str) -> Optional[str]:
                     })
                 else:
                     # 添加新账号
-                    db.add_account(
+                    db.add_or_update_account(
                         platform="tencent",
                         platform_id=account_info['id'],
                         nickname=nickname,

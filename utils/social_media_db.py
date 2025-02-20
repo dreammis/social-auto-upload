@@ -34,7 +34,8 @@ class SocialMediaDB:
     
     典型用法:
         db = SocialMediaDB()
-        db.add_account("tencent", "12345", "测试账号")
+        # 使用add_or_update_account来添加或更新账号
+        db.add_or_update_account("tencent", "12345", {"nickname": "测试账号"})
         db.add_cookie("tencent", "12345", "cookies/test.json")
     """
     
@@ -87,38 +88,6 @@ class SocialMediaDB:
         
         self.db.create_table(create_accounts_table_sql)
         self.db.create_table(create_cookies_table_sql)
-    
-    def add_account(self, platform: str, account_id: str, nickname: str,
-                   video_count: int = 0, follower_count: int = 0,
-                   extra: dict = None) -> bool:
-        """添加新的社交媒体账号
-        
-        Args:
-            platform: 平台名称
-            account_id: 平台账号ID
-            nickname: 账号昵称
-            video_count: 视频数量
-            follower_count: 粉丝数量
-            extra: 额外信息字典
-            
-        Returns:
-            bool: 是否添加成功
-        """
-        try:
-            sql = """
-            INSERT INTO social_media_accounts 
-            (platform, account_id, nickname, video_count, follower_count, 
-             last_update, extra)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """
-            self.db.execute(sql, (
-                platform, account_id, nickname, video_count, follower_count,
-                datetime.now(), json.dumps(extra or {})
-            ))
-            return True
-        except Exception as e:
-            logger.error(f"添加账号失败: {str(e)}")
-            return False
     
     def _validate_cookie_file(self, cookie_path: str) -> bool:
         """验证cookie文件
@@ -434,45 +403,78 @@ class SocialMediaDB:
         result = self.db.query_one(sql, (platform, nickname))
         return result['last_check'] if result else None
     
-    def update_account_info(self, platform: str, username: str, info: Dict[str, Any]) -> bool:
-        """更新账号信息
+    def add_or_update_account(self, platform: str, account_id: str, info: Dict[str, Any]) -> bool:
+        """添加或更新账号信息
+        
+        如果账号不存在则添加新账号,如果已存在则更新账号信息
         
         Args:
             platform: 平台名称
-            username: 用户名
-            info: 账号信息字典
+            account_id: 账号ID
+            info: 账号信息字典，包含nickname, video_count, follower_count等字段
             
         Returns:
-            bool: 是否更新成功
+            bool: 是否操作成功
         """
         try:
-            # 获取 kwai_id，如果不存在则使用用户名
-            account_id = info.get('kwai_id') or username
+            # 检查账号是否存在
+            sql_check = """
+            SELECT COUNT(*) as count 
+            FROM social_media_accounts 
+            WHERE platform = ? AND account_id = ?
+            """
+            result = self.db.query_one(sql_check, (platform, account_id))
             
-            # 构建更新数据
-            updates = {
-                'nickname': info.get('username', ''),
-                'follower_count': info.get('followers', 0),
-                'extra': json.dumps(info, ensure_ascii=False)
-            }
-            
-            # 查找账号
-            account = self.get_account(platform, account_id)
-            if not account:
-                # 如果账号不存在，创建新账号
-                return self.add_account(
-                    platform=platform,
-                    account_id=account_id,
-                    nickname=updates['nickname'],
-                    follower_count=updates['follower_count'],
-                    extra=json.loads(updates['extra'])
-                )
-            
-            # 更新现有账号
-            return self.update_account(platform, account_id, updates)
+            if result['count'] > 0:
+                # 如果存在，执行更新
+                updates = {
+                    'nickname': info.get('nickname', ''),
+                    'video_count': info.get('video_count', 0),
+                    'follower_count': info.get('follower_count', 0)
+                }
+                
+                # 如果有extra字段，添加到更新数据中
+                if 'extra' in info:
+                    updates['extra'] = json.dumps(info['extra'], ensure_ascii=False)
+                
+                # 构建UPDATE语句
+                set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+                sql = f"""
+                UPDATE social_media_accounts 
+                SET {set_clause}, last_update = ?
+                WHERE platform = ? AND account_id = ?
+                """
+                
+                # 准备参数
+                params = list(updates.values())
+                params.extend([datetime.now(), platform, account_id])
+                
+                self.db.execute(sql, tuple(params))
+                logger.info(f"更新账号信息: {platform}/{account_id}")
+                
+            else:
+                # 如果不存在，执行插入
+                sql = """
+                INSERT INTO social_media_accounts 
+                (platform, account_id, nickname, video_count, follower_count, last_update, extra)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """
+                
+                self.db.execute(sql, (
+                    platform,
+                    account_id,
+                    info.get('nickname', ''),
+                    info.get('video_count', 0),
+                    info.get('follower_count', 0),
+                    datetime.now(),
+                    json.dumps(info.get('extra', {}), ensure_ascii=False)
+                ))
+                logger.info(f"添加新账号: {platform}/{account_id}")
+                
+            return True
             
         except Exception as e:
-            logger.error(f"更新账号信息失败: {str(e)}")
+            logger.error(f"添加/更新账号失败: {str(e)}")
             return False
 
     def close(self):

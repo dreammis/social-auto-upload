@@ -90,7 +90,7 @@ class KSAccountManager:
             # 批量更新数据库
             for item in self._pending_updates:
                 try:
-                    self._db.update_account_info(
+                    self._db.add_or_update_account(
                         item['platform'],
                         item['username'],
                         item['info']
