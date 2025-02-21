@@ -161,3 +161,37 @@ class DBHelper:
             
         finally:
             self.db.close()
+
+    def get_cookie_path_by_nickname(self, nickname: str) -> Optional[str]:
+        """
+        通过昵称查找账号的cookie路径
+        Args:
+            nickname: 账号昵称
+        Returns:
+            Optional[str]: cookie文件路径，如果未找到返回None
+        """
+        try:
+            sql = """
+            SELECT ac.cookie_path
+            FROM social_media_accounts sma
+            JOIN account_cookies ac ON sma.platform = ac.platform 
+                AND sma.account_id = ac.account_id
+            WHERE sma.platform = ? AND sma.nickname = ? AND ac.is_valid = 1
+            ORDER BY ac.last_check DESC
+            LIMIT 1
+            """
+            
+            result = self.db.db.query_one(sql, (self.platform, nickname))
+            if result:
+                douyin_logger.info(f"找到账号 {nickname} 的cookie路径")
+                return result['cookie_path']
+            else:
+                douyin_logger.warning(f"未找到账号 {nickname} 的cookie路径")
+                return None
+                
+        except Exception as e:
+            douyin_logger.error(f"查询cookie路径失败: {str(e)}")
+            return None
+            
+        finally:
+            self.db.close()

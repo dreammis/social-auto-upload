@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime
 from playwright.async_api import async_playwright, Browser, BrowserContext
+import json
 
 # 使用绝对导入
 from utils.log import douyin_logger
@@ -48,6 +49,17 @@ class CookieSyncManager:
             # 确保目录存在
             cookie_file.parent.mkdir(parents=True, exist_ok=True)
             
+            # 如果cookie文件存在且不为空，跳过同步
+            if cookie_file.exists():
+                try:
+                    with open(cookie_file, 'r', encoding='utf-8') as f:
+                        state = json.load(f)
+                        if state.get('cookies') or state.get('origins'):
+                            douyin_logger.info(f"账号 {account_id} cookie文件有效，跳过同步")
+                            return True
+                except Exception as e:
+                    douyin_logger.warning(f"读取cookie文件失败: {str(e)}")
+            
             # 创建临时上下文并同步
             async with async_playwright() as playwright:
                 # 使用launch_persistent_context读取现有数据
@@ -56,11 +68,17 @@ class CookieSyncManager:
                     headless=True
                 )
                 try:
-                    # 保存状态到cookie文件
-                    await context.storage_state(path=str(cookie_file))
-                    self.last_sync_time[account_id] = current_time
-                    douyin_logger.info(f"账号 {account_id} 同步到文件成功")
-                    return True
+                    # 获取当前状态
+                    state = await context.storage_state()
+                    if state.get('cookies') or state.get('origins'):
+                        # 只有当有有效的cookie时才保存
+                        await context.storage_state(path=str(cookie_file))
+                        self.last_sync_time[account_id] = current_time
+                        douyin_logger.info(f"账号 {account_id} 同步到文件成功")
+                        return True
+                    else:
+                        douyin_logger.warning(f"账号 {account_id} 没有有效的cookie，跳过同步")
+                        return False
                 finally:
                     await context.close()
                     

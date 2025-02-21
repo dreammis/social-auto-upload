@@ -38,29 +38,34 @@ class PageCheckHelper:
         检查页面是否完全加载
         """
         try:
-            # 1. 检查基础容器
-            if not await PageCheckHelper.check_element_exists(page, ".content-qNoE6N"):
-                logger.warning("基础容器未加载")
+            # 检查当前URL
+            current_url = page.url
+            logger.info(f"当前页面URL: {current_url}")
+            
+            # 如果URL是登录页，说明未登录
+            if current_url == "https://creator.douyin.com/":
+                logger.info("已跳转到登录页面，未登录状态")
                 return False
                 
-            # 2. 并行检查用户信息相关元素
-            user_info_selectors = [
-                ".container-vEyGlK",  # 用户信息容器
-                ".avatar-XoPjK6 img",  # 头像
-                ".name-_lSSDc",  # 用户名
-                ".unique_id-EuH8eA"  # 抖音号
+            # 如果URL包含creator-micro，说明已登录
+            if "creator-micro" in current_url:
+                logger.info("在创作者中心页面，已登录状态")
+                return True
+            
+            # 其他情况，检查页面元素
+            containers = [
+                ".semi-layout-content",  # 新版容器
+                "#douyin-creator-master-side-upload",  # 上传按钮容器
+                ".container-vEyGlK"  # 用户信息容器
             ]
             
-            if not await PageCheckHelper.check_multiple_elements(page, user_info_selectors):
-                logger.warning("用户信息未完全加载")
-                return False
-                
-            # 3. 检查功能按钮
-            if not await PageCheckHelper.check_element_exists(page, "#douyin-creator-master-side-upload"):
-                logger.warning("功能按钮未加载")
-                return False
-                
-            return True
+            for container in containers:
+                if await PageCheckHelper.check_element_exists(page, container):
+                    logger.info(f"找到创作者中心元素: {container}")
+                    return True
+            
+            logger.warning("未找到创作者中心元素，可能未登录")
+            return False
             
         except Exception as e:
             logger.error(f"页面加载检查失败: {str(e)}")
