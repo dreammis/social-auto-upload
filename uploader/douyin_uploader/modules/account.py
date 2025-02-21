@@ -6,12 +6,17 @@
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 from playwright.async_api import Page, Browser, BrowserContext
+
+# 使用绝对导入
 from utils.log import douyin_logger
+
+# 使用相对导入访问douyin_uploader包内的模块
 from ..utils.browser_helper import BrowserHelper
 from ..utils.cookie_helper import CookieHelper
 from ..utils.login_helper import LoginHelper
 from ..utils.error_helper import ErrorHelper
 from ..utils.db_helper import DBHelper
+from ..utils.cookie_sync_manager import CookieSyncManager
 
 class AccountManager:
     """抖音账号管理类"""
@@ -23,11 +28,51 @@ class AccountManager:
         self.login_helper = LoginHelper()
         self.error_helper = ErrorHelper()
         self.db_helper = DBHelper(platform="douyin")
+        self.cookie_sync_manager = CookieSyncManager()  # 添加同步管理器
         
         # 设置浏览器用户数据目录
         self.user_data_dir = Path(".playwright/user_data/douyin")
         self.user_data_dir.mkdir(parents=True, exist_ok=True)
     
+    def _get_account_dirs(self, account_id: str) -> tuple[Path, Path]:
+        """获取账号相关目录
+        Args:
+            account_id: 账号ID
+        Returns:
+            tuple[Path, Path]: (user_data_dir, cookie_file)
+        """
+        # 为每个账号创建独立的用户数据目录
+        user_data_dir = self.user_data_dir / account_id
+        
+        # 修改为正确的cookie保存路径
+        cookie_file = Path("cookies/douyin_uploader") / f"{account_id}.json"
+        
+        # 确保目录存在
+        cookie_file.parent.mkdir(parents=True, exist_ok=True)
+        user_data_dir.mkdir(parents=True, exist_ok=True)
+        
+        return user_data_dir, cookie_file
+        
+    async def _handle_sync_after_operation(
+        self,
+        account_id: str,
+        operation_name: str
+    ) -> None:
+        """处理操作后的同步
+        Args:
+            account_id: 账号ID
+            operation_name: 操作名称
+        """
+        try:
+            user_data_dir, cookie_file = self._get_account_dirs(account_id)
+            await self.cookie_sync_manager.sync_from_profile_to_file(
+                user_data_dir,
+                cookie_file,
+                account_id
+            )
+        except Exception as e:
+            douyin_logger.error(f"操作后同步失败 [{operation_name}]: {str(e)}")
+
     async def _verify_cookie_and_get_user_info(self, account_file: str, headless: bool = True) -> tuple[bool, Optional[Dict[str, Any]]]:
         """
         验证cookie并获取用户信息的通用方法
@@ -157,10 +202,16 @@ class AccountManager:
             Dict[str, Any]: 设置结果
         """
         try:
-            # 验证cookie并获取用户信息（使用有头模式，避免抖音反爬检测）
-            is_valid, user_info = await self._verify_cookie_and_get_user_info(account_file, headless=False)
+            # 从cookie文件路径中提取account_id
+            account_id = Path(account_file).stem
+            user_data_dir, cookie_file = self._get_account_dirs(account_id)
             
-            # 如果cookie无效或不存在，且启用了自动处理
+            # 验证cookie并获取用户信息
+            is_valid, user_info = await self._verify_cookie_and_get_user_info(
+                str(cookie_file),
+                headless=False
+            )
+            
             if not is_valid or not user_info:
                 if not handle:
                     return {
@@ -168,14 +219,18 @@ class AccountManager:
                         'message': 'Cookie无效且未启用自动处理'
                     }
                 douyin_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录')
-                result = await self.cookie_gen(account_file)
+                result = await self.cookie_gen(str(cookie_file))
                 if result['success']:
                     user_info = result['user_info']
-                else:
-                    return result
+                    # 登录成功后同步
+                    await self._handle_sync_after_operation(
+                        account_id,
+                        "setup_account"
+                    )
+                return result
             
             # 更新数据库
-            if not self.db_helper.update_account(user_info, account_file):
+            if not self.db_helper.update_account(user_info, str(cookie_file)):
                 return {
                     'success': False,
                     'message': '更新账号信息失败'
@@ -185,7 +240,7 @@ class AccountManager:
                 'success': True,
                 'message': 'Cookie设置成功',
                 'user_info': user_info,
-                'cookie_file': account_file
+                'cookie_file': str(cookie_file)
             }
             
         except Exception as e:
@@ -204,13 +259,25 @@ class AccountManager:
             Optional[Dict[str, Any]]: 更新/添加后的账号信息，失败返回None
         """
         try:
-            # 验证cookie并获取用户信息（使用有头模式，避免抖音反爬检测）
-            is_valid, user_info = await self._verify_cookie_and_get_user_info(account_file, headless=False)
+            # 从cookie文件路径中提取account_id
+            account_id = Path(account_file).stem
+            user_data_dir, cookie_file = self._get_account_dirs(account_id)
+            
+            # 验证cookie并获取用户信息
+            is_valid, user_info = await self._verify_cookie_and_get_user_info(
+                str(cookie_file),
+                headless=False
+            )
             if not is_valid or not user_info:
                 return None
             
             # 更新或添加到数据库
             if self.db_helper.update_account(user_info):
+                # 信息更新成功后同步
+                await self._handle_sync_after_operation(
+                    account_id,
+                    "update_account_info"
+                )
                 return user_info
             return None
                 
