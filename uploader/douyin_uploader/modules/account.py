@@ -28,12 +28,12 @@ class AccountManager:
         self.user_data_dir = Path(".playwright/user_data/douyin")
         self.user_data_dir.mkdir(parents=True, exist_ok=True)
     
-    async def _verify_cookie_and_get_user_info(self, account_file: str, headless: bool = False) -> tuple[bool, Optional[Dict[str, Any]]]:
+    async def _verify_cookie_and_get_user_info(self, account_file: str, headless: bool = True) -> tuple[bool, Optional[Dict[str, Any]]]:
         """
         验证cookie并获取用户信息的通用方法
         Args:
             account_file: cookie文件路径
-            headless: 是否使用无头模式，默认为False以便观察浏览器操作
+            headless: 是否使用无头模式，默认为True
         Returns:
             tuple[bool, Optional[Dict[str, Any]]]: (是否成功, 用户信息)
         """
@@ -53,6 +53,12 @@ class AccountManager:
             
             # 创建新页面并加载cookie
             page = await context.new_page()
+            
+            # 注入stealth.js脚本
+            with open('utils/stealth.min.js', 'r', encoding='utf-8') as f:
+                stealth_js = f.read()
+            await page.add_init_script(stealth_js)
+            
             await context.storage_state(path=account_file)
             
             # 导航到创作者中心
@@ -151,7 +157,7 @@ class AccountManager:
             Dict[str, Any]: 设置结果
         """
         try:
-            # 验证cookie并获取用户信息（使用有头模式）
+            # 验证cookie并获取用户信息（使用有头模式，避免抖音反爬检测）
             is_valid, user_info = await self._verify_cookie_and_get_user_info(account_file, headless=False)
             
             # 如果cookie无效或不存在，且启用了自动处理
@@ -198,7 +204,7 @@ class AccountManager:
             Optional[Dict[str, Any]]: 更新/添加后的账号信息，失败返回None
         """
         try:
-            # 验证cookie并获取用户信息（使用有头模式）
+            # 验证cookie并获取用户信息（使用有头模式，避免抖音反爬检测）
             is_valid, user_info = await self._verify_cookie_and_get_user_info(account_file, headless=False)
             if not is_valid or not user_info:
                 return None
