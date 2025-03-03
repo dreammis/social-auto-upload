@@ -7,6 +7,9 @@ import asyncio
 from pathlib import Path
 import sys
 import os
+from typing import List
+from playwright.async_api import BrowserContext
+import json
 
 # 添加项目根目录到 Python 路径
 current_dir = Path(__file__).resolve().parent.parent
@@ -21,6 +24,35 @@ from uploader.douyin_uploader.modules.video import DouYinVideo
 from uploader.douyin_uploader.utils.db_helper import DBHelper
 from utils.playwright_helper import PlaywrightHelper
 
+async def batch_upload_videos(video_paths: List[str], context: BrowserContext, account_file: Path, daily_times: List[int] = [16]) -> None:
+    """批量上传多个视频"""
+    uploader = DouYinVideo()
+    for video_path in video_paths:
+        douyin_logger.info(f"开始上传视频: {video_path}")
+        try:
+            await uploader.batch_upload(
+                context=context,
+                video_dir=video_path,
+                account_file=account_file,
+                daily_times=daily_times
+            )
+        except Exception as e:
+            douyin_logger.error(f"上传视频 {video_path} 失败: {str(e)}")
+
+async def upload_single_video(video_path: str, context: BrowserContext, account_file: Path, daily_times: List[int] = [16]) -> None:
+    """上传单个视频"""
+    uploader = DouYinVideo()
+    douyin_logger.info(f"开始上传视频: {video_path}")
+    try:
+        await uploader.batch_upload(
+            context=context,
+            video_dir=video_path,
+            account_file=account_file,
+            daily_times=daily_times
+        )
+    except Exception as e:
+        douyin_logger.error(f"上传视频 {video_path} 失败: {str(e)}")
+
 async def main():
     """主函数"""
     try:
@@ -33,7 +65,10 @@ async def main():
             sys.exit(1)
         
         # 配置路径
-        video_dir = r"F:\向阳也有米\24版本\12月\1125-19-教人7"  # 使用实际的视频目录路径
+        video_paths = [
+            r"F:\向阳也有米\24版本\12月\1125-19-教人7",
+            r"F:\向阳也有米\24版本\12月\1125-20-学历8"
+        ]  # 示例视频路径
         
         # 从数据库获取cookie路径
         db_helper = DBHelper()
@@ -42,27 +77,22 @@ async def main():
         if not cookie_path:
             douyin_logger.error(f"未找到账号 {nickname} 的cookie信息")
             sys.exit(1)
-            
+        
         account_file = Path(cookie_path)
         if not account_file.exists():
-            douyin_logger.error(f"Cookie文件不存在: {account_file}")
-            sys.exit(1)
-        
-        # 创建上传器实例
-        uploader = DouYinVideo()
+            douyin_logger.info(f"Cookie文件不存在，创建新文件: {account_file}")
+            with open(account_file, 'w', encoding='utf-8') as f:
+                json.dump({"cookies": [], "origins": []}, f)
+            douyin_logger.info(f"新建Cookie文件成功: {account_file}")
         
         # 使用上下文管理器管理浏览器资源
         async with playwright_helper.get_context() as context:
-            # 执行批量上传
-            await uploader.batch_upload(
-                context=context,
-                video_dir=video_dir,
-                account_file=account_file,
-                daily_times=[16]  # 设置每天16点发布
-            )
-            
+            if len(video_paths) > 1:
+                await batch_upload_videos(video_paths, context, account_file)
+            else:
+                await upload_single_video(video_paths[0], context, account_file)
     except KeyboardInterrupt:
-        douyin_logger.warning("用户中断上传程序")
+        douyin_logger.warning("用户中断发布程序")
     except Exception as e:
         douyin_logger.error(f"程序执行出错: {str(e)}")
         sys.exit(1)

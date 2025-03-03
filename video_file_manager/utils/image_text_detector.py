@@ -29,7 +29,7 @@ class ImageTextDetector:
         self, 
         api_key: Optional[str] = None,
         api_base: Optional[str] = None,
-        model: str = "deepseek-ai/deepseek-vl2",
+        model: str = "Qwen/Qwen2-VL-72B-Instruct",
         timeout: int = 30,
         max_retries: int = 3,
         max_concurrent: int = 5  # 最大并发数

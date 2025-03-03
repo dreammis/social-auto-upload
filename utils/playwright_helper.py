@@ -156,6 +156,7 @@ class PlaywrightHelper:
             
             # 注入 stealth.js 脚本
             try:
+                # utils/stealth.min.js打开失败，
                 with open('utils/stealth.min.js', 'r', encoding='utf-8') as f:
                     stealth_js = f.read()
                 await self._context.add_init_script(stealth_js)

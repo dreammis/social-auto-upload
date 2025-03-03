@@ -81,6 +81,10 @@ class AccountManager:
                 douyin_logger.error(f"读取Cookie文件失败: {str(e)}")
         else:
             douyin_logger.info("Cookie文件不存在")
+            douyin_logger.info(f"Cookie文件不存在，创建新文件: {cookie_file}")
+            with open(cookie_file, 'w', encoding='utf-8') as f:
+                json.dump({"cookies": [], "origins": []}, f)
+            douyin_logger.info(f"新建Cookie文件成功: {cookie_file}")
         
         # 确保cookie目录存在
         cookie_file.parent.mkdir(parents=True, exist_ok=True)

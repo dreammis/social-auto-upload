@@ -78,7 +78,10 @@ SELECTORS = {
     'LOCATION_INPUT': 'div.semi-select span:has-text("输入地理位置")',
     'THIRD_PART_SWITCH': '[class^="info"] > [class^="first-part"] div div.semi-switch',
     'SCHEDULE_RADIO': "[class^='radio']:has-text('定时发布')",
-    'SCHEDULE_INPUT': '.semi-input[placeholder="日期和时间"]'
+    'SCHEDULE_INPUT': '.semi-input[placeholder="日期和时间"]',
+    'MENTION_INPUT': '.zone-container',
+    'THUMBNAIL_INPUT': '[type="file"]',
+    'VIDEO_INPUT': '[type="file"]'
 }
 
 class DouYinVideo:
@@ -173,6 +176,9 @@ class DouYinVideo:
         """在指定目录下查找视频文件"""
         try:
             video_files = set()
+            douyin_logger.info(f"查找视频文件的目录: {base_dir}")
+            # 打印出base_dir的类型
+            douyin_logger.info(f"base_dir的类型: {type(base_dir)}")
             for ext in cls.SUPPORTED_VIDEO_EXTENSIONS:
                 found_files = list(base_dir.glob(f"*{ext}")) + list(base_dir.glob(f"*{ext.upper()}"))
                 for file in found_files:
@@ -269,8 +275,9 @@ class DouYinVideo:
                         douyin_logger.info(f"使用默认发布时间: {publish_date}")
                     
                     # 上传单个视频
+                    page = await context.new_page()  # 在当前上下文中创建新页面
                     await self.upload_single_video(
-                        context=context,
+                        page=page,
                         title=title,
                         file_path=str(file),
                         tags=tags,
@@ -282,8 +289,8 @@ class DouYinVideo:
                     
                     # 上传间隔
                     if index < file_num - 1:
-                        await asyncio.sleep(2)
-                        
+                        await asyncio.sleep(1)  # 减少间隔时间
+                    
                 except Exception as e:
                     douyin_logger.error(f"处理视频 {file.name} 失败: {str(e)}")
                     continue
@@ -291,6 +298,36 @@ class DouYinVideo:
         except Exception as e:
             douyin_logger.error(f"批量上传失败: {str(e)}")
             raise
+
+    @handle_douyin_errors
+    async def publish_video(self, context: BrowserContext, video_path: Path, title: str, tags: List[str], mentions: List[str], thumbnail_path: Path, publish_time: datetime) -> None:
+        """发布视频"""
+        # 验证标题
+        self._validate_title(title)
+        # 验证标签
+        self._validate_tags(tags)
+        # 验证提及
+        self._validate_mentions(mentions)
+        # 验证封面
+        self._validate_thumbnail_file(thumbnail_path)
+        # 验证视频
+        self._validate_video_file(video_path)
+        # 设置定时发布时间
+        self._validate_publish_date(publish_time)
+        
+        # 执行发布逻辑
+        page = await context.new_page()
+        await page.goto("https://creator.douyin.com/creator-micro/content/upload")  # 正确的上传页面
+        await page.fill(SELECTORS['TITLE_INPUT'], title)
+        await page.fill(SELECTORS['TAGS_INPUT'], ','.join(tags))
+        for mention in mentions:
+            await page.fill(SELECTORS['MENTION_INPUT'], mention)
+        await page.set_input_files(SELECTORS['THUMBNAIL_INPUT'], thumbnail_path)
+        await page.set_input_files(SELECTORS['VIDEO_INPUT'], video_path)
+        
+        # 使用重试机制点击发布按钮
+        await self.click_publish_button(page)
+        douyin_logger.info(f"视频发布成功: {title}")
 
     @handle_douyin_errors
     async def upload_single_video(
@@ -305,46 +342,39 @@ class DouYinVideo:
         thumbnail_path: Optional[str] = None
     ) -> None:
         """上传单个视频"""
-        MAX_RETRIES = 3
-        retry_count = 0
+        # 将字符串路径转换为Path对象
+        file_path_obj = Path(file_path)
+        thumbnail_path_obj = Path(thumbnail_path) if thumbnail_path else None
         
-        while retry_count < MAX_RETRIES:
-            try:
-                # 设置账号并获取浏览器上下文
-                result = await self.account_manager.setup_account(
-                    account_file,
-                    handle=True,
-                    context=context
-                )
-                if not result['success']:
-                    raise UploadError(f"账号设置失败: {result['message']}")
-                
-                try:
-                    # 使用已经在创作者中心的页面
-                    page = result['page']
-                    await self._perform_upload(
-                        page=page,
-                        title=title,
-                        file_path=file_path,
-                        tags=tags,
-                        mentions=mentions,
-                        publish_date=publish_date,
-                        thumbnail_path=thumbnail_path
-                    )
-                    break
-                    
-                finally:
-                    # 只关闭当前页面，保持浏览器和上下文打开
-                    if 'page' in locals():
-                        await page.close()
-                        
-            except Exception as e:
-                retry_count += 1
-                if retry_count < MAX_RETRIES:
-                    douyin_logger.error(f"上传失败 (尝试 {retry_count}/{MAX_RETRIES}): {str(e)}")
-                    await asyncio.sleep(5)  # 等待5秒后重试
-                else:
-                    raise UploadError(f"上传失败，已达到最大重试次数: {str(e)}")
+        # 验证标题
+        self._validate_title(title)
+        # 验证标签
+        self._validate_tags(tags)
+        # 验证提及
+        self._validate_mentions(mentions)
+        # 验证封面
+        if thumbnail_path_obj:
+            self._validate_thumbnail_file(thumbnail_path_obj)
+        # 验证视频
+        self._validate_video_file(file_path_obj)
+        # 设置定时发布时间
+        self._validate_publish_date(publish_date)
+
+        # 设置账号并获取浏览器上下文
+        result = await self.account_manager.setup_account(account_file, handle=True, context=context)
+        if not result['success']:
+            raise UploadError(f"账号设置失败: {result['message']}")
+        
+        page = result['page']
+        await self._perform_upload(
+            page=page,
+            title=title,
+            file_path=file_path,  # 保持原始字符串路径用于上传
+            tags=tags,
+            mentions=mentions,
+            publish_date=publish_date,
+            thumbnail_path=thumbnail_path  # 保持原始字符串路径用于上传
+        )
 
     async def set_schedule_time(self, page: Page, publish_date: datetime) -> None:
         """
@@ -415,16 +445,8 @@ class DouYinVideo:
             douyin_logger.info(f"上传封面图片: {thumbnail_path}")
             await file_chooser.set_files(thumbnail_path)
             
-            # 5. 等待上传完成（等待预览图出现）
-            try:
-                await modal.wait_for_selector("div.background-OpVteV[style*='background-image']", 
-                    state="visible", 
-                    timeout=10000
-                )
-                douyin_logger.info("封面预览已显示")
-            except Exception as e:
-                douyin_logger.warning(f"等待预览图超时: {str(e)}")
             
+            await asyncio.sleep(2)
             # 6. 点击完成按钮
             finish_btn = modal.locator("button.semi-button-primary:has-text('完成')")
             await finish_btn.wait_for(state="visible", timeout=5000)
@@ -487,7 +509,7 @@ class DouYinVideo:
             
             # 等待按钮可见并点击
             douyin_logger.info("等待上传按钮可见...")
-            await upload_button.wait_for(state="visible", timeout=10000)
+            await upload_button.wait_for(state="visible", timeout=5000)
             await page.wait_for_load_state("networkidle")
             await asyncio.sleep(2)  # 额外等待以确保按钮可交互
             
@@ -552,6 +574,7 @@ class DouYinVideo:
                 await page.keyboard.type(title)
                 await page.keyboard.press("Enter")
             
+            await asyncio.sleep(1)
             # 设置标签
             css_selector = SELECTORS['TAGS_INPUT']
             for tag in tags[:5]:
@@ -559,12 +582,16 @@ class DouYinVideo:
                 await page.press(css_selector, "Space")
             douyin_logger.info(f'总共添加{len(tags)}个话题')
             await page.keyboard.press("Enter")
+            
+            await asyncio.sleep(1)
+            
             for mention in mentions[:5]:
                 await page.type(css_selector, "@" + mention)
                 await page.press(css_selector, "Space")
             douyin_logger.info(f'总共添加{len(mentions)}个@')
             await page.keyboard.press("Enter")
             
+            await asyncio.sleep(1)
 
             # 5. 等待视频上传完成
             douyin_logger.info("  [-] 等待视频上传完成...")
@@ -597,7 +624,7 @@ class DouYinVideo:
                 douyin_logger.info("  [-] 设置视频封面...")
                 await self.set_thumbnail(page, thumbnail_path)
             
- 
+            await asyncio.sleep(1)
             # 9. 设置发布时间
             if publish_date:
                 douyin_logger.info("  [-] 设置发布时间...")
@@ -683,3 +710,16 @@ class DouYinVideo:
         except Exception as e:
             douyin_logger.error(f"验证视频失败: {str(e)}")
             return False, None, None, None, None, None 
+
+    async def click_publish_button(self, page: Page, retries: int = 3) -> None:
+        """点击发布按钮，带重试机制"""
+        for attempt in range(retries):
+            try:
+                await page.wait_for_selector(SELECTORS['PUBLISH_BUTTON'], timeout=10000)
+                await page.click(SELECTORS['PUBLISH_BUTTON'])
+                douyin_logger.info("成功点击发布按钮")
+                return  # 成功点击后退出
+            except Exception as e:
+                douyin_logger.warning(f"点击发布按钮失败，尝试第 {attempt + 1} 次: {str(e)}")
+                await asyncio.sleep(2)  # 等待一段时间再重试
+        raise Exception("点击发布按钮失败，已达到最大重试次数") 
