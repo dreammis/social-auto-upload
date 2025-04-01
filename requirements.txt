@@ -7,3 +7,4 @@ biliup
 xhs
 qrcode
 loguru
+pyside6
