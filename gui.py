@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
 from PySide6.QtCore import (Qt, QDateTime, QThread, Signal, QObject, QSettings,
                            QTimer, Slot)
 
+from uploader.bilibili_uploader.main import BiliBiliUploader, bilibili_setup
+
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - [%(threadName)s] - %(message)s')
 
@@ -28,7 +30,7 @@ try:
     from uploader.tencent_uploader.main import weixin_setup, TencentVideo
     from uploader.tk_uploader.main_chrome import tiktok_setup, TiktokVideo
     from utils.base_social_media import get_supported_social_media, SOCIAL_MEDIA_DOUYIN, \
-        SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK, SOCIAL_MEDIA_KUAISHOU
+    SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK, SOCIAL_MEDIA_KUAISHOU, SOCIAL_MEDIA_BILIBILI
     from utils.constant import TencentZoneTypes
     from utils.files_times import get_title_and_hashtags
 except ImportError as e:
@@ -312,6 +314,7 @@ class SocialMediaUploaderGUI(QMainWindow):
                 elif platform == SOCIAL_MEDIA_TIKTOK: await tiktok_setup(str(target_cookie_file), handle=True)
                 elif platform == SOCIAL_MEDIA_TENCENT: await weixin_setup(str(target_cookie_file), handle=True)
                 elif platform == SOCIAL_MEDIA_KUAISHOU: await ks_setup(str(target_cookie_file), handle=True)
+                elif platform == SOCIAL_MEDIA_BILIBILI: await bilibili_setup(str(target_cookie_file), handle=True).main()
                 else: raise ValueError(f"不支持的平台: {platform}")
                 await asyncio.sleep(0.5)
                 if target_cookie_file.exists() and target_cookie_file.stat().st_size > 0:
@@ -391,6 +394,7 @@ class SocialMediaUploaderGUI(QMainWindow):
             if platform == SOCIAL_MEDIA_TIKTOK: return TiktokVideo(**common_args)
             elif platform == SOCIAL_MEDIA_TENCENT: return TencentVideo(**common_args, category=TencentZoneTypes.LIFESTYLE.value)
             elif platform == SOCIAL_MEDIA_KUAISHOU: return KSVideo(**common_args)
+            elif platform == SOCIAL_MEDIA_BILIBILI: return BiliBiliUploader(**common_args)
             else: raise ValueError(f"不支持的平台实例创建: {platform}")
         except Exception as e: logging.error(f"Error creating {platform} uploader instance: {e}", exc_info=True); raise type(e)(f"创建 {platform} 上传器实例时出错: {e}") from e
 
