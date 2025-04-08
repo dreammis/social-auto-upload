@@ -10,3 +10,5 @@ loguru
 pyside6
 fastapi
 uvicorn
+pydantic
+python-multipart
