@@ -10,7 +10,8 @@ social-auto-upload 该项目旨在自动化发布视频到各个社交媒体平�
   - [x] bilibili
   - [x] 小红书
   - [x] 快手
-  - [ ] 百家号
+  - [x] 百家号
+  - [ ] qq視頻
 
 - 部分国外社交媒体：
   - [x] tiktok
