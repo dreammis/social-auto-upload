@@ -1,8 +1,6 @@
 # social-auto-upload
 social-auto-upload 该项目旨在自动化发布视频到各个社交媒体平台
 
-social-auto-upload This project aims to automate the posting of videos to various social media platforms.
-
 <img src="media/show/tkupload.gif" alt="tiktok show" width="800"/>
 
 ## 💡Feature
@@ -38,9 +36,6 @@ playwright install chromium firefox
 非程序员，[新手级教程](https://juejin.cn/post/7372114027840208911)
 
 # 🐇 About
-The project for my own project extracted, my release strategy is timed release (released a day in advance), so the release part of the event are used for the next day time!
-
-If you need to release it immediately, you can study the source code or ask me questions.
 
 该项目为我自用项目抽离出来，我的发布策略是定时发布（提前一天发布），故发布部分采用的事件均为第二天的时间
 
