@@ -6,6 +6,7 @@ import os
 import asyncio
 
 from conf import LOCAL_CHROME_PATH
+from utils import file_utils
 from utils.base_social_media import set_init_script
 from utils.log import douyin_logger
 
@@ -95,6 +96,11 @@ class DouYinVideo(object):
         await page.locator('div.progress-div [class^="upload-btn-input"]').set_input_files(self.file_path)
 
     async def upload(self, playwright: Playwright) -> None:
+        # 在这之前需要校验一下视频文件大小，抖音的web限制上传文件为1G 因此，请注意不要上传超过1G大小的文件
+        if file_utils.check_video_size(self.file_path, 1024):
+            # 如果超过1G，直接返回报错
+            douyin_logger.error('视频文件超过1G，请重新上传')
+            raise Exception('视频文件超过1G，超过抖音限制了，无法上传。')
         # 使用 Chromium 浏览器启动一个浏览器实例
         if self.local_executable_path:
             browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
