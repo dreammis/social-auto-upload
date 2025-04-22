@@ -259,18 +259,13 @@ class TiktokVideo(object):
                 if await publish_button.count():
                     await publish_button.click()
 
-                await self.locator_base.locator(success_flag_div).wait_for(state="visible", timeout=3000)
+                await page.wait_for_url("https://www.tiktok.com/tiktokstudio/content",  timeout=3000)
                 tiktok_logger.success("  [-] video published success")
                 break
             except Exception as e:
-                if await self.locator_base.locator(success_flag_div).count():
-                    tiktok_logger.success("  [-]video published success")
-                    break
-                else:
-                    tiktok_logger.exception(f"  [-] Exception: {e}")
-                    tiktok_logger.info("  [-] video publishing")
-                    await page.screenshot(full_page=True)
-                    await asyncio.sleep(0.5)
+                tiktok_logger.exception(f"  [-] Exception: {e}")
+                tiktok_logger.info("  [-] video publishing")
+                await asyncio.sleep(0.5)
 
     async def detect_upload_status(self, page):
         while True:
