@@ -27,7 +27,7 @@ async def cookie_auth(account_file):
             await browser.close()
             return False
         # 2024.06.17 抖音创作者中心改版
-        if await page.get_by_text('手机号登录').count():
+        if await page.get_by_text('手机号登录').count() or await page.get_by_text('扫码登录').count():
             print("[+] 等待5秒 cookie 失效")
             return False
         else:
