@@ -120,7 +120,7 @@ class DouYinVideo(object):
             try:
                 # 尝试等待第一个 URL
                 await page.wait_for_url(
-                    "https://creator.douyin.com/creator-micro/content/publish?enter_from=publish_page", timeout=3)
+                    "https://creator.douyin.com/creator-micro/content/publish?enter_from=publish_page", timeout=3000)
                 douyin_logger.info("[+] 成功进入version_1发布页面!")
                 break  # 成功进入页面后跳出循环
             except Exception:
@@ -128,7 +128,7 @@ class DouYinVideo(object):
                     # 如果第一个 URL 超时，再尝试等待第二个 URL
                     await page.wait_for_url(
                         "https://creator.douyin.com/creator-micro/content/post/video?enter_from=publish_page",
-                        timeout=3)
+                        timeout=3000)
                     douyin_logger.info("[+] 成功进入version_2发布页面!")
 
                     break  # 成功进入页面后跳出循环
