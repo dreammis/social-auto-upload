@@ -1,6 +1,8 @@
 # social-auto-upload
 
-`social-auto-upload` 项目旨在帮助用户自动化地将视频发布到多个主流社交媒体平台。
+`social-auto-upload` 是一个强大的自动化工具，旨在帮助内容创作者和运营者高效地将视频内容一键发布到多个国内外主流社交媒体平台。
+项目实现了对 `抖音`、`Bilibili`、`小红书`、`快手`、`视频号`、`百家号` 以及 `TikTok` 等平台的视频上传、定时发布等功能。
+结合各平台 `uploader` 模块，您可以轻松配置和扩展支持的平台，并通过示例脚本快速上手。
 
 <img src="media/show/tkupload.gif" alt="tiktok show" width="800"/>
 
