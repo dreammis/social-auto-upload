@@ -128,12 +128,49 @@
 
 [☕ Donate as u like](https://www.buymeacoffee.com/hysn2001m) - 如果您觉得这个项目对您有帮助，可以考虑赞助。
 
-如果您也是独立开发者、技术爱好者，对 #技术变现 #AI创业 #跨境电商 #自动化工具 #视频创作 等话题感兴趣，欢迎加入社群交流：
+如果您也是独立开发者、技术爱好者，对 #技术变现 #AI创业 #跨境电商 #自动化工具 #视频创作 等话题感兴趣，欢迎加入社群交流。
 
-| 微信公众号                                 | 交流群 (通过公众号获取)                      |
-| :----------------------------------------: | :------------------------------------------: |
-| ![NasDaddy公众号](sau_backend/media/mp.jpg)             | ![赞赏码/入群引导](sau_backend/media/QR.png)             |
-| 关注公众号，后台回复 `上传` 获取加群方式 | 如果您觉得项目有用，可以考虑打赏支持一下 | 
+### Creator
+
+<table>
+    <td align="center">
+        <a href="https://sap-doc.nasdaddy.com/">
+            <img src="sau_backend/media/mp.jpg" width="100px;" alt="NasDaddy公众号"/>
+            <br />
+            <sub><b>微信公众号</b></sub>
+        </a>
+        <br />
+        <a href="https://github.com/dreammis/social-auto-upload/commits?author=dreammis" title="Code">💻</a>
+        <br />
+        关注公众号，后台回复 `上传` 获取加群方式
+    </td>
+    <td align="center">
+        <a href="https://sap-doc.nasdaddy.com/">
+            <img src="sau_backend/media/QR.png" width="100px;" alt="赞赏码/入群引导"/>
+            <br />
+            <sub><b>交流群 (通过公众号获取)</b></sub>
+        </a>
+        <br />
+        <a href="https://sap-doc.nasdaddy.com/" title="Documentation">📖</a>
+        <br />
+        如果您觉得项目有用，可以考虑打赏支持一下
+    </td>
+</table>
+
+### Active Core Team
+
+<table>
+    <td align="center">
+        <a href="https://leedebug.github.io/">
+            <img src="sau_backend/media/edan-qrcode.png" width="100px;" alt="Edan Lee"/>
+            <br />
+            <sub><b>Edan Lee</b></sub>
+        </a>
+        <br />
+        <a href="https://github.com/dreammis/social-auto-upload/commits?author=LeeDebug" title="Code">💻</a>
+        <a href="https://leedebug.github.io/" title="Documentation">📖</a>
+    </td>
+</table>
 
 ## 🤝贡献指南
 
