@@ -338,7 +338,7 @@
             v-model="accountForm.platform" 
             placeholder="请选择平台" 
             style="width: 100%"
-            :disabled="sseConnecting"
+            :disabled="dialogType === 'edit' || sseConnecting"
           >
             <el-option label="快手" value="快手" />
             <el-option label="抖音" value="抖音" />
@@ -376,7 +376,7 @@
       </el-form>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="dialogVisible = false" :disabled="sseConnecting && !loginStatus">取消</el-button>
+          <el-button @click="dialogVisible = false">取消</el-button>
           <el-button 
             type="primary" 
             @click="submitAccountForm" 
@@ -630,42 +630,31 @@ const connectSSE = (platform, name) => {
     else if (data === '200' || data === '500') {
       loginStatus.value = data
       
-      // 如果登录成功，添加账号到状态管理
+      // 如果登录成功
       if (data === '200') {
         setTimeout(() => {
-          const newId = accountStore.accounts.length > 0 ? 
-            Math.max(...accountStore.accounts.map(a => a.id)) + 1 : 1
-          
-          const newAccount = {
-            id: newId,
-            name: accountForm.name,
-            platform: accountForm.platform,
-            status: '正常',
-            avatar: '/vite.svg' // 默认头像
-          }
-          
-          // 添加到状态管理
-          accountStore.addAccount(newAccount)
-          
           // 关闭连接
           closeSSEConnection()
           
-          // 1秒后关闭对话框
+          // 1秒后关闭对话框并开始刷新
           setTimeout(() => {
             dialogVisible.value = false
             sseConnecting.value = false
             ElMessage.success('账号添加成功')
             
-            // 显示更新账号信息提示并刷新账号列表
+            // 显示更新账号信息提示
             ElMessage({
               type: 'info',
-              message: '更新账号信息中...',
-              duration: 2000
+              message: '正在同步账号信息...',
+              duration: 0
             })
             
             // 触发刷新操作
-            isRefreshing.value = true
-            fetchAccounts()
+            fetchAccounts().then(() => {
+              // 刷新完成后关闭提示
+              ElMessage.closeAll()
+              ElMessage.success('账号信息已更新')
+            })
           }, 1000)
         }, 1000)
       } else {
@@ -699,12 +688,23 @@ const submitAccountForm = () => {
         // 建立SSE连接
         connectSSE(accountForm.platform, accountForm.name)
       } else {
-        // 编辑账号逻辑保持不变
+        // 编辑账号逻辑
         try {
-          // 更新状态管理中的账号
-          accountStore.updateAccount(accountForm.id, accountForm)
-          ElMessage.success('更新成功')
-          dialogVisible.value = false
+          const res = await accountApi.updateAccount({
+            id: accountForm.id,
+            type: Number(accountForm.platform === '快手' ? 1 : accountForm.platform === '抖音' ? 2 : accountForm.platform === '视频号' ? 3 : 4),
+            userName: accountForm.name
+          })
+          if (res.code === 200) {
+            // 更新状态管理中的账号
+            accountStore.updateAccount(accountForm.id, accountForm)
+            ElMessage.success('更新成功')
+            dialogVisible.value = false
+            // 刷新账号列表
+            fetchAccounts()
+          } else {
+            ElMessage.error(res.msg || '更新账号失败')
+          }
         } catch (error) {
           console.error('更新账号失败:', error)
           ElMessage.error('更新账号失败')
@@ -805,6 +805,7 @@ onBeforeUnmount(() => {
         max-width: 200px;
         max-height: 200px;
         border: 1px solid #ebeef5;
+        background-color: black;
       }
     }
     
