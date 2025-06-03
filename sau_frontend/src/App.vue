@@ -1,327 +1,201 @@
 <template>
-  <div class="main-layout">
-    <!-- 顶部导航栏 -->
-    <header class="header">
-      <div class="logo">
-        <img src="@/assets/logo.svg" alt="Logo" class="logo-img" />
-        <span>SAU自媒体自动化运营系统</span>
-      </div>
-      <div class="header-tabs">
-        <!-- <div class="tab-item" v-for="tab in tabs" :key="tab.id">{{ tab.name }}</div> -->
-      </div>
-      <!-- <div class="user-info">
-        <button class="btn-upgrade" @click="showLoginModal">登录</button>
-        <div class="avatar">
-          <img src="@/assets/tudong.jpg" alt="Avatar" />
-        </div>
-      </div> -->
-      <LoginModal :visible="isLoginModalVisible" @close="closeLoginModal" @login-success="handleLoginSuccess" />
-    </header>
-    
-    <!-- 主体内容区 -->
-    <div class="content-container">
-      <!-- 左侧导航栏 -->
-      <aside class="sidebar">
-        <nav>
-          <!-- 静态路由 -->
-          <router-link 
-            v-for="route in staticRoutes" 
-            :key="route.path" 
-            :to="route.path"
-            class="nav-item"
-            active-class="active"
-          >
-            <i :class="route.meta.icon"></i>
-            <span>{{ route.meta.title }}</span>
-          </router-link>
-          
-          <!-- 动态视频发布路由 -->
-          <div 
-            v-for="route in videoRoutes" 
-            :key="route.id"
-            class="nav-item-with-close"
-          >
-            <router-link 
-              :to="`/video-publish/${route.id}`" 
-              class="nav-item"
-              active-class="active"
-            >
-              <i class="icon-video"></i>
-              <span>{{ route.meta.title }}</span>
-            </router-link>
-            <button 
-              class="close-btn" 
-              @click="handleRemoveVideoRoute(route.id)"
-              title="删除路由"
-            >×</button>
+  <div id="app">
+    <el-container>
+      <el-aside :width="isCollapse ? '64px' : '200px'">
+        <div class="sidebar">
+          <div class="logo">
+            <img v-show="isCollapse" src="/vite.svg" alt="Logo" class="logo-img">
+            <h2 v-show="!isCollapse">自媒体自动化运营系统</h2>
           </div>
-        </nav>
-      </aside>
-      
-      <!-- 右侧内容区 -->
-      <main class="main-content">
-        <router-view></router-view>
-      </main>
-    </div>
+          <el-menu
+            :router="true"
+            :default-active="activeMenu"
+            :collapse="isCollapse"
+            class="sidebar-menu"
+            background-color="#001529"
+            text-color="#fff"
+            active-text-color="#409EFF"
+          >
+            <el-menu-item index="/">
+              <el-icon><HomeFilled /></el-icon>
+              <span>首页</span>
+            </el-menu-item>
+            <el-menu-item index="/account-management">
+              <el-icon><User /></el-icon>
+              <span>账号管理</span>
+            </el-menu-item>
+            <el-menu-item index="/material-management">
+              <el-icon><Picture /></el-icon>
+              <span>素材管理</span>
+            </el-menu-item>
+            <el-menu-item index="/publish-center">
+              <el-icon><Upload /></el-icon>
+              <span>发布中心</span>
+            </el-menu-item>
+            <el-menu-item index="/website">
+              <el-icon><Monitor /></el-icon>
+              <span>网站</span>
+            </el-menu-item>
+            <el-menu-item index="/data">
+              <el-icon><DataAnalysis /></el-icon>
+              <span>数据</span>
+            </el-menu-item>
+          </el-menu>
+        </div>
+      </el-aside>
+      <el-container>
+        <el-header>
+          <div class="header-content">
+            <div class="header-left">
+              <el-icon class="toggle-sidebar" @click="toggleSidebar"><Fold /></el-icon>
+            </div>
+            <div class="header-right">
+              <!-- 账号信息已移除 -->
+            </div>
+          </div>
+        </el-header>
+        <el-main>
+          <router-view />
+        </el-main>
+      </el-container>
+    </el-container>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
-import LoginModal from '@/components/LoginModal.vue';
-import { videoRoutes, removeVideoRoute } from '@/router';
+import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
+import { 
+  HomeFilled, User, Monitor, DataAnalysis, 
+  Fold, Picture, Upload
+} from '@element-plus/icons-vue'
 
-const router = useRouter();
+const route = useRoute()
 
-// 静态路由
-const staticRoutes = computed(() => router.options.routes.filter(route => route.meta?.title));
+// 当前激活的菜单项
+const activeMenu = computed(() => {
+  return route.path
+})
 
-// 动态视频发布路由已从router导入
+// 侧边栏折叠状态
+const isCollapse = ref(false)
 
-// 监听视频路由变化，动态添加/删除路由
-watch(videoRoutes, (newRoutes) => {
-  // 确保路由已添加到router中
-  newRoutes.forEach(route => {
-    if (!router.hasRoute(route.name)) {
-      router.addRoute(route);
-    }
-  });
-}, { immediate: true });
-
-// 删除视频发布路由
-const handleRemoveVideoRoute = (id) => {
-  const route = videoRoutes.value.find(r => r.id === id);
-  if (route && router.currentRoute.value.path === route.path) {
-    // 如果当前在要删除的路由页面，先跳转到其他页面
-    router.push('/publish');
-  }
-  // 调用router中的removeVideoRoute函数
-  removeVideoRoute(id);
-};
-
-// 登录模态窗口控制
-const isLoginModalVisible = ref(false);
-
-const showLoginModal = () => {
-  isLoginModalVisible.value = true;
-};
-
-const closeLoginModal = () => {
-  isLoginModalVisible.value = false;
-};
-
-const handleLoginSuccess = (userData) => {
-  console.log('用户登录成功:', userData);
-  // 这里可以添加登录成功后的逻辑，比如更新用户状态等
-};
-
-const tabs = [
-  { id: 1, name: '抖音' },
-  { id: 2, name: '小红书' },
-  { id: 3, name: '微信视频号' },
-  { id: 4, name: '快手' },
-  { id: 5, name: '视频号小店' },
-  { id: 6, name: 'TikTok' }
-];
+// 切换侧边栏折叠状态
+const toggleSidebar = () => {
+  isCollapse.value = !isCollapse.value
+}
 </script>
 
-<style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+<style lang="scss" scoped>
+@use '@/styles/variables.scss' as *;
+
+#app {
+  min-height: 100vh;
 }
 
-body {
-  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  color: #333;
-  background-color: #f5f7fa;
-}
-
-.main-layout {
-  display: flex;
-  flex-direction: column;
+.el-container {
   height: 100vh;
 }
 
-.header {
-  height: 60px;
+.el-aside {
+  background-color: #001529;
+  color: #fff;
+  height: 100vh;
+  overflow: hidden;
+  transition: width 0.3s;
+  
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    
+    .logo {
+      height: 60px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      background-color: #002140;
+      overflow: hidden;
+      
+      .logo-img {
+        width: 32px;
+        height: 32px;
+        margin-right: 12px;
+      }
+      
+      h2 {
+        color: #fff;
+        font-size: 16px;
+        font-weight: 600;
+        white-space: nowrap;
+        margin: 0;
+      }
+    }
+    
+    .sidebar-menu {
+      border-right: none;
+      flex: 1;
+      
+      .el-menu-item {
+        display: flex;
+        align-items: center;
+        
+        .el-icon {
+          margin-right: 10px;
+          font-size: 18px;
+        }
+      }
+    }
+  }
+}
+
+.el-header {
   background-color: #fff;
-  border-bottom: 1px solid #eee;
-  display: flex;
-  align-items: center;
-  padding: 0 20px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  font-weight: bold;
-  font-size: 18px;
-  margin-right: 40px;
-}
-
-.logo-img {
-  width: 30px;
-  height: 30px;
-  margin-right: 10px;
-}
-
-.header-tabs {
-  display: flex;
-  flex: 1;
-}
-
-.tab-item {
-  padding: 0 15px;
-  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+  padding: 0;
   height: 60px;
-  display: flex;
-  align-items: center;
+  
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 100%;
+    padding: 0 16px;
+    
+    .header-left {
+      .toggle-sidebar {
+        font-size: 20px;
+        cursor: pointer;
+        color: $text-regular;
+        
+        &:hover {
+          color: $primary-color;
+        }
+      }
+    }
+    
+    .header-right {
+      .user-dropdown {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        
+        .username {
+          margin: 0 8px;
+          color: $text-regular;
+        }
+        
+        .el-icon {
+          font-size: 12px;
+          color: $text-secondary;
+        }
+      }
+    }
+  }
 }
 
-.tab-item:hover {
-  color: #4e6ef2;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-}
-
-.btn-upgrade {
-  background-color: #f0f2ff;
-  color: #4e6ef2;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  margin-right: 15px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-.btn-upgrade:hover {
-  background-color: #e0e5ff;
-}
-
-.avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  overflow: hidden;
-}
-
-.avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.content-container {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-}
-
-.sidebar {
-  width: 200px;
-  background-color: #f8f9fc;
-  border-right: 1px solid #eee;
-  padding: 20px 0;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  padding: 12px 20px;
-  color: #333;
-  text-decoration: none;
-  margin-bottom: 5px;
-}
-
-.nav-item i {
-  margin-right: 10px;
-  font-size: 18px;
-}
-
-/* 图标样式 */
-.icon-account, .icon-publish, .icon-website, .icon-data, .icon-video, .icon-multi-publish, .icon-material {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  position: relative;
-}
-
-.icon-multi-publish::before {
-  content: '';
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  background-color: #8b5cf6;
-  border-radius: 50%;
-  top: 3px;
-  left: 3px;
-}
-
-.icon-material::before {
-  content: '';
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  background-color: #10b981;
-  border-radius: 50%;
-  top: 3px;
-  left: 3px;
-}
-
-.nav-item.active {
-  background-color: #e6f7ff;
-  color: #4e6ef2;
-  border-right: 3px solid #4e6ef2;
-}
-
-/* 带关闭按钮的导航项 */
-.nav-item-with-close {
-  position: relative;
-  display: flex;
-  align-items: center;
-  margin-bottom: 5px;
-}
-
-.nav-item-with-close .nav-item {
-  flex: 1;
-  margin-bottom: 0;
-}
-
-.close-btn {
-  position: absolute;
-  right: 10px;
-  background: none;
-  border: none;
-  color: #999;
-  font-size: 16px;
-  cursor: pointer;
-  display: none;
-  width: 20px;
-  height: 20px;
-  line-height: 18px;
-  text-align: center;
-  border-radius: 50%;
-}
-
-.close-btn:hover {
-  background-color: rgba(0, 0, 0, 0.1);
-  color: #666;
-}
-
-.nav-item-with-close:hover .close-btn {
-  display: block;
-}
-
-.main-content {
-  flex: 1;
+.el-main {
+  background-color: $bg-color-page;
   padding: 20px;
   overflow-y: auto;
 }
