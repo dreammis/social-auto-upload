@@ -169,3 +169,8 @@ bilibili_uploader/*.json
 tk_uploader/*.json
 
 sau_backend/cookies
+
+# Frontend
+dist/
+node_modules/
+package-lock.json
