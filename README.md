@@ -71,7 +71,6 @@
 2.  **安装依赖**:
     建议在虚拟环境中安装依赖。
     ```bash
-    cd sau_backend
     pip install -r requirements.txt
     ```
 
@@ -81,17 +80,24 @@
     ```
     根据您的需求，至少需要安装 `chromium`。`firefox` 主要用于 TikTok 上传（旧版）。
 
-4.  **启动前端项目**:
+4.  **启动后端项目**:
+    ```bash
+    cd sau_backend
+    python app.py
+    ```
+    后端项目将在 `http://localhost:5409` 启动。
+
+5.  **启动前端项目**:
     ```bash
     cd sau_frontend
     npm install
     npm run dev
     ```
-    前端项目将在 `http://localhost:5173` 启动。
-
+    前端项目将在 `http://localhost:5173` 启动，在浏览器中打开此链接即可访问。
 
 
 > 非程序员用户可以参考：[新手级教程](https://juejin.cn/post/7372114027840208911)
+
 
 ## 🏁快速开始
 
