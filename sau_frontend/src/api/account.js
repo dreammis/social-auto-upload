@@ -13,8 +13,8 @@ export const accountApi = {
   },
   
   // 更新账号
-  updateAccount(id, data) {
-    return http.put(`/account/${id}`, data)
+  updateAccount(data) {
+    return http.post('/updateUserinfo', data)
   },
   
   // 删除账号

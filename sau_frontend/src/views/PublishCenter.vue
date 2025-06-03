@@ -43,16 +43,6 @@
       </div>
     </div>
 
-    <!-- 批量发布状态提示 -->
-    <div v-if="batchPublishMessage" class="batch-publish-status">
-      <el-alert
-        :title="batchPublishMessage"
-        :type="batchPublishType"
-        :closable="false"
-        show-icon
-      />
-    </div>
-
     <!-- 内容区域 -->
     <div class="publish-content">
       <div class="tab-content-wrapper">
@@ -62,6 +52,16 @@
           v-show="activeTab === tab.name"
           class="tab-content"
         >
+          <!-- 发布状态提示 -->
+          <div v-if="tab.publishStatus" class="publish-status">
+            <el-alert
+              :title="tab.publishStatus.message"
+              :type="tab.publishStatus.type"
+              :closable="false"
+              show-icon
+            />
+          </div>
+
           <!-- 视频上传区域 -->
           <div class="upload-section">
             <h3>视频</h3>
@@ -132,6 +132,59 @@
                 </div>
               </template>
             </el-upload>
+          </el-dialog>
+
+          <!-- 批量发布进度对话框 -->
+          <el-dialog
+            v-model="batchPublishDialogVisible"
+            title="批量发布进度"
+            width="500px"
+            :close-on-click-modal="false"
+            :close-on-press-escape="false"
+            :show-close="false"
+          >
+            <div class="publish-progress">
+              <el-progress 
+                :percentage="publishProgress"
+                :status="publishProgress === 100 ? 'success' : ''"
+              />
+              <div v-if="currentPublishingTab" class="current-publishing">
+                正在发布：{{ currentPublishingTab.label }}
+              </div>
+              
+              <!-- 发布结果列表 -->
+              <div class="publish-results" v-if="publishResults.length > 0">
+                <div 
+                  v-for="(result, index) in publishResults" 
+                  :key="index"
+                  :class="['result-item', result.status]"
+                >
+                  <el-icon v-if="result.status === 'success'"><Check /></el-icon>
+                  <el-icon v-else-if="result.status === 'error'"><Close /></el-icon>
+                  <el-icon v-else><InfoFilled /></el-icon>
+                  <span class="label">{{ result.label }}</span>
+                  <span class="message">{{ result.message }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <template #footer>
+              <div class="dialog-footer">
+                <el-button 
+                  @click="cancelBatchPublish" 
+                  :disabled="publishProgress === 100"
+                >
+                  取消发布
+                </el-button>
+                <el-button 
+                  type="primary" 
+                  @click="batchPublishDialogVisible = false"
+                  v-if="publishProgress === 100"
+                >
+                  关闭
+                </el-button>
+              </div>
+            </template>
           </el-dialog>
 
           <!-- 素材库选择弹窗 -->
@@ -431,10 +484,10 @@ const batchPublishType = ref('info')
 
 // 平台列表 - 对应后端type字段
 const platforms = [
-  { key: 1, name: '抖音' },
+  { key: 3, name: '抖音' },
   { key: 4, name: '快手' },
   { key: 2, name: '视频号' },
-  { key: 3, name: '小红书' }
+  { key: 1, name: '小红书' }
 ]
 
 // tab页数据 - 默认只有一个tab
@@ -451,7 +504,8 @@ const tabs = reactive([
     scheduleEnabled: false, // 定时发布开关
     videosPerDay: 1, // 每天发布视频数量
     dailyTimes: ['10:00'], // 每天发布时间点列表
-    startDays: 0 // 从今天开始计算的发布天数，0表示明天，1表示后天
+    startDays: 0, // 从今天开始计算的发布天数，0表示明天，1表示后天
+    publishStatus: null // 发布状态，包含message和type
   }
 ])
 
@@ -466,9 +520,9 @@ const accountStore = useAccountStore()
 // 根据选择的平台获取可用账号列表
 const availableAccounts = computed(() => {
   const platformMap = {
-    1: '抖音',
+    3: '抖音',
     2: '视频号',
-    3: '小红书',
+    1: '小红书',
     4: '快手'
   }
   const currentPlatform = currentTab.value ? platformMap[currentTab.value.selectedPlatform] : null
@@ -501,7 +555,8 @@ const addTab = () => {
     scheduleEnabled: false,
     videosPerDay: 1,
     dailyTimes: ['10:00'],
-    startDays: 0
+    startDays: 0,
+    publishStatus: null
   }
   tabs.push(newTab)
   activeTab.value = newTab.name
@@ -654,68 +709,87 @@ const cancelPublish = (tab) => {
 }
 
 // 确认发布
-const confirmPublish = (tab) => {
-  // 数据验证
-  if (tab.fileList.length === 0) {
-    ElMessage.warning('请先上传视频文件')
-    return
-  }
-  if (!tab.title.trim()) {
-    ElMessage.warning('请输入标题')
-    return
-  }
-  if (!tab.selectedPlatform) {
-    ElMessage.warning('请选择发布平台')
-    return
-  }
-  if (tab.selectedAccounts.length === 0) {
-    ElMessage.warning('请选择发布账号')
-    return
-  }
-  
-  // 构造发布数据，符合后端API格式
-  const publishData = {
-    type: tab.selectedPlatform,
-    title: tab.title,
-    tags: tab.selectedTopics, // 不带#号的话题列表
-    fileList: tab.fileList.map(file => file.path), // 只发送文件路径
-    accountList: tab.selectedAccounts.map(accountId => {
-      const account = accountStore.accounts.find(acc => acc.id === accountId)
-      return account ? account.filePath : accountId
-    }), // 发送账号的文件路径
-    category: tab.scheduleEnabled ? 1 : 0, // 是否启用定时发布，开启传1，不开启传0
-    videosPerDay: tab.scheduleEnabled ? tab.videosPerDay || 1 : 1, // 每天发布视频数量，1-55
-    dailyTimes: tab.scheduleEnabled ? tab.dailyTimes || ['10:00'] : ['10:00'], // 每天发布时间点
-    startDays: tab.scheduleEnabled ? tab.startDays || 0 : 0, // 从今天开始计算的发布天数，0表示明天，1表示后天
-  }
-  
-  // 调用后端发布API
-  fetch(`${apiBaseUrl}/postVideo`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders.value
-    },
-    body: JSON.stringify(publishData)
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.code === 200) {
-      ElMessage.success('发布成功')
-      // 清空当前tab的数据
-      tab.fileList = []
-      tab.displayFileList = []
-      tab.title = ''
-      tab.selectedTopics = []
-      tab.selectedAccounts = []
-      tab.scheduleEnabled = false
-    } else {
-      ElMessage.error(data.msg || '发布失败')
+const confirmPublish = async (tab) => {
+  return new Promise((resolve, reject) => {
+    // 数据验证
+    if (tab.fileList.length === 0) {
+      ElMessage.error('请先上传视频文件')
+      reject(new Error('请先上传视频文件'))
+      return
     }
-  })
-  .catch(error => {
-    console.error('发布错误:', error)
-    ElMessage.error('发布失败，请检查网络连接')
+    if (!tab.title.trim()) {
+      ElMessage.error('请输入标题')
+      reject(new Error('请输入标题'))
+      return
+    }
+    if (!tab.selectedPlatform) {
+      ElMessage.error('请选择发布平台')
+      reject(new Error('请选择发布平台'))
+      return
+    }
+    if (tab.selectedAccounts.length === 0) {
+      ElMessage.error('请选择发布账号')
+      reject(new Error('请选择发布账号'))
+      return
+    }
+    
+    // 构造发布数据，符合后端API格式
+    const publishData = {
+      type: tab.selectedPlatform,
+      title: tab.title,
+      tags: tab.selectedTopics, // 不带#号的话题列表
+      fileList: tab.fileList.map(file => file.path), // 只发送文件路径
+      accountList: tab.selectedAccounts.map(accountId => {
+        const account = accountStore.accounts.find(acc => acc.id === accountId)
+        return account ? account.filePath : accountId
+      }), // 发送账号的文件路径
+      enableTimer: tab.scheduleEnabled ? 1 : 0, // 是否启用定时发布，开启传1，不开启传0
+      videosPerDay: tab.scheduleEnabled ? tab.videosPerDay || 1 : 1, // 每天发布视频数量，1-55
+      dailyTimes: tab.scheduleEnabled ? tab.dailyTimes || ['10:00'] : ['10:00'], // 每天发布时间点
+      startDays: tab.scheduleEnabled ? tab.startDays || 0 : 0, // 从今天开始计算的发布天数，0表示明天，1表示后天
+      category: 0 //表示非原创
+    }
+    
+    // 调用后端发布API
+    fetch(`${apiBaseUrl}/postVideo`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders.value
+      },
+      body: JSON.stringify(publishData)
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.code === 200) {
+        tab.publishStatus = {
+          message: '发布成功',
+          type: 'success'
+        }
+        // 清空当前tab的数据
+        tab.fileList = []
+        tab.displayFileList = []
+        tab.title = ''
+        tab.selectedTopics = []
+        tab.selectedAccounts = []
+        tab.scheduleEnabled = false
+        resolve()
+      } else {
+        tab.publishStatus = {
+          message: `发布失败：${data.msg || '发布失败'}`,
+          type: 'error'
+        }
+        reject(new Error(data.msg || '发布失败'))
+      }
+    })
+    .catch(error => {
+      console.error('发布错误:', error)
+      tab.publishStatus = {
+        message: '发布失败，请检查网络连接',
+        type: 'error'
+      }
+      reject(error)
+    })
   })
 }
 
@@ -798,92 +872,86 @@ const confirmMaterialSelection = () => {
   ElMessage.success(`已添加 ${addedCount} 个素材`)
 }
 
+// 批量发布对话框状态
+const batchPublishDialogVisible = ref(false)
+const currentPublishingTab = ref(null)
+const publishProgress = ref(0)
+const publishResults = ref([])
+const isCancelled = ref(false)
+
+// 取消批量发布
+const cancelBatchPublish = () => {
+  isCancelled.value = true
+  ElMessage.info('正在取消发布...')
+}
+
 // 批量发布方法
 const batchPublish = async () => {
   if (batchPublishing.value) return
   
   batchPublishing.value = true
-  batchPublishMessage.value = '开始批量发布...'
-  batchPublishType.value = 'info'
+  currentPublishingTab.value = null
+  publishProgress.value = 0
+  publishResults.value = []
+  isCancelled.value = false
+  batchPublishDialogVisible.value = true
   
   try {
     for (let i = 0; i < tabs.length; i++) {
+      if (isCancelled.value) {
+        publishResults.value.push({
+          label: tabs[i].label,
+          status: 'cancelled',
+          message: '已取消'
+        })
+        continue
+      }
+
       const tab = tabs[i]
-      batchPublishMessage.value = `正在发布第 ${i + 1} 个Tab: ${tab.label}`
-      
-      // 数据验证
-      if (tab.fileList.length === 0) {
-        batchPublishMessage.value = `Tab "${tab.label}" 发布失败：请先上传视频文件`
-        batchPublishType.value = 'error'
-        break
-      }
-      if (!tab.title.trim()) {
-        batchPublishMessage.value = `Tab "${tab.label}" 发布失败：请输入标题`
-        batchPublishType.value = 'error'
-        break
-      }
-      if (!tab.selectedPlatform) {
-        batchPublishMessage.value = `Tab "${tab.label}" 发布失败：请选择发布平台`
-        batchPublishType.value = 'error'
-        break
-      }
-      if (tab.selectedAccounts.length === 0) {
-        batchPublishMessage.value = `Tab "${tab.label}" 发布失败：请选择发布账号`
-        batchPublishType.value = 'error'
-        break
-      }
-      
-      // 构造发布数据
-      const publishData = {
-        type: tab.selectedPlatform,
-        title: tab.title,
-        tags: tab.selectedTopics,
-        fileList: tab.fileList.map(file => file.path),
-        accounts: tab.selectedAccounts,
-        scheduleEnabled: tab.scheduleEnabled,
-        videosPerDay: tab.videosPerDay,
-        dailyTimes: tab.dailyTimes,
-        startDays: tab.startDays
-      }
+      currentPublishingTab.value = tab
+      publishProgress.value = Math.floor((i / tabs.length) * 100)
       
       try {
-        // 这里应该调用实际的发布API
-        // const response = await publishApi.publish(publishData)
-        // 模拟API调用
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
-        // 模拟随机失败（用于测试）
-        if (Math.random() < 0.1) {
-          throw new Error('网络错误')
-        }
-        
-        batchPublishMessage.value = `Tab "${tab.label}" 发布成功`
-        batchPublishType.value = 'success'
-        
+        await confirmPublish(tab)
+        publishResults.value.push({
+          label: tab.label,
+          status: 'success',
+          message: '发布成功'
+        })
       } catch (error) {
-        console.error('发布失败:', error)
-        batchPublishMessage.value = `Tab "${tab.label}" 发布失败：${error.message || '网络错误'}`
-        batchPublishType.value = 'error'
-        break
+        publishResults.value.push({
+          label: tab.label,
+          status: 'error',
+          message: error.message
+        })
+        // 不立即返回，继续显示发布结果
       }
     }
     
-    if (batchPublishType.value === 'success') {
-      batchPublishMessage.value = '所有Tab发布完成！'
-      ElMessage.success('批量发布完成')
+    publishProgress.value = 100
+    
+    // 统计发布结果
+    const successCount = publishResults.value.filter(r => r.status === 'success').length
+    const failCount = publishResults.value.filter(r => r.status === 'error').length
+    const cancelCount = publishResults.value.filter(r => r.status === 'cancelled').length
+    
+    if (isCancelled.value) {
+      ElMessage.warning(`发布已取消：${successCount}个成功，${failCount}个失败，${cancelCount}个未执行`)
+    } else if (failCount > 0) {
+      ElMessage.error(`发布完成：${successCount}个成功，${failCount}个失败`)
+    } else {
+      ElMessage.success('所有Tab发布成功')
+      setTimeout(() => {
+        batchPublishDialogVisible.value = false
+      }, 1000)
     }
     
   } catch (error) {
     console.error('批量发布出错:', error)
-    batchPublishMessage.value = '批量发布出错，请重试'
-    batchPublishType.value = 'error'
+    ElMessage.error('批量发布出错，请重试')
   } finally {
     batchPublishing.value = false
-    
-    // 5秒后自动清除消息
-    setTimeout(() => {
-      batchPublishMessage.value = ''
-    }, 5000)
+    isCancelled.value = false
   }
 }
 </script>
@@ -981,13 +1049,59 @@ const batchPublish = async () => {
     }
   }
   
-  // 批量发布状态提示区域
-  .batch-publish-status {
-    margin: 10px 20px;
+  // 批量发布进度对话框样式
+  .publish-progress {
+    padding: 20px;
     
-    .el-alert {
-      border-radius: 6px;
+    .current-publishing {
+      margin: 15px 0;
+      text-align: center;
+      color: #606266;
     }
+
+    .publish-results {
+      margin-top: 20px;
+      border-top: 1px solid #EBEEF5;
+      padding-top: 15px;
+      max-height: 300px;
+      overflow-y: auto;
+
+      .result-item {
+        display: flex;
+        align-items: center;
+        padding: 8px 0;
+        color: #606266;
+
+        .el-icon {
+          margin-right: 8px;
+        }
+
+        .label {
+          margin-right: 10px;
+          font-weight: 500;
+        }
+
+        .message {
+          color: #909399;
+        }
+
+        &.success {
+          color: #67C23A;
+        }
+
+        &.error {
+          color: #F56C6C;
+        }
+
+        &.cancelled {
+          color: #909399;
+        }
+      }
+    }
+  }
+
+  .dialog-footer {
+    text-align: right;
   }
   
   // 内容区域
