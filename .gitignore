@@ -175,3 +175,12 @@ cookies
 dist/
 node_modules/
 package-lock.json
+
+# database
+db/database.db
+
+# 临时文件夹
+cookiesFile
+uploadFile
+videoFile
+
