@@ -56,7 +56,7 @@
 
 ## 🚀支持的平台
 
-本项目通过各平台对应的 `uploader` 模块实现视频上传功能。您可以在 <mcfolder name="examples" path="d:\Code\Awesome-Tools\1.Social_Tools\social-auto-upload__dreammis\examples"></mcfolder> 目录下找到各个平台的使用示例脚本。
+本项目通过各平台对应的 `uploader` 模块实现视频上传功能。您可以在 `examples` 目录下找到各个平台的使用示例脚本。
 
 每个示例脚本展示了如何配置和调用相应的 uploader。
 
@@ -71,6 +71,7 @@
 2.  **安装依赖**:
     建议在虚拟环境中安装依赖。
     ```bash
+    cd sau_backend
     pip install -r requirements.txt
     ```
 
@@ -79,6 +80,16 @@
     playwright install chromium firefox
     ```
     根据您的需求，至少需要安装 `chromium`。`firefox` 主要用于 TikTok 上传（旧版）。
+
+4.  **启动前端项目**:
+    ```bash
+    cd sau_frontend
+    npm install
+    npm run dev
+    ```
+    前端项目将在 `http://localhost:5173` 启动。
+
+
 
 > 非程序员用户可以参考：[新手级教程](https://juejin.cn/post/7372114027840208911)
 
