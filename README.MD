@@ -4,7 +4,7 @@
 项目实现了对 `抖音`、`Bilibili`、`小红书`、`快手`、`视频号`、`百家号` 以及 `TikTok` 等平台的视频上传、定时发布等功能。
 结合各平台 `uploader` 模块，您可以轻松配置和扩展支持的平台，并通过示例脚本快速上手。
 
-<img src="media/show/tkupload.gif" alt="tiktok show" width="800"/>
+<img src="sau_backend/media/show/tkupload.gif" alt="tiktok show" width="800"/>
 
 ## 目录
 
@@ -121,7 +121,7 @@
 
 | 微信公众号                                 | 交流群 (通过公众号获取)                      |
 | :----------------------------------------: | :------------------------------------------: |
-| ![NasDaddy公众号](media/mp.jpg)             | ![赞赏码/入群引导](media/QR.png)             |
+| ![NasDaddy公众号](sau_backend/media/mp.jpg)             | ![赞赏码/入群引导](sau_backend/media/QR.png)             |
 | 关注公众号，后台回复 `上传` 获取加群方式 | 如果您觉得项目有用，可以考虑打赏支持一下 | 
 
 ## 🤝贡献指南
