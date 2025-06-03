@@ -171,6 +171,7 @@ tk_uploader/*.json
 sau_backend/cookies
 
 # Frontend
+.vite/
 dist/
 node_modules/
 package-lock.json
