@@ -1,0 +1,22 @@
+{
+  "name": "sau-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "author": "Edan.Lee",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "axios": "^1.9.0",
+    "pinia": "^2.1.7",
+    "vue": "^3.3.4",
+    "vue-router": "^4.2.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.3.4",
+    "vite": "^4.4.9",
+    "vite-plugin-vue-devtools": "^7.7.6"
+  }
+}
