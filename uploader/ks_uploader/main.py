@@ -89,8 +89,6 @@ class KSVideo(object):
             )  # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(storage_state=f"{self.account_file}")
         context = await set_init_script(context)
-        context.on("close", lambda: context.storage_state(path=self.account_file))
-
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
