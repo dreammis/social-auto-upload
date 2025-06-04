@@ -71,6 +71,9 @@
 2.  **安装依赖**:
     建议在虚拟环境中安装依赖。
     ```bash
+    conda create -n social-auto-upload python=3.10
+    conda activate social-auto-upload
+    # 挂载清华镜像 or 命令行代理
     pip install -r requirements.txt
     ```
 
