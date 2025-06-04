@@ -80,14 +80,22 @@
     ```
     根据您的需求，至少需要安装 `chromium`。`firefox` 主要用于 TikTok 上传（旧版）。
 
-4.  **启动后端项目**:
+4.  **配置数据库**:
+    如果 db/database.db 文件不存在，您可以运行以下命令来初始化数据库：
+    ```bash
+    cd db
+    python createTable.py
+    ```
+    此命令将初始化 SQLite 数据库。
+
+5.  **启动后端项目**:
     ```bash
     cd sau_backend
     python app.py
     ```
     后端项目将在 `http://localhost:5409` 启动。
 
-5.  **启动前端项目**:
+6.  **启动前端项目**:
     ```bash
     cd sau_frontend
     npm install

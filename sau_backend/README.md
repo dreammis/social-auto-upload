@@ -4,7 +4,7 @@ python 版本：3.10
     pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 2. 删除 db 目录下 database.db（如果没有直接运行createTable.py即可），运行 createTable.py 重新建库，避免出现脏数据
 3. 修改 conf.py最下方 LOCAL_CHROME_PATH 为本地 chrome 浏览器地址
-4. 运行 web 目录下 app.py
+4. 运行 sau_backend 目录下 app.py
 5. type字段（平台标识） 1 小红书 2 视频号 3 抖音 4 快手
 ## 接口说明
 1. /upload post
