@@ -7,6 +7,16 @@ import uuid
 from pathlib import Path
 from queue import Queue
 from flask_cors import CORS
+import sys
+# 当前脚本所在文件夹
+BASE_DIR = Path(__file__).resolve().parent
+# 上一级目录
+PARENT_DIR = BASE_DIR.parent
+
+# 避免重复插入
+if str(PARENT_DIR) not in sys.path:
+    # 放在索引 0，可优先于 site-packages 被搜索
+    sys.path.insert(0, str(PARENT_DIR))
 from myUtils.auth import check_cookie
 from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 from conf import BASE_DIR
@@ -42,6 +52,12 @@ def hello_world():  # put application's code here
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    """
+    上传文件接口
+    Args:
+    Returns:
+
+    """
     if 'file' not in request.files:
         return jsonify({
             "code": 200,
@@ -59,10 +75,16 @@ def upload_file():
         # 保存文件到指定位置
         uuid_v1 = uuid.uuid1()
         print(f"UUID v1: {uuid_v1}")
-        filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{file.filename}")
+        path = Path(BASE_DIR / "cookiesFile" / f"{uuid_v1}.json")
+        # 文件夹不存在则创建
+        if not path.parent.exists():
+            path.parent.mkdir(parents=True)
+        # 保存 cookies
+        filepath = path
         file.save(filepath)
         return jsonify({"code":200,"msg": "File uploaded successfully", "data": f"{uuid_v1}_{file.filename}"}), 200
     except Exception as e:
+        print(e)
         return jsonify({"code":200,"msg": str(e),"data":None}), 500
 
 @app.route('/getFile', methods=['GET'])
@@ -116,6 +138,7 @@ def upload_save():
         # 构造文件名和路径
         final_filename = f"{uuid_v1}_{filename}"
         filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{filename}")
+
 
         # 保存文件
         file.save(filepath)

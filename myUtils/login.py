@@ -125,7 +125,12 @@ async def get_tencent_cookie(id,status_queue):
             return None
         uuid_v1 = uuid.uuid1()
         print(f"UUID v1: {uuid_v1}")
-        await context.storage_state(path=Path(BASE_DIR / "cookiesFile" / f"{uuid_v1}.json"))
+        path = Path(BASE_DIR / "cookiesFile" / f"{uuid_v1}.json")
+        # 文件夹不存在则创建
+        if not path.parent.exists():
+            path.parent.mkdir(parents=True)
+        # 保存 cookies
+        await context.storage_state(path=path)
         result = await check_cookie(2,f"{uuid_v1}.json")
         if not result:
             status_queue.put("500")
