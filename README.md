@@ -98,8 +98,7 @@
 
 6.  **启动后端项目**:
     ```bash
-    cd sau_backend
-    python app.py
+    python sau_backend.py
     ```
     后端项目将在 `http://localhost:5409` 启动。
 
