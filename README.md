@@ -4,7 +4,7 @@
 项目实现了对 `抖音`、`Bilibili`、`小红书`、`快手`、`视频号`、`百家号` 以及 `TikTok` 等平台的视频上传、定时发布等功能。
 结合各平台 `uploader` 模块，您可以轻松配置和扩展支持的平台，并通过示例脚本快速上手。
 
-<img src="sau_backend/media/show/tkupload.gif" alt="tiktok show" width="800"/>
+<img src="media/show/tkupload.gif" alt="tiktok show" width="800"/>
 
 ## 目录
 
@@ -149,7 +149,7 @@
 <table>
     <td align="center">
         <a href="https://sap-doc.nasdaddy.com/">
-            <img src="sau_backend/media/mp.jpg" width="100px;" alt="NasDaddy公众号"/>
+            <img src="media/mp.jpg" width="100px;" alt="NasDaddy公众号"/>
             <br />
             <sub><b>微信公众号</b></sub>
         </a>
@@ -160,7 +160,7 @@
     </td>
     <td align="center">
         <a href="https://sap-doc.nasdaddy.com/">
-            <img src="sau_backend/media/QR.png" width="100px;" alt="赞赏码/入群引导"/>
+            <img src="media/QR.png" width="100px;" alt="赞赏码/入群引导"/>
             <br />
             <sub><b>交流群 (通过公众号获取)</b></sub>
         </a>
@@ -176,13 +176,15 @@
 <table>
     <td align="center">
         <a href="https://leedebug.github.io/">
-            <img src="sau_backend/media/edan-qrcode.png" width="100px;" alt="Edan Lee"/>
+            <img src="media/edan-qrcode.png" width="100px;" alt="Edan Lee"/>
             <br />
             <sub><b>Edan Lee</b></sub>
         </a>
         <br />
         <a href="https://github.com/dreammis/social-auto-upload/commits?author=LeeDebug" title="Code">💻</a>
         <a href="https://leedebug.github.io/" title="Documentation">📖</a>
+        <br />
+        封装了 api 接口和 web 前端管理界面
     </td>
 </table>
 
