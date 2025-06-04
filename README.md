@@ -83,7 +83,12 @@
     ```
     根据您的需求，至少需要安装 `chromium`。`firefox` 主要用于 TikTok 上传（旧版）。
 
-4.  **配置数据库**:
+4.  **修改配置文件**:
+    复制 `conf.example.py` 并重命名为 `conf.py`。
+    在 `conf.py` 中，您需要配置以下内容：
+    -   `LOCAL_CHROME_PATH`: 本地 Chrome 浏览器的路径，比如 `C:\Program Files\Google\Chrome\Application\chrome.exe` 保存。
+
+5.  **配置数据库**:
     如果 db/database.db 文件不存在，您可以运行以下命令来初始化数据库：
     ```bash
     cd db
@@ -91,14 +96,14 @@
     ```
     此命令将初始化 SQLite 数据库。
 
-5.  **启动后端项目**:
+6.  **启动后端项目**:
     ```bash
     cd sau_backend
     python app.py
     ```
     后端项目将在 `http://localhost:5409` 启动。
 
-6.  **启动前端项目**:
+7.  **启动前端项目**:
     ```bash
     cd sau_frontend
     npm install
