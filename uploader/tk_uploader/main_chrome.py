@@ -148,7 +148,7 @@ class TiktokVideo(object):
     async def upload(self, playwright: Playwright) -> None:
         browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
         context = await browser.new_context(storage_state=f"{self.account_file}")
-        context = await set_init_script(context)
+        # context = await set_init_script(context)
         page = await context.new_page()
 
         # change language to eng first
@@ -186,6 +186,7 @@ class TiktokVideo(object):
             await self.set_schedule_time(page, self.publish_date)
 
         await self.click_publish(page)
+        tiktok_logger.success(f"video_id: {await self.get_last_video_id(page)}")
 
         await context.storage_state(path=f"{self.account_file}")  # save cookie
         tiktok_logger.info('  [-] update cookie！')
@@ -249,7 +250,7 @@ class TiktokVideo(object):
 
         await page.locator('[data-e2e="nav-more-menu"]').click()
         await page.locator('[data-e2e="language-select"]').click()
-        await page.locator('#creator-tools-selection-menu-header >> text=English').click()
+        await page.locator('#creator-tools-selection-menu-header >> text=English (US)').click()
 
     async def click_publish(self, page):
         success_flag_div = 'div.common-modal-confirm-modal'
@@ -266,6 +267,15 @@ class TiktokVideo(object):
                 tiktok_logger.exception(f"  [-] Exception: {e}")
                 tiktok_logger.info("  [-] video publishing")
                 await asyncio.sleep(0.5)
+
+    async def get_last_video_id(self, page):
+        await page.wait_for_selector('div[data-tt="components_PostTable_Container"]')
+        video_list_locator = self.locator_base.locator('div[data-tt="components_PostTable_Container"] div[data-tt="components_PostInfoCell_Container"] a')
+        if await video_list_locator.count():
+            first_video_obj = await video_list_locator.nth(0).get_attribute('href')
+            video_id = re.search(r'video/(\d+)', first_video_obj).group(1) if first_video_obj else None
+            return video_id
+
 
     async def detect_upload_status(self, page):
         while True:
