@@ -87,6 +87,10 @@
     复制 `conf.example.py` 并重命名为 `conf.py`。
     在 `conf.py` 中，您需要配置以下内容：
     -   `LOCAL_CHROME_PATH`: 本地 Chrome 浏览器的路径，比如 `C:\Program Files\Google\Chrome\Application\chrome.exe` 保存。
+    
+    **临时解决方案**
+
+    需要在根目录创建 `cookiesFile` 和 `videoFile` 两个文件夹，分别是 存储cookie文件 和 存储上传文件 的文件夹
 
 5.  **配置数据库**:
     如果 db/database.db 文件不存在，您可以运行以下命令来初始化数据库：
@@ -156,7 +160,7 @@
 <table>
     <td align="center">
         <a href="https://sap-doc.nasdaddy.com/">
-            <img src="media/mp.jpg" width="100px;" alt="NasDaddy公众号"/>
+            <img src="media/mp.jpg" width="200px" alt="NasDaddy公众号"/>
             <br />
             <sub><b>微信公众号</b></sub>
         </a>
@@ -167,7 +171,7 @@
     </td>
     <td align="center">
         <a href="https://sap-doc.nasdaddy.com/">
-            <img src="media/QR.png" width="100px;" alt="赞赏码/入群引导"/>
+            <img src="media/QR.png" width="200px" alt="赞赏码/入群引导"/>
             <br />
             <sub><b>交流群 (通过公众号获取)</b></sub>
         </a>
@@ -183,7 +187,7 @@
 <table>
     <td align="center">
         <a href="https://leedebug.github.io/">
-            <img src="media/edan-qrcode.png" width="100px;" alt="Edan Lee"/>
+            <img src="media/edan-qrcode.png" width="200px" alt="Edan Lee"/>
             <br />
             <sub><b>Edan Lee</b></sub>
         </a>
@@ -192,6 +196,8 @@
         <a href="https://leedebug.github.io/" title="Documentation">📖</a>
         <br />
         封装了 api 接口和 web 前端管理界面
+        <br />
+        （请注明来意：进群、学习、企业咨询等）
     </td>
 </table>
 
