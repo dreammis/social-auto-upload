@@ -163,7 +163,7 @@ class XiaoHongShuVideo(object):
         # 这里为了避免页面变化，故使用相对位置定位：作品标题父级右侧第一个元素的input子元素
         await asyncio.sleep(1)
         xiaohongshu_logger.info(f'  [-] 正在填充标题和话题...')
-        title_container = page.locator('div.input.titleInput').locator('input.d-text')
+        title_container = page.locator('div.plugin.title-container').locator('input.d-text')
         if await title_container.count():
             await title_container.fill(self.title[:30])
         else:
