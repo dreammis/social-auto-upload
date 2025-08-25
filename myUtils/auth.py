@@ -13,7 +13,7 @@ from uploader.xhs_uploader.main import sign_local
 
 async def cookie_auth_douyin(account_file):
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True)
+        browser = await playwright.chromium.launch(headless=False)
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
         # 创建一个新的页面
@@ -22,18 +22,21 @@ async def cookie_auth_douyin(account_file):
         await page.goto("https://creator.douyin.com/creator-micro/content/upload")
         try:
             await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=5000)
+            # 2024.06.17 抖音创作者中心改版
+            # 判断
+            # 等待“扫码登录”元素出现，超时 5 秒（如果 5 秒没出现，说明 cookie 有效）
+            try:
+                await page.get_by_text("扫码登录").wait_for(timeout=5000)
+                logger.error("[+] cookie 失效，需要扫码登录")
+                return False
+            except:
+                logger.success("[+]  cookie 有效")
+                return True
         except:
-            print("[+] 等待5秒 cookie 失效")
+            logger.error("[+] 等待5秒 cookie 失效")
             await context.close()
             await browser.close()
             return False
-        # 2024.06.17 抖音创作者中心改版
-        if await page.get_by_text('手机号登录').count() or await page.get_by_text('扫码登录').count():
-            print("[+] 等待5秒 cookie 失效")
-            return False
-        else:
-            print("[+] cookie 有效")
-            return True
 
 async def cookie_auth_tencent(account_file):
     async with async_playwright() as playwright:
