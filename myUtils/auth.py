@@ -21,19 +21,20 @@ async def cookie_auth_douyin(account_file):
         # 访问指定的 URL
         await page.goto("https://creator.douyin.com/creator-micro/content/upload")
         try:
-            await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=5000)
-        except:
-            print("[+] 等待5秒 cookie 失效")
-            await context.close()
-            await browser.close()
-            return False
-        # 2024.06.17 抖音创作者中心改版
+            # await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=5000)
+            # 修复抖音cookie判断
         if await page.get_by_text('手机号登录').count() or await page.get_by_text('扫码登录').count():
             print("[+] 等待5秒 cookie 失效")
             return False
         else:
             print("[+] cookie 有效")
             return True
+        except:
+            print("[+] 等待5秒 cookie 失效")
+            await context.close()
+            await browser.close()
+            return False
+        
 
 async def cookie_auth_tencent(account_file):
     async with async_playwright() as playwright:
