@@ -381,6 +381,27 @@
             </template>
           </el-dialog>
 
+          <!-- 标签 (仅在抖音可见) -->
+          <div v-if="tab.selectedPlatform === 3" class="product-section">
+            <h3>商品链接</h3>
+            <el-input
+              v-model="tab.productTitle"
+              type="text"
+              :rows="1"
+              placeholder="请输入商品名称"
+              maxlength="200"
+              class="product-name-input"
+            />
+            <el-input
+              v-model="tab.productLink"
+              type="text"
+              :rows="1"
+              placeholder="请输入商品链接"
+              maxlength="200"
+              class="product-link-input"
+            />
+          </div>
+
           <!-- 定时发布 -->
           <div class="schedule-section">
             <h3>定时发布</h3>
@@ -490,23 +511,27 @@ const platforms = [
   { key: 1, name: '小红书' }
 ]
 
+const defaultTabInit = {
+  name: 'tab1',
+  label: '发布1',
+  fileList: [], // 后端返回的文件名列表
+  displayFileList: [], // 用于显示的文件列表
+  selectedAccounts: [], // 选中的账号ID列表
+  selectedPlatform: 1, // 选中的平台（单选）
+  title: '',
+  productLink: '', // 商品链接
+  productTitle: '', // 商品名称
+  selectedTopics: [], // 话题列表（不带#号）
+  scheduleEnabled: false, // 定时发布开关
+  videosPerDay: 1, // 每天发布视频数量
+  dailyTimes: ['10:00'], // 每天发布时间点列表
+  startDays: 0, // 从今天开始计算的发布天数，0表示明天，1表示后天
+  publishStatus: null // 发布状态，包含message和type
+}
+
 // tab页数据 - 默认只有一个tab
 const tabs = reactive([
-  {
-    name: 'tab1',
-    label: '发布1',
-    fileList: [], // 后端返回的文件名列表
-    displayFileList: [], // 用于显示的文件列表
-    selectedAccounts: [], // 选中的账号ID列表
-    selectedPlatform: 1, // 选中的平台（单选）
-    title: '',
-    selectedTopics: [], // 话题列表（不带#号）
-    scheduleEnabled: false, // 定时发布开关
-    videosPerDay: 1, // 每天发布视频数量
-    dailyTimes: ['10:00'], // 每天发布时间点列表
-    startDays: 0, // 从今天开始计算的发布天数，0表示明天，1表示后天
-    publishStatus: null // 发布状态，包含message和type
-  }
+  defaultTabInit
 ])
 
 // 账号相关状态
@@ -543,21 +568,9 @@ const recommendedTopics = [
 // 添加新tab
 const addTab = () => {
   tabCounter++
-  const newTab = {
-    name: `tab${tabCounter}`,
-    label: `发布${tabCounter}`,
-    fileList: [],
-    displayFileList: [],
-    selectedAccounts: [],
-    selectedPlatform: 1,
-    title: '',
-    selectedTopics: [],
-    scheduleEnabled: false,
-    videosPerDay: 1,
-    dailyTimes: ['10:00'],
-    startDays: 0,
-    publishStatus: null
-  }
+  const newTab = defaultTabInit
+  newTab['name'] = `tab${tabCounter}`
+  newTab['label'] = `发布${tabCounter}`
   tabs.push(newTab)
   activeTab.value = newTab.name
 }
@@ -747,7 +760,9 @@ const confirmPublish = async (tab) => {
       videosPerDay: tab.scheduleEnabled ? tab.videosPerDay || 1 : 1, // 每天发布视频数量，1-55
       dailyTimes: tab.scheduleEnabled ? tab.dailyTimes || ['10:00'] : ['10:00'], // 每天发布时间点
       startDays: tab.scheduleEnabled ? tab.startDays || 0 : 0, // 从今天开始计算的发布天数，0表示明天，1表示后天
-      category: 0 //表示非原创
+      category: 0, //表示非原创
+      productLink: tab.productLink.trim() || '', // 商品链接
+      productTitle: tab.productTitle.trim() || '' // 商品名称
     }
     
     // 调用后端发布API
@@ -1131,9 +1146,17 @@ const batchPublish = async () => {
         .account-section,
         .platform-section,
         .title-section,
+        .product-section,
         .topic-section,
         .schedule-section {
           margin-bottom: 30px;
+        }
+
+        .product-section {
+          .product-name-input,
+          .product-link-input {
+            margin-bottom: 5px;
+          }
         }
         
         .video-upload {
