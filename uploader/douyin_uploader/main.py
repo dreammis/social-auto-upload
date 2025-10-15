@@ -160,8 +160,10 @@ class DouYinVideo(object):
         douyin_logger.info(f'总共添加{len(self.tags)}个话题')
 
         if self.productLink and self.productTitle:
+            douyin_logger.info(f'  [-] 正在设置商品链接...')
             await asyncio.sleep(1)
             await self.set_product_link(page, self.productLink, self.productTitle)
+            douyin_logger.info(f'  [+] 完成设置商品链接...')
 
         while True:
             # 判断重新上传按钮是否存在，如果不存在，代表视频正在上传，则等待
@@ -186,7 +188,7 @@ class DouYinVideo(object):
         await self.set_thumbnail(page, self.thumbnail_path)
 
         # 更换可见元素
-        await self.set_location(page, "杭州市")
+        await self.set_location(page, "")
 
         # 頭條/西瓜
         third_part_element = '[class^="info"] > [class^="first-part"] div div.semi-switch'
@@ -237,7 +239,9 @@ class DouYinVideo(object):
             #     await finish_confirm_element.click()
             # await page.locator("div[class^='footer'] button:has-text('完成')").click()
 
-    async def set_location(self, page: Page, location: str = "杭州市"):
+    async def set_location(self, page: Page, location: str = ""):
+        if not location:
+            return
         # todo supoort location later
         # await page.get_by_text('添加标签').locator("..").locator("..").locator("xpath=following-sibling::div").locator(
         #     "div.semi-select-single").nth(0).click()
