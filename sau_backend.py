@@ -335,6 +335,8 @@ def postVideo():
     enableTimer = data.get('enableTimer')
     if category == 0:
         category = None
+    productLink = data.get('productLink', '')
+    productTitle = data.get('productTitle', '')
 
     videos_per_day = data.get('videosPerDay')
     daily_times = data.get('dailyTimes')
@@ -351,7 +353,7 @@ def postVideo():
                                start_days)
         case 3:
             post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                      start_days)
+                      start_days, productLink, productTitle)
         case 4:
             post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                       start_days)
@@ -418,6 +420,8 @@ def postVideoBatch():
         enableTimer = data.get('enableTimer')
         if category == 0:
             category = None
+        productLink = data.get('productLink', '')
+        productTitle = data.get('productTitle', '')
 
         videos_per_day = data.get('videosPerDay')
         daily_times = data.get('dailyTimes')
@@ -433,7 +437,7 @@ def postVideoBatch():
                                    start_days)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days)
+                          start_days, productLink, productTitle)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
