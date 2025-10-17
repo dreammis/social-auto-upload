@@ -190,6 +190,7 @@ class DouYinVideo(object):
         # 更换可见元素
         await self.set_location(page, "")
 
+
         # 頭條/西瓜
         third_part_element = '[class^="info"] > [class^="first-part"] div div.semi-switch'
         # 定位是否有第三方平台
