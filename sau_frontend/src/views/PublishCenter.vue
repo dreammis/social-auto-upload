@@ -529,9 +529,19 @@ const defaultTabInit = {
   publishStatus: null // 发布状态，包含message和type
 }
 
-// tab页数据 - 默认只有一个tab
+// helper to create a fresh deep-copied tab from defaultTabInit
+const makeNewTab = () => {
+  // prefer structuredClone when available (newer browsers/node), fallback to JSON
+  try {
+    return typeof structuredClone === 'function' ? structuredClone(defaultTabInit) : JSON.parse(JSON.stringify(defaultTabInit))
+  } catch (e) {
+    return JSON.parse(JSON.stringify(defaultTabInit))
+  }
+}
+
+// tab页数据 - 默认只有一个tab (use deep copy to avoid shared refs)
 const tabs = reactive([
-  defaultTabInit
+  makeNewTab()
 ])
 
 // 账号相关状态
@@ -568,9 +578,9 @@ const recommendedTopics = [
 // 添加新tab
 const addTab = () => {
   tabCounter++
-  const newTab = defaultTabInit
-  newTab['name'] = `tab${tabCounter}`
-  newTab['label'] = `发布${tabCounter}`
+  const newTab = makeNewTab()
+  newTab.name = `tab${tabCounter}`
+  newTab.label = `发布${tabCounter}`
   tabs.push(newTab)
   activeTab.value = newTab.name
 }
