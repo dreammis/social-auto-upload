@@ -321,6 +321,15 @@ class DouYinVideo(object):
                 return False
             await add_button.click()
             douyin_logger.debug("[+] 成功点击'添加链接'按钮")
+            ## 如果链接不可用
+            await page.wait_for_timeout(2000)
+            error_modal = page.locator('text=未搜索到对应商品')
+            if await error_modal.count():
+                confirm_button = page.locator('button:has-text("确定")')
+                await confirm_button.click()
+                # await page.wait_for_selector('.semi-modal-content', state='hidden', timeout=5000)
+                douyin_logger.error("[-] 商品链接无效")
+                return False
 
             # 填写商品短标题
             if not await self.handle_product_dialog(page, product_title):
