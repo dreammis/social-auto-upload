@@ -257,6 +257,7 @@ class DouYinVideo(object):
         """处理商品编辑弹窗"""
 
         await page.wait_for_timeout(2000)
+        await page.wait_for_selector('input[placeholder="请输入商品短标题"]', timeout=10000)
         short_title_input = page.locator('input[placeholder="请输入商品短标题"]')
         if not await short_title_input.count():
             douyin_logger.error("[-] 未找到商品短标题输入框")
@@ -292,6 +293,7 @@ class DouYinVideo(object):
         """设置商品链接功能"""
         try:
             # 定位"添加标签"文本，然后向上导航到容器，再找到下拉框
+            await page.wait_for_selector('text=添加标签', timeout=10000)
             dropdown = page.get_by_text('添加标签').locator("..").locator("..").locator("..").locator(".semi-select").first
             if not await dropdown.count():
                 douyin_logger.error("[-] 未找到标签下拉框")
