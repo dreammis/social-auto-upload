@@ -257,6 +257,7 @@ class DouYinVideo(object):
         """处理商品编辑弹窗"""
 
         await page.wait_for_timeout(2000)
+        await page.wait_for_selector('input[placeholder="请输入商品短标题"]', timeout=10000)
         short_title_input = page.locator('input[placeholder="请输入商品短标题"]')
         if not await short_title_input.count():
             douyin_logger.error("[-] 未找到商品短标题输入框")
@@ -292,6 +293,7 @@ class DouYinVideo(object):
         """设置商品链接功能"""
         try:
             # 定位"添加标签"文本，然后向上导航到容器，再找到下拉框
+            await page.wait_for_selector('text=添加标签', timeout=10000)
             dropdown = page.get_by_text('添加标签').locator("..").locator("..").locator("..").locator(".semi-select").first
             if not await dropdown.count():
                 douyin_logger.error("[-] 未找到标签下拉框")
@@ -321,6 +323,15 @@ class DouYinVideo(object):
                 return False
             await add_button.click()
             douyin_logger.debug("[+] 成功点击'添加链接'按钮")
+            ## 如果链接不可用
+            await page.wait_for_timeout(2000)
+            error_modal = page.locator('text=未搜索到对应商品')
+            if await error_modal.count():
+                confirm_button = page.locator('button:has-text("确定")')
+                await confirm_button.click()
+                # await page.wait_for_selector('.semi-modal-content', state='hidden', timeout=5000)
+                douyin_logger.error("[-] 商品链接无效")
+                return False
 
             # 填写商品短标题
             if not await self.handle_product_dialog(page, product_title):
