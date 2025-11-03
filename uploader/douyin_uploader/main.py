@@ -158,13 +158,6 @@ class DouYinVideo(object):
             await page.type(css_selector, "#" + tag)
             await page.press(css_selector, "Space")
         douyin_logger.info(f'总共添加{len(self.tags)}个话题')
-
-        if self.productLink and self.productTitle:
-            douyin_logger.info(f'  [-] 正在设置商品链接...')
-            await asyncio.sleep(1)
-            await self.set_product_link(page, self.productLink, self.productTitle)
-            douyin_logger.info(f'  [+] 完成设置商品链接...')
-
         while True:
             # 判断重新上传按钮是否存在，如果不存在，代表视频正在上传，则等待
             try:
@@ -183,6 +176,11 @@ class DouYinVideo(object):
             except:
                 douyin_logger.info("  [-] 正在上传视频中...")
                 await asyncio.sleep(2)
+
+        if self.productLink and self.productTitle:
+            douyin_logger.info(f'  [-] 正在设置商品链接...')
+            await self.set_product_link(page, self.productLink, self.productTitle)
+            douyin_logger.info(f'  [+] 完成设置商品链接...')
         
         #上传视频封面
         await self.set_thumbnail(page, self.thumbnail_path)
@@ -227,18 +225,23 @@ class DouYinVideo(object):
     
     async def set_thumbnail(self, page: Page, thumbnail_path: str):
         if thumbnail_path:
+            douyin_logger.info('  [-] 正在设置视频封面...')
             await page.click('text="选择封面"')
-            await page.wait_for_selector("div.semi-modal-content:visible")
+            await page.wait_for_selector("div.dy-creator-content-modal")
             await page.click('text="设置竖封面"')
             await page.wait_for_timeout(2000)  # 等待2秒
             # 定位到上传区域并点击
             await page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path)
             await page.wait_for_timeout(2000)  # 等待2秒
-            await page.locator("div[class^='extractFooter'] button:visible:has-text('完成')").click()
+            await page.locator("div#tooltip-container button:visible:has-text('完成')").click()
             # finish_confirm_element = page.locator("div[class^='confirmBtn'] >> div:has-text('完成')")
             # if await finish_confirm_element.count():
             #     await finish_confirm_element.click()
             # await page.locator("div[class^='footer'] button:has-text('完成')").click()
+            douyin_logger.info('  [+] 视频封面设置完成！')
+            # 等待封面设置对话框关闭
+            await page.wait_for_selector("div.extractFooter", state='detached')
+            
 
     async def set_location(self, page: Page, location: str = ""):
         if not location:
@@ -291,6 +294,7 @@ class DouYinVideo(object):
         
     async def set_product_link(self, page: Page, product_link: str, product_title: str):
         """设置商品链接功能"""
+        await page.wait_for_timeout(2000)  # 等待2秒
         try:
             # 定位"添加标签"文本，然后向上导航到容器，再找到下拉框
             await page.wait_for_selector('text=添加标签', timeout=10000)
