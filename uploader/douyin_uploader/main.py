@@ -239,6 +239,7 @@ class DouYinVideo(object):
             #     await finish_confirm_element.click()
             # await page.locator("div[class^='footer'] button:has-text('完成')").click()
             douyin_logger.info('  [+] 视频封面设置完成！')
+            # 等待封面设置对话框关闭
             await page.wait_for_selector("div.extractFooter", state='detached')
             
 
