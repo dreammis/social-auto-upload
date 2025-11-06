@@ -7,7 +7,7 @@ from myUtils.auth import check_cookie
 from utils.base_social_media import set_init_script
 import uuid
 from pathlib import Path
-from conf import BASE_DIR
+from conf import BASE_DIR, LOCAL_CHROME_HEADLESS
 
 # 抖音登录
 async def douyin_cookie_gen(id,status_queue):
@@ -18,7 +18,7 @@ async def douyin_cookie_gen(id,status_queue):
             url_changed_event.set()
     async with async_playwright() as playwright:
         options = {
-            'headless': False
+            'headless': LOCAL_CHROME_HEADLESS
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
@@ -88,7 +88,7 @@ async def get_tencent_cookie(id,status_queue):
             'args': [
                 '--lang en-GB'
             ],
-            'headless': False,  # Set headless option here
+            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
@@ -165,7 +165,7 @@ async def get_ks_cookie(id,status_queue):
             'args': [
                 '--lang en-GB'
             ],
-            'headless': False,  # Set headless option here
+            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
@@ -241,7 +241,7 @@ async def xiaohongshu_cookie_gen(id,status_queue):
             'args': [
                 '--lang en-GB'
             ],
-            'headless': False,  # Set headless option here
+            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
