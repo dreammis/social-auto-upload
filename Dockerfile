@@ -50,7 +50,6 @@ COPY . .
 
 RUN cp conf.example.py conf.py
 
-EXPOSE 80
 EXPOSE 5409
 
 CMD ["python", "sau_backend.py"]
