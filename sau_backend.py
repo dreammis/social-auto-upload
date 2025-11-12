@@ -139,9 +139,10 @@ def upload_save():
         }), 200
 
     except Exception as e:
+        print(f"Upload failed: {e}")
         return jsonify({
             "code": 500,
-            "msg": str("upload failed!"),
+            "msg": f"upload failed: {e}",
             "data": None
         }), 500
 
