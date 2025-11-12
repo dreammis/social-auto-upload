@@ -89,7 +89,7 @@ class TencentVideo(object):
         self.publish_date = publish_date
         self.account_file = account_file
         self.category = category
-        self.local_executable_path = LOCAL_CHROME_PATH
+        self.local_executable_path = LOCAL_CHROME_PATH or None
 
     async def set_schedule_time_tencent(self, page, publish_date):
         label_element = page.locator("label").filter(has_text="定时").nth(1)
