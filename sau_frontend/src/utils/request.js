@@ -87,11 +87,12 @@ export const http = {
     return request.delete(url, { params })
   },
   
-  upload(url, formData) {
+  upload(url, formData, onUploadProgress) {
     return request.post(url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
-      }
+      },
+      onUploadProgress
     })
   }
 }

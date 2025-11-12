@@ -58,7 +58,8 @@
           <el-form-item label="文件名称:">
             <el-input
               v-model="customFilename"
-              placeholder="选填"
+              placeholder="选填 (仅单个文件时生效)"
+              :disabled="customFilenameDisabled"
               clearable
             />
           </el-form-item>
@@ -66,10 +67,11 @@
             <el-upload
               class="upload-demo"
               drag
+              multiple
               :auto-upload="false"
               :on-change="handleFileChange"
+              :on-remove="handleFileRemove"
               :file-list="fileList"
-              :limit="1"
             >
               <el-icon class="el-icon--upload"><Upload /></el-icon>
               <div class="el-upload__text">
@@ -77,10 +79,25 @@
               </div>
               <template #tip>
                 <div class="el-upload__tip">
-                  支持视频、图片等格式文件，只能上传一个文件
+                  支持视频、图片等格式文件，可一次选择多个文件
                 </div>
               </template>
             </el-upload>
+          </el-form-item>
+          <el-form-item label="上传列表" v-if="fileList.length > 0">
+            <div class="upload-file-list">
+              <div v-for="file in fileList" :key="file.uid" class="upload-file-item">
+                <span class="file-name">{{ file.name }}</span>
+                <el-progress
+                  :percentage="uploadProgress[file.uid]?.percentage || 0"
+                  :text-inside="true"
+                  :stroke-width="20"
+                  style="width: 100%; margin-top: 5px;"
+                >
+                  <span>{{ uploadProgress[file.uid]?.speed || '' }}</span>
+                </el-progress>
+              </div>
+            </div>
           </el-form-item>
         </el-form>
       </div>
@@ -123,7 +140,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Refresh, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { materialApi } from '@/api/material'
@@ -145,6 +162,17 @@ const currentMaterial = ref(null)
 // 文件上传
 const fileList = ref([])
 const customFilename = ref('')
+const customFilenameDisabled = computed(() => fileList.value.length > 1)
+const uploadProgress = ref({}); // { [uid]: { percentage: 0, speed: '' } }
+
+
+watch(fileList, (newList) => {
+  if (newList.length <= 1) {
+    // If you want to clear the custom name when going back to single file, uncomment below
+    // customFilename.value = ''
+  }
+});
+
 
 // 获取素材列表
 const fetchMaterials = async () => {
@@ -186,6 +214,7 @@ const handleUploadMaterial = () => {
   // 清空变量
   fileList.value = []
   customFilename.value = ''
+  uploadProgress.value = {};
   uploadDialogVisible.value = true
 }
 
@@ -193,16 +222,24 @@ const handleUploadMaterial = () => {
 const handleUploadDialogClose = () => {
   fileList.value = []
   customFilename.value = ''
+  uploadProgress.value = {};
 }
 
 // 文件选择变更
 const handleFileChange = (file, uploadFileList) => {
-  // 只保留最新选择的文件
-  console.log('选择的文件:', file)
-  if (file.raw) {
-    // 确保获取到原始文件对象
-    fileList.value = [file]
+  fileList.value = uploadFileList;
+  const newProgress = {};
+  for (const f of uploadFileList) {
+    newProgress[f.uid] = { percentage: 0, speed: '' };
   }
+  uploadProgress.value = newProgress;
+}
+
+const handleFileRemove = (file, uploadFileList) => {
+  fileList.value = uploadFileList;
+  const newProgress = { ...uploadProgress.value };
+  delete newProgress[file.uid];
+  uploadProgress.value = newProgress;
 }
 
 // 提交上传
@@ -212,45 +249,67 @@ const submitUpload = async () => {
     return
   }
   
-  // 确保文件对象存在
-  const fileObj = fileList.value[0]
-  if (!fileObj || !fileObj.raw) {
-    ElMessage.warning('文件对象无效，请重新选择文件')
-    return
-  }
-  
   isUploading.value = true
   
-  try {
-    // 使用FormData进行表单提交
-    const formData = new FormData()
-    
-    // 添加文件，确保使用正确的文件对象
-    console.log('上传文件对象:', fileObj.raw)
-    formData.append('file', fileObj.raw)
-    
-    // 如果用户输入了自定义文件名，则添加到表单中
-    if (customFilename.value.trim()) {
-      formData.append('filename', customFilename.value.trim())
-      console.log('自定义文件名:', customFilename.value.trim())
+  for (const file of fileList.value) {
+    try {
+      // 确保文件对象存在
+      if (!file || !file.raw) {
+        ElMessage.warning(`文件 ${file.name} 对象无效，已跳过`)
+        continue
+      }
+      
+      const formData = new FormData()
+      formData.append('file', file.raw)
+      
+      // 只有当只有一个文件时，自定义文件名才生效
+      if (fileList.value.length === 1 && customFilename.value.trim()) {
+        formData.append('filename', customFilename.value.trim())
+      }
+      
+      let lastLoaded = 0;
+      let lastTime = Date.now();
+
+      const response = await materialApi.uploadMaterial(formData, (progressEvent) => {
+        const progressData = uploadProgress.value[file.uid];
+        if (!progressData) return;
+
+        const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+        progressData.percentage = progress;
+
+        const currentTime = Date.now();
+        const timeDiff = (currentTime - lastTime) / 1000; // in seconds
+        const loadedDiff = progressEvent.loaded - lastLoaded;
+
+        if (timeDiff > 0.5) { // Update speed every 0.5 seconds
+          const speed = loadedDiff / timeDiff; // bytes per second
+          if (speed > 1024 * 1024) {
+            progressData.speed = (speed / (1024 * 1024)).toFixed(2) + ' MB/s';
+          } else {
+            progressData.speed = (speed / 1024).toFixed(2) + ' KB/s';
+          }
+          lastLoaded = progressEvent.loaded;
+          lastTime = currentTime;
+        }
+      })
+      
+      if (response.code === 200) {
+        ElMessage.success(`文件 ${file.name} 上传成功`)
+        const progressData = uploadProgress.value[file.uid];
+        if(progressData) progressData.speed = '完成';
+      } else {
+        ElMessage.error(`文件 ${file.name} 上传失败: ${response.msg || '未知错误'}`)
+      }
+    } catch (error) {
+      console.error(`上传文件 ${file.name} 出错:`, error)
+      ElMessage.error(`文件 ${file.name} 上传失败: ${error.message || '未知错误'}`)
     }
-    
-    const response = await materialApi.uploadMaterial(formData)
-    
-    if (response.code === 200) {
-      ElMessage.success('上传成功')
-      uploadDialogVisible.value = false
-      // 上传成功后直接刷新素材列表
-      await fetchMaterials()
-    } else {
-      ElMessage.error(response.msg || '上传失败')
-    }
-  } catch (error) {
-    console.error('上传素材出错:', error)
-    ElMessage.error('上传失败: ' + (error.message || '未知错误'))
-  } finally {
-    isUploading.value = false
   }
+  
+  isUploading.value = false
+  // Keep dialog open to show results
+  // uploadDialogVisible.value = false 
+  await fetchMaterials()
 }
 
 // 预览素材
@@ -428,6 +487,24 @@ onMounted(() => {
   padding: 0 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.upload-file-list {
+  width: 100%;
+}
+
+.upload-file-item {
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.upload-file-item .file-name {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 5px;
+  display: block;
 }
 
 /* 覆盖Element Plus对话框样式 */
