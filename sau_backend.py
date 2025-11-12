@@ -158,14 +158,26 @@ def get_all_files():
             cursor.execute("SELECT * FROM file_records")
             rows = cursor.fetchall()
 
-            # 将结果转为字典列表
-            data = [dict(row) for row in rows]
+            # 将结果转为字典列表，并提取UUID
+            data = []
+            for row in rows:
+                row_dict = dict(row)
+                # 从 file_path 中提取 UUID (文件名的第一部分，下划线前)
+                if row_dict.get('file_path'):
+                    file_path_parts = row_dict['file_path'].split('_', 1)  # 只分割第一个下划线
+                    if len(file_path_parts) > 0:
+                        row_dict['uuid'] = file_path_parts[0]  # UUID 部分
+                    else:
+                        row_dict['uuid'] = ''
+                else:
+                    row_dict['uuid'] = ''
+                data.append(row_dict)
 
-        return jsonify({
-            "code": 200,
-            "msg": "success",
-            "data": data
-        }), 200
+            return jsonify({
+                "code": 200,
+                "msg": "success",
+                "data": data
+            }), 200
     except Exception as e:
         return jsonify({
             "code": 500,

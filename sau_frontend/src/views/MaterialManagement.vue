@@ -25,6 +25,7 @@
       
       <div v-if="filteredMaterials.length > 0" class="material-list">
         <el-table :data="filteredMaterials" style="width: 100%">
+          <el-table-column prop="uuid" label="UUID" width="180" />
           <el-table-column prop="filename" label="文件名" width="300" />
           <el-table-column prop="filesize" label="文件大小" width="120">
             <template #default="scope">
