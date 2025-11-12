@@ -235,6 +235,18 @@ def delete_file():
 
             record = dict(record)
 
+            # 获取文件路径并删除实际文件
+            file_path = Path(BASE_DIR / "videoFile" / record['file_path'])
+            if file_path.exists():
+                try:
+                    file_path.unlink()  # 删除文件
+                    print(f"✅ 实际文件已删除: {file_path}")
+                except Exception as e:
+                    print(f"⚠️ 删除实际文件失败: {e}")
+                    # 即使删除文件失败，也要继续删除数据库记录，避免数据不一致
+            else:
+                print(f"⚠️ 实际文件不存在: {file_path}")
+
             # 删除数据库记录
             cursor.execute("DELETE FROM file_records WHERE id = ?", (file_id,))
             conn.commit()
