@@ -402,6 +402,15 @@
             />
           </div>
 
+          <!-- 草稿选项 (仅在视频号可见) -->
+          <div v-if="tab.selectedPlatform === 2" class="draft-section">
+            <el-checkbox
+              v-model="tab.isDraft"
+              label="视频号上传草稿"
+              class="draft-checkbox"
+            />
+          </div>
+
           <!-- 定时发布 -->
           <div class="schedule-section">
             <h3>定时发布</h3>
@@ -534,7 +543,8 @@ const defaultTabInit = {
   dailyTimes: ['10:00'], // 每天发布时间点列表
   startDays: 0, // 从今天开始计算的发布天数，0表示明天，1表示后天
   publishStatus: null, // 发布状态，包含message和type
-  publishing: false // 发布状态，用于控制按钮loading效果
+  publishing: false, // 发布状态，用于控制按钮loading效果
+  isDraft: false // 是否保存为草稿，仅视频号平台可见
 }
 
 // helper to create a fresh deep-copied tab from defaultTabInit
@@ -791,7 +801,8 @@ const confirmPublish = async (tab) => {
       startDays: tab.scheduleEnabled ? tab.startDays || 0 : 0, // 从今天开始计算的发布天数，0表示明天，1表示后天
       category: 0, //表示非原创
       productLink: tab.productLink.trim() || '', // 商品链接
-      productTitle: tab.productTitle.trim() || '' // 商品名称
+      productTitle: tab.productTitle.trim() || '', // 商品名称
+      isDraft: tab.isDraft // 是否保存为草稿，仅视频号平台使用
     }
 
     // 调用后端发布API

@@ -363,6 +363,7 @@ def postVideo():
     productLink = data.get('productLink', '')
     productTitle = data.get('productTitle', '')
     thumbnail_path = data.get('thumbnail', '')
+    is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
 
     videos_per_day = data.get('videosPerDay')
     daily_times = data.get('dailyTimes')
@@ -376,7 +377,7 @@ def postVideo():
                                start_days)
         case 2:
             post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                               start_days)
+                               start_days, is_draft)
         case 3:
             post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                       start_days, thumbnail_path, productLink, productTitle)
