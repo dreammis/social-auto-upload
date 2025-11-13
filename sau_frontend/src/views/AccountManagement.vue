@@ -57,6 +57,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button size="small" type="primary" @click="handleDownloadCookie(scope.row)">下载Cookie文件</el-button>
+                    <el-button size="small" type="info" @click="handleUploadCookie(scope.row)">上传Cookie文件</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -120,6 +122,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button size="small" type="primary" @click="handleDownloadCookie(scope.row)">下载Cookie文件</el-button>
+                    <el-button size="small" type="info" @click="handleUploadCookie(scope.row)">上传Cookie文件</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -183,6 +187,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button size="small" type="primary" @click="handleDownloadCookie(scope.row)">下载Cookie文件</el-button>
+                    <el-button size="small" type="info" @click="handleUploadCookie(scope.row)">上传Cookie文件</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -246,6 +252,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button size="small" type="primary" @click="handleDownloadCookie(scope.row)">下载Cookie文件</el-button>
+                    <el-button size="small" type="info" @click="handleUploadCookie(scope.row)">上传Cookie文件</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -309,6 +317,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button size="small" type="primary" @click="handleDownloadCookie(scope.row)">下载Cookie文件</el-button>
+                    <el-button size="small" type="info" @click="handleUploadCookie(scope.row)">上传Cookie文件</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -547,7 +557,7 @@ const handleDelete = (row) => {
       try {
         // 调用API删除账号
         const response = await accountApi.deleteAccount(row.id)
-        
+
         if (response.code === 200) {
           // 从状态管理中删除账号
           accountStore.deleteAccount(row.id)
@@ -566,6 +576,77 @@ const handleDelete = (row) => {
     .catch(() => {
       // 取消删除
     })
+}
+
+// 下载Cookie文件
+const handleDownloadCookie = (row) => {
+  // 从后端获取Cookie文件
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
+  const downloadUrl = `${baseUrl}/downloadCookie?filePath=${encodeURIComponent(row.filePath)}`
+
+  // 创建一个隐藏的链接来触发下载
+  const link = document.createElement('a')
+  link.href = downloadUrl
+  link.download = `${row.name}_cookie.json`
+  link.target = '_blank'
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+// 上传Cookie文件
+const handleUploadCookie = (row) => {
+  // 创建一个隐藏的文件输入框
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json'
+  input.style.display = 'none'
+  document.body.appendChild(input)
+
+  input.onchange = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    // 检查文件类型
+    if (!file.name.endsWith('.json')) {
+      ElMessage.error('请选择JSON格式的Cookie文件')
+      document.body.removeChild(input)
+      return
+    }
+
+    try {
+      // 创建FormData对象
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('id', row.id)
+      formData.append('platform', row.platform)
+
+      // 发送上传请求
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
+      const response = await fetch(`${baseUrl}/uploadCookie`, {
+        method: 'POST',
+        body: formData
+      })
+
+      const result = await response.json()
+
+      if (result.code === 200) {
+        ElMessage.success('Cookie文件上传成功')
+        // 刷新账号列表以显示更新
+        fetchAccounts()
+      } else {
+        ElMessage.error(result.msg || 'Cookie文件上传失败')
+      }
+    } catch (error) {
+      console.error('上传Cookie文件失败:', error)
+      ElMessage.error('Cookie文件上传失败')
+    } finally {
+      document.body.removeChild(input)
+    }
+  }
+
+  input.click()
 }
 
 // SSE事件源对象
