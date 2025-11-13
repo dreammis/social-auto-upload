@@ -296,6 +296,36 @@
             </el-radio-group>
           </div>
 
+          <!-- 草稿选项 (仅在视频号可见) -->
+          <div v-if="tab.selectedPlatform === 2" class="draft-section">
+            <el-checkbox
+              v-model="tab.isDraft"
+              label="视频号仅保存草稿(用手机发布)"
+              class="draft-checkbox"
+            />
+          </div>
+
+          <!-- 标签 (仅在抖音可见) -->
+          <div v-if="tab.selectedPlatform === 3" class="product-section">
+            <h3>商品链接</h3>
+            <el-input
+              v-model="tab.productTitle"
+              type="text"
+              :rows="1"
+              placeholder="请输入商品名称"
+              maxlength="200"
+              class="product-name-input"
+            />
+            <el-input
+              v-model="tab.productLink"
+              type="text"
+              :rows="1"
+              placeholder="请输入商品链接"
+              maxlength="200"
+              class="product-link-input"
+            />
+          </div>
+
           <!-- 标题输入 -->
           <div class="title-section">
             <h3>标题</h3>
@@ -399,15 +429,6 @@
               placeholder="请输入商品链接"
               maxlength="200"
               class="product-link-input"
-            />
-          </div>
-
-          <!-- 草稿选项 (仅在视频号可见) -->
-          <div v-if="tab.selectedPlatform === 2" class="draft-section">
-            <el-checkbox
-              v-model="tab.isDraft"
-              label="视频号上传草稿"
-              class="draft-checkbox"
             />
           </div>
 
@@ -1294,10 +1315,19 @@ const batchPublish = async () => {
           padding-top: 20px;
           border-top: 1px solid #ebeef5;
         }
+
+        .draft-section {
+          margin: 20px 0;
+
+          .draft-checkbox {
+            display: block;
+            margin: 10px 0;
+          }
+        }
       }
     }
   }
-  
+
   // 已上传文件列表样式
   .uploaded-files {
     margin-top: 20px;
