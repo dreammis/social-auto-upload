@@ -57,8 +57,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
-                    <el-button size="small" type="primary" @click="handleDownloadCookie(scope.row)">下载Cookie文件</el-button>
-                    <el-button size="small" type="info" @click="handleUploadCookie(scope.row)">上传Cookie文件</el-button>
+                    <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
+                    <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -122,8 +122,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
-                    <el-button size="small" type="primary" @click="handleDownloadCookie(scope.row)">下载Cookie文件</el-button>
-                    <el-button size="small" type="info" @click="handleUploadCookie(scope.row)">上传Cookie文件</el-button>
+                    <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
+                    <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -187,8 +187,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
-                    <el-button size="small" type="primary" @click="handleDownloadCookie(scope.row)">下载Cookie文件</el-button>
-                    <el-button size="small" type="info" @click="handleUploadCookie(scope.row)">上传Cookie文件</el-button>
+                    <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
+                    <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -252,8 +252,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
-                    <el-button size="small" type="primary" @click="handleDownloadCookie(scope.row)">下载Cookie文件</el-button>
-                    <el-button size="small" type="info" @click="handleUploadCookie(scope.row)">上传Cookie文件</el-button>
+                    <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
+                    <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -317,8 +317,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
-                    <el-button size="small" type="primary" @click="handleDownloadCookie(scope.row)">下载Cookie文件</el-button>
-                    <el-button size="small" type="info" @click="handleUploadCookie(scope.row)">上传Cookie文件</el-button>
+                    <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
+                    <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -403,7 +403,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
-import { Refresh, CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
+import { Refresh, CircleCheckFilled, CircleCloseFilled, Download, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { accountApi } from '@/api/account'
 import { useAccountStore } from '@/stores/account'
