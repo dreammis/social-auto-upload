@@ -47,9 +47,12 @@
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
                     <el-tag
-                      :type="scope.row.status === '正常' ? 'success' : 'danger'"
+                      :type="getStatusTagType(scope.row.status)"
                       effect="plain"
                     >
+                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
+                        <Loading />
+                      </el-icon>
                       {{ scope.row.status }}
                     </el-tag>
                   </template>
@@ -112,9 +115,12 @@
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
                     <el-tag
-                      :type="scope.row.status === '正常' ? 'success' : 'danger'"
+                      :type="getStatusTagType(scope.row.status)"
                       effect="plain"
                     >
+                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
+                        <Loading />
+                      </el-icon>
                       {{ scope.row.status }}
                     </el-tag>
                   </template>
@@ -177,9 +183,12 @@
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
                     <el-tag
-                      :type="scope.row.status === '正常' ? 'success' : 'danger'"
+                      :type="getStatusTagType(scope.row.status)"
                       effect="plain"
                     >
+                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
+                        <Loading />
+                      </el-icon>
                       {{ scope.row.status }}
                     </el-tag>
                   </template>
@@ -242,9 +251,12 @@
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
                     <el-tag
-                      :type="scope.row.status === '正常' ? 'success' : 'danger'"
+                      :type="getStatusTagType(scope.row.status)"
                       effect="plain"
                     >
+                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
+                        <Loading />
+                      </el-icon>
                       {{ scope.row.status }}
                     </el-tag>
                   </template>
@@ -307,9 +319,12 @@
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
                     <el-tag
-                      :type="scope.row.status === '正常' ? 'success' : 'danger'"
+                      :type="getStatusTagType(scope.row.status)"
                       effect="plain"
                     >
+                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
+                        <Loading />
+                      </el-icon>
                       {{ scope.row.status }}
                     </el-tag>
                   </template>
@@ -403,7 +418,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
-import { Refresh, CircleCheckFilled, CircleCloseFilled, Download, Upload } from '@element-plus/icons-vue'
+import { Refresh, CircleCheckFilled, CircleCloseFilled, Download, Upload, Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { accountApi } from '@/api/account'
 import { useAccountStore } from '@/stores/account'
@@ -420,12 +435,31 @@ const activeTab = ref('all')
 // 搜索关键词
 const searchKeyword = ref('')
 
-// 获取账号数据
+// 获取账号数据（快速，不验证）
+const fetchAccountsQuick = async () => {
+  try {
+    const res = await accountApi.getAccounts()
+    if (res.code === 200 && res.data) {
+      // 将所有账号的状态暂时设为"验证中"
+      const accountsWithPendingStatus = res.data.map(account => {
+        // account[4] 是状态字段，暂时设为"验证中"
+        const updatedAccount = [...account];
+        updatedAccount[4] = '验证中'; // 临时状态
+        return updatedAccount;
+      });
+      accountStore.setAccounts(accountsWithPendingStatus);
+    }
+  } catch (error) {
+    console.error('快速获取账号数据失败:', error)
+  }
+}
+
+// 获取账号数据（带验证）
 const fetchAccounts = async () => {
   if (appStore.isAccountRefreshing) return
-  
+
   appStore.setAccountRefreshing(true)
-  
+
   try {
     const res = await accountApi.getValidAccounts()
     if (res.code === 200 && res.data) {
@@ -446,12 +480,30 @@ const fetchAccounts = async () => {
   }
 }
 
+// 后台验证所有账号（优化版本，使用setTimeout避免阻塞UI）
+const validateAllAccountsInBackground = async () => {
+  // 使用setTimeout将验证过程放在下一个事件循环，避免阻塞UI
+  setTimeout(async () => {
+    try {
+      const res = await accountApi.getValidAccounts()
+      if (res.code === 200 && res.data) {
+        accountStore.setAccounts(res.data)
+      }
+    } catch (error) {
+      console.error('后台验证账号失败:', error)
+    }
+  }, 0)
+}
+
 // 页面加载时获取账号数据
 onMounted(() => {
-  // 只有第一次进入时才获取数据
-  if (appStore.isFirstTimeAccountManagement) {
-    fetchAccounts()
-  }
+  // 快速获取账号列表（不验证），立即显示
+  fetchAccountsQuick()
+
+  // 在后台验证所有账号
+  setTimeout(() => {
+    validateAllAccountsInBackground()
+  }, 100) // 稍微延迟一下，让用户看到快速加载的效果
 })
 
 // 获取平台标签类型
@@ -463,6 +515,17 @@ const getPlatformTagType = (platform) => {
     '小红书': 'info'
   }
   return typeMap[platform] || 'info'
+}
+
+// 获取状态标签类型
+const getStatusTagType = (status) => {
+  if (status === '验证中') {
+    return 'info'; // 验证中使用灰色
+  } else if (status === '正常') {
+    return 'success'; // 正常使用绿色
+  } else {
+    return 'danger'; // 无效使用红色
+  }
 }
 
 // 过滤后的账号列表
