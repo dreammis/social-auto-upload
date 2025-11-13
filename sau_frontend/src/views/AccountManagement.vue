@@ -30,7 +30,7 @@
               <el-table :data="filteredAccounts" style="width: 100%">
                 <el-table-column label="头像" width="80">
                   <template #default="scope">
-                    <el-avatar :src="scope.row.avatar" :size="40" />
+                    <el-avatar :src="getDefaultAvatar(scope.row.name)" :size="40" />
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
@@ -49,6 +49,8 @@
                     <el-tag
                       :type="getStatusTagType(scope.row.status)"
                       effect="plain"
+                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
+                      @click="handleStatusClick(scope.row)"
                     >
                       <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
                         <Loading />
@@ -98,7 +100,7 @@
               <el-table :data="filteredKuaishouAccounts" style="width: 100%">
                 <el-table-column label="头像" width="80">
                   <template #default="scope">
-                    <el-avatar :src="scope.row.avatar" :size="40" />
+                    <el-avatar :src="getDefaultAvatar(scope.row.name)" :size="40" />
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
@@ -117,6 +119,8 @@
                     <el-tag
                       :type="getStatusTagType(scope.row.status)"
                       effect="plain"
+                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
+                      @click="handleStatusClick(scope.row)"
                     >
                       <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
                         <Loading />
@@ -166,7 +170,7 @@
               <el-table :data="filteredDouyinAccounts" style="width: 100%">
                 <el-table-column label="头像" width="80">
                   <template #default="scope">
-                    <el-avatar :src="scope.row.avatar" :size="40" />
+                    <el-avatar :src="getDefaultAvatar(scope.row.name)" :size="40" />
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
@@ -185,6 +189,8 @@
                     <el-tag
                       :type="getStatusTagType(scope.row.status)"
                       effect="plain"
+                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
+                      @click="handleStatusClick(scope.row)"
                     >
                       <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
                         <Loading />
@@ -234,7 +240,7 @@
               <el-table :data="filteredChannelsAccounts" style="width: 100%">
                 <el-table-column label="头像" width="80">
                   <template #default="scope">
-                    <el-avatar :src="scope.row.avatar" :size="40" />
+                    <el-avatar :src="getDefaultAvatar(scope.row.name)" :size="40" />
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
@@ -253,6 +259,8 @@
                     <el-tag
                       :type="getStatusTagType(scope.row.status)"
                       effect="plain"
+                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
+                      @click="handleStatusClick(scope.row)"
                     >
                       <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
                         <Loading />
@@ -302,7 +310,7 @@
               <el-table :data="filteredXiaohongshuAccounts" style="width: 100%">
                 <el-table-column label="头像" width="80">
                   <template #default="scope">
-                    <el-avatar :src="scope.row.avatar" :size="40" />
+                    <el-avatar :src="getDefaultAvatar(scope.row.name)" :size="40" />
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
@@ -321,6 +329,8 @@
                     <el-tag
                       :type="getStatusTagType(scope.row.status)"
                       effect="plain"
+                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
+                      @click="handleStatusClick(scope.row)"
                     >
                       <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
                         <Loading />
@@ -517,6 +527,11 @@ const getPlatformTagType = (platform) => {
   return typeMap[platform] || 'info'
 }
 
+// 判断状态是否可点击（异常状态可点击）
+const isStatusClickable = (status) => {
+  return status === '异常'; // 只有异常状态可点击，验证中不可点击
+}
+
 // 获取状态标签类型
 const getStatusTagType = (status) => {
   if (status === '验证中') {
@@ -528,10 +543,18 @@ const getStatusTagType = (status) => {
   }
 }
 
+// 处理状态点击事件
+const handleStatusClick = (row) => {
+  if (isStatusClickable(row.status)) {
+    // 触发重新登录流程
+    handleReLogin(row)
+  }
+}
+
 // 过滤后的账号列表
 const filteredAccounts = computed(() => {
   if (!searchKeyword.value) return accountStore.accounts
-  return accountStore.accounts.filter(account => 
+  return accountStore.accounts.filter(account =>
     account.name.includes(searchKeyword.value)
   )
 })
@@ -601,7 +624,12 @@ const handleAddAccount = () => {
 // 编辑账号
 const handleEdit = (row) => {
   dialogType.value = 'edit'
-  Object.assign(accountForm, { ...row })
+  Object.assign(accountForm, {
+    id: row.id,
+    name: row.name,
+    platform: row.platform,
+    status: row.status
+  })
   dialogVisible.value = true
 }
 
@@ -712,6 +740,37 @@ const handleUploadCookie = (row) => {
   input.click()
 }
 
+// 重新登录账号
+const handleReLogin = (row) => {
+  // 设置表单信息
+  dialogType.value = 'edit'
+  Object.assign(accountForm, {
+    id: row.id,
+    name: row.name,
+    platform: row.platform,
+    status: row.status
+  })
+
+  // 重置SSE状态
+  sseConnecting.value = false
+  qrCodeData.value = ''
+  loginStatus.value = ''
+
+  // 显示对话框
+  dialogVisible.value = true
+
+  // 立即开始登录流程
+  setTimeout(() => {
+    connectSSE(row.platform, row.name)
+  }, 300)
+}
+
+// 获取默认头像
+const getDefaultAvatar = (name) => {
+  // 使用简单的默认头像，可以基于用户名生成不同的颜色
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
+}
+
 // SSE事件源对象
 let eventSource = null
 
@@ -727,12 +786,12 @@ const closeSSEConnection = () => {
 const connectSSE = (platform, name) => {
   // 关闭可能存在的连接
   closeSSEConnection()
-  
+
   // 设置连接状态
   sseConnecting.value = true
   qrCodeData.value = ''
   loginStatus.value = ''
-  
+
   // 获取平台类型编号
   const platformTypeMap = {
     '小红书': '1',
@@ -740,20 +799,20 @@ const connectSSE = (platform, name) => {
     '抖音': '3',
     '快手': '4'
   }
-  
+
   const type = platformTypeMap[platform] || '1'
-  
+
   // 创建SSE连接
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
   const url = `${baseUrl}/login?type=${type}&id=${encodeURIComponent(name)}`
-  
+
   eventSource = new EventSource(url)
-  
+
   // 监听消息
   eventSource.onmessage = (event) => {
     const data = event.data
     console.log('SSE消息:', data)
-    
+
     // 如果还没有二维码数据，且数据长度较长，认为是二维码
     if (!qrCodeData.value && data.length > 100) {
       try {
@@ -769,30 +828,32 @@ const connectSSE = (platform, name) => {
       } catch (error) {
         console.error('处理二维码数据出错:', error)
       }
-    } 
+    }
     // 如果收到状态码
     else if (data === '200' || data === '500') {
       loginStatus.value = data
-      
+
       // 如果登录成功
       if (data === '200') {
         setTimeout(() => {
           // 关闭连接
           closeSSEConnection()
-          
+
           // 1秒后关闭对话框并开始刷新
           setTimeout(() => {
             dialogVisible.value = false
             sseConnecting.value = false
-            ElMessage.success('账号添加成功')
-            
+
+            // 根据是否是重新登录显示不同提示
+            ElMessage.success(dialogType.value === 'edit' ? '重新登录成功' : '账号添加成功')
+
             // 显示更新账号信息提示
             ElMessage({
               type: 'info',
               message: '正在同步账号信息...',
               duration: 0
             })
-            
+
             // 触发刷新操作
             fetchAccounts().then(() => {
               // 刷新完成后关闭提示
@@ -804,7 +865,7 @@ const connectSSE = (platform, name) => {
       } else {
         // 登录失败，关闭连接
         closeSSEConnection()
-        
+
         // 2秒后重置状态，允许重试
         setTimeout(() => {
           sseConnecting.value = false
@@ -814,7 +875,7 @@ const connectSSE = (platform, name) => {
       }
     }
   }
-  
+
   // 监听错误
   eventSource.onerror = (error) => {
     console.error('SSE连接错误:', error)
@@ -834,14 +895,29 @@ const submitAccountForm = () => {
       } else {
         // 编辑账号逻辑
         try {
+          // 将平台名称转换为类型数字
+          const platformTypeMap = {
+            '快手': 1,
+            '抖音': 2,
+            '视频号': 3,
+            '小红书': 4
+          };
+          const type = platformTypeMap[accountForm.platform] || 1;
+
           const res = await accountApi.updateAccount({
             id: accountForm.id,
-            type: Number(accountForm.platform === '快手' ? 1 : accountForm.platform === '抖音' ? 2 : accountForm.platform === '视频号' ? 3 : 4),
+            type: type,
             userName: accountForm.name
           })
           if (res.code === 200) {
             // 更新状态管理中的账号
-            accountStore.updateAccount(accountForm.id, accountForm)
+            const updatedAccount = {
+              id: accountForm.id,
+              name: accountForm.name,
+              platform: accountForm.platform,
+              status: accountForm.status // Keep the existing status
+            };
+            accountStore.updateAccount(accountForm.id, updatedAccount)
             ElMessage.success('更新成功')
             dialogVisible.value = false
             // 刷新账号列表
@@ -929,6 +1005,16 @@ onBeforeUnmount(() => {
   }
   
   // 二维码容器样式
+  .clickable-status {
+    cursor: pointer;
+    transition: all 0.3s;
+
+    &:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.15);
+    }
+  }
+
   .qrcode-container {
     margin-top: 20px;
     display: flex;
