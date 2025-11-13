@@ -186,6 +186,37 @@ def get_all_files():
         }), 500
 
 
+@app.route("/getAccounts", methods=['GET'])
+def getAccounts():
+    """快速获取所有账号信息，不进行cookie验证"""
+    try:
+        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('''
+            SELECT * FROM user_info''')
+            rows = cursor.fetchall()
+            rows_list = [list(row) for row in rows]
+
+            print("\n📋 当前数据表内容（快速获取）：")
+            for row in rows:
+                print(row)
+
+            return jsonify(
+                {
+                    "code": 200,
+                    "msg": None,
+                    "data": rows_list
+                }), 200
+    except Exception as e:
+        print(f"获取账号列表时出错: {str(e)}")
+        return jsonify({
+            "code": 500,
+            "msg": f"获取账号列表失败: {str(e)}",
+            "data": None
+        }), 500
+
+
 @app.route("/getValidAccounts",methods=['GET'])
 async def getValidAccounts():
     with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
