@@ -8,9 +8,9 @@ export const materialApi = {
   },
   
   // 上传素材
-  uploadMaterial: (formData) => {
+  uploadMaterial: (formData, onUploadProgress) => {
     // 使用http.upload方法，它已经配置了正确的Content-Type
-    return http.upload('/uploadSave', formData)
+    return http.upload('/uploadSave', formData, onUploadProgress)
   },
   
   // 删除素材
