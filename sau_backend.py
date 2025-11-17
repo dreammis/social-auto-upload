@@ -37,8 +37,8 @@ def favicon(filename):
 
 # （未来打包用）
 @app.route('/')
-def hello_world():  # put application's code here
-    return render_template('index.html')
+def index():  # put application's code here
+    return send_from_directory(current_dir, 'index.html')
 
 @app.route('/upload', methods=['POST'])
 def upload_file():

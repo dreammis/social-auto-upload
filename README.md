@@ -46,7 +46,7 @@
 -   **功能增强**:
     -   [x] 更易用的版本 (GUI / CLI 交互优化)
     -   [x] API 封装
-    -   [ ] Docker 部署
+    -   [x] Docker 部署
     -   [ ] 自动化上传 (更智能的调度策略)
     -   [ ] 多线程/异步上传优化
     -   [ ] Slack/消息推送通知
@@ -163,6 +163,27 @@
     ```bash
     python examples/upload_video_to_douyin.py
     ```
+
+## Docker 环境
+### 自己构建镜像
+1. **构建Docker镜像**:
+    ```
+   docker build -t social-auto-upload:latest .
+   ```
+2. **运行Docker容器**:
+    ```
+   docker run -d -it -p 5409:5409 social-auto-upload:latest
+   ```
+### 使用预构建镜像
+1. **拉取镜像**:
+    ```
+   docker pull gzxy/social-auto-upload:latest
+   ```
+2. **运行Docker容器**:
+    ```
+   docker run -d -it -p 5409:5409 gzxy/social-auto-upload:latest
+   ```
+启动容器后访问：[http://localhost:5409](http://localhost:5409)
 
 ## 🐇项目背景
 
