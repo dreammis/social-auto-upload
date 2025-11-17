@@ -30,7 +30,7 @@
               <el-table :data="filteredAccounts" style="width: 100%">
                 <el-table-column label="头像" width="80">
                   <template #default="scope">
-                    <el-avatar :src="scope.row.avatar" :size="40" />
+                    <el-avatar :src="getDefaultAvatar(scope.row.name)" :size="40" />
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
@@ -47,9 +47,14 @@
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
                     <el-tag
-                      :type="scope.row.status === '正常' ? 'success' : 'danger'"
+                      :type="getStatusTagType(scope.row.status)"
                       effect="plain"
+                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
+                      @click="handleStatusClick(scope.row)"
                     >
+                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
+                        <Loading />
+                      </el-icon>
                       {{ scope.row.status }}
                     </el-tag>
                   </template>
@@ -57,6 +62,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
+                    <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -93,7 +100,7 @@
               <el-table :data="filteredKuaishouAccounts" style="width: 100%">
                 <el-table-column label="头像" width="80">
                   <template #default="scope">
-                    <el-avatar :src="scope.row.avatar" :size="40" />
+                    <el-avatar :src="getDefaultAvatar(scope.row.name)" :size="40" />
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
@@ -110,9 +117,14 @@
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
                     <el-tag
-                      :type="scope.row.status === '正常' ? 'success' : 'danger'"
+                      :type="getStatusTagType(scope.row.status)"
                       effect="plain"
+                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
+                      @click="handleStatusClick(scope.row)"
                     >
+                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
+                        <Loading />
+                      </el-icon>
                       {{ scope.row.status }}
                     </el-tag>
                   </template>
@@ -120,6 +132,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
+                    <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -156,7 +170,7 @@
               <el-table :data="filteredDouyinAccounts" style="width: 100%">
                 <el-table-column label="头像" width="80">
                   <template #default="scope">
-                    <el-avatar :src="scope.row.avatar" :size="40" />
+                    <el-avatar :src="getDefaultAvatar(scope.row.name)" :size="40" />
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
@@ -173,9 +187,14 @@
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
                     <el-tag
-                      :type="scope.row.status === '正常' ? 'success' : 'danger'"
+                      :type="getStatusTagType(scope.row.status)"
                       effect="plain"
+                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
+                      @click="handleStatusClick(scope.row)"
                     >
+                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
+                        <Loading />
+                      </el-icon>
                       {{ scope.row.status }}
                     </el-tag>
                   </template>
@@ -183,6 +202,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
+                    <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -219,7 +240,7 @@
               <el-table :data="filteredChannelsAccounts" style="width: 100%">
                 <el-table-column label="头像" width="80">
                   <template #default="scope">
-                    <el-avatar :src="scope.row.avatar" :size="40" />
+                    <el-avatar :src="getDefaultAvatar(scope.row.name)" :size="40" />
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
@@ -236,9 +257,14 @@
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
                     <el-tag
-                      :type="scope.row.status === '正常' ? 'success' : 'danger'"
+                      :type="getStatusTagType(scope.row.status)"
                       effect="plain"
+                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
+                      @click="handleStatusClick(scope.row)"
                     >
+                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
+                        <Loading />
+                      </el-icon>
                       {{ scope.row.status }}
                     </el-tag>
                   </template>
@@ -246,6 +272,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
+                    <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -282,7 +310,7 @@
               <el-table :data="filteredXiaohongshuAccounts" style="width: 100%">
                 <el-table-column label="头像" width="80">
                   <template #default="scope">
-                    <el-avatar :src="scope.row.avatar" :size="40" />
+                    <el-avatar :src="getDefaultAvatar(scope.row.name)" :size="40" />
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
@@ -299,9 +327,14 @@
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
                     <el-tag
-                      :type="scope.row.status === '正常' ? 'success' : 'danger'"
+                      :type="getStatusTagType(scope.row.status)"
                       effect="plain"
+                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
+                      @click="handleStatusClick(scope.row)"
                     >
+                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
+                        <Loading />
+                      </el-icon>
                       {{ scope.row.status }}
                     </el-tag>
                   </template>
@@ -309,6 +342,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
+                    <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -393,7 +428,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
-import { Refresh, CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
+import { Refresh, CircleCheckFilled, CircleCloseFilled, Download, Upload, Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { accountApi } from '@/api/account'
 import { useAccountStore } from '@/stores/account'
@@ -410,12 +445,31 @@ const activeTab = ref('all')
 // 搜索关键词
 const searchKeyword = ref('')
 
-// 获取账号数据
+// 获取账号数据（快速，不验证）
+const fetchAccountsQuick = async () => {
+  try {
+    const res = await accountApi.getAccounts()
+    if (res.code === 200 && res.data) {
+      // 将所有账号的状态暂时设为"验证中"
+      const accountsWithPendingStatus = res.data.map(account => {
+        // account[4] 是状态字段，暂时设为"验证中"
+        const updatedAccount = [...account];
+        updatedAccount[4] = '验证中'; // 临时状态
+        return updatedAccount;
+      });
+      accountStore.setAccounts(accountsWithPendingStatus);
+    }
+  } catch (error) {
+    console.error('快速获取账号数据失败:', error)
+  }
+}
+
+// 获取账号数据（带验证）
 const fetchAccounts = async () => {
   if (appStore.isAccountRefreshing) return
-  
+
   appStore.setAccountRefreshing(true)
-  
+
   try {
     const res = await accountApi.getValidAccounts()
     if (res.code === 200 && res.data) {
@@ -436,12 +490,30 @@ const fetchAccounts = async () => {
   }
 }
 
+// 后台验证所有账号（优化版本，使用setTimeout避免阻塞UI）
+const validateAllAccountsInBackground = async () => {
+  // 使用setTimeout将验证过程放在下一个事件循环，避免阻塞UI
+  setTimeout(async () => {
+    try {
+      const res = await accountApi.getValidAccounts()
+      if (res.code === 200 && res.data) {
+        accountStore.setAccounts(res.data)
+      }
+    } catch (error) {
+      console.error('后台验证账号失败:', error)
+    }
+  }, 0)
+}
+
 // 页面加载时获取账号数据
 onMounted(() => {
-  // 只有第一次进入时才获取数据
-  if (appStore.isFirstTimeAccountManagement) {
-    fetchAccounts()
-  }
+  // 快速获取账号列表（不验证），立即显示
+  fetchAccountsQuick()
+
+  // 在后台验证所有账号
+  setTimeout(() => {
+    validateAllAccountsInBackground()
+  }, 100) // 稍微延迟一下，让用户看到快速加载的效果
 })
 
 // 获取平台标签类型
@@ -455,10 +527,34 @@ const getPlatformTagType = (platform) => {
   return typeMap[platform] || 'info'
 }
 
+// 判断状态是否可点击（异常状态可点击）
+const isStatusClickable = (status) => {
+  return status === '异常'; // 只有异常状态可点击，验证中不可点击
+}
+
+// 获取状态标签类型
+const getStatusTagType = (status) => {
+  if (status === '验证中') {
+    return 'info'; // 验证中使用灰色
+  } else if (status === '正常') {
+    return 'success'; // 正常使用绿色
+  } else {
+    return 'danger'; // 无效使用红色
+  }
+}
+
+// 处理状态点击事件
+const handleStatusClick = (row) => {
+  if (isStatusClickable(row.status)) {
+    // 触发重新登录流程
+    handleReLogin(row)
+  }
+}
+
 // 过滤后的账号列表
 const filteredAccounts = computed(() => {
   if (!searchKeyword.value) return accountStore.accounts
-  return accountStore.accounts.filter(account => 
+  return accountStore.accounts.filter(account =>
     account.name.includes(searchKeyword.value)
   )
 })
@@ -528,7 +624,12 @@ const handleAddAccount = () => {
 // 编辑账号
 const handleEdit = (row) => {
   dialogType.value = 'edit'
-  Object.assign(accountForm, { ...row })
+  Object.assign(accountForm, {
+    id: row.id,
+    name: row.name,
+    platform: row.platform,
+    status: row.status
+  })
   dialogVisible.value = true
 }
 
@@ -547,7 +648,7 @@ const handleDelete = (row) => {
       try {
         // 调用API删除账号
         const response = await accountApi.deleteAccount(row.id)
-        
+
         if (response.code === 200) {
           // 从状态管理中删除账号
           accountStore.deleteAccount(row.id)
@@ -568,6 +669,108 @@ const handleDelete = (row) => {
     })
 }
 
+// 下载Cookie文件
+const handleDownloadCookie = (row) => {
+  // 从后端获取Cookie文件
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
+  const downloadUrl = `${baseUrl}/downloadCookie?filePath=${encodeURIComponent(row.filePath)}`
+
+  // 创建一个隐藏的链接来触发下载
+  const link = document.createElement('a')
+  link.href = downloadUrl
+  link.download = `${row.name}_cookie.json`
+  link.target = '_blank'
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+// 上传Cookie文件
+const handleUploadCookie = (row) => {
+  // 创建一个隐藏的文件输入框
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json'
+  input.style.display = 'none'
+  document.body.appendChild(input)
+
+  input.onchange = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    // 检查文件类型
+    if (!file.name.endsWith('.json')) {
+      ElMessage.error('请选择JSON格式的Cookie文件')
+      document.body.removeChild(input)
+      return
+    }
+
+    try {
+      // 创建FormData对象
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('id', row.id)
+      formData.append('platform', row.platform)
+
+      // 发送上传请求
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
+      const response = await fetch(`${baseUrl}/uploadCookie`, {
+        method: 'POST',
+        body: formData
+      })
+
+      const result = await response.json()
+
+      if (result.code === 200) {
+        ElMessage.success('Cookie文件上传成功')
+        // 刷新账号列表以显示更新
+        fetchAccounts()
+      } else {
+        ElMessage.error(result.msg || 'Cookie文件上传失败')
+      }
+    } catch (error) {
+      console.error('上传Cookie文件失败:', error)
+      ElMessage.error('Cookie文件上传失败')
+    } finally {
+      document.body.removeChild(input)
+    }
+  }
+
+  input.click()
+}
+
+// 重新登录账号
+const handleReLogin = (row) => {
+  // 设置表单信息
+  dialogType.value = 'edit'
+  Object.assign(accountForm, {
+    id: row.id,
+    name: row.name,
+    platform: row.platform,
+    status: row.status
+  })
+
+  // 重置SSE状态
+  sseConnecting.value = false
+  qrCodeData.value = ''
+  loginStatus.value = ''
+
+  // 显示对话框
+  dialogVisible.value = true
+
+  // 立即开始登录流程
+  setTimeout(() => {
+    connectSSE(row.platform, row.name)
+  }, 300)
+}
+
+// 获取默认头像
+const getDefaultAvatar = (name) => {
+  // 使用简单的默认头像，可以基于用户名生成不同的颜色
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
+}
+
 // SSE事件源对象
 let eventSource = null
 
@@ -583,12 +786,12 @@ const closeSSEConnection = () => {
 const connectSSE = (platform, name) => {
   // 关闭可能存在的连接
   closeSSEConnection()
-  
+
   // 设置连接状态
   sseConnecting.value = true
   qrCodeData.value = ''
   loginStatus.value = ''
-  
+
   // 获取平台类型编号
   const platformTypeMap = {
     '小红书': '1',
@@ -596,20 +799,20 @@ const connectSSE = (platform, name) => {
     '抖音': '3',
     '快手': '4'
   }
-  
+
   const type = platformTypeMap[platform] || '1'
-  
+
   // 创建SSE连接
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
   const url = `${baseUrl}/login?type=${type}&id=${encodeURIComponent(name)}`
-  
+
   eventSource = new EventSource(url)
-  
+
   // 监听消息
   eventSource.onmessage = (event) => {
     const data = event.data
     console.log('SSE消息:', data)
-    
+
     // 如果还没有二维码数据，且数据长度较长，认为是二维码
     if (!qrCodeData.value && data.length > 100) {
       try {
@@ -625,30 +828,32 @@ const connectSSE = (platform, name) => {
       } catch (error) {
         console.error('处理二维码数据出错:', error)
       }
-    } 
+    }
     // 如果收到状态码
     else if (data === '200' || data === '500') {
       loginStatus.value = data
-      
+
       // 如果登录成功
       if (data === '200') {
         setTimeout(() => {
           // 关闭连接
           closeSSEConnection()
-          
+
           // 1秒后关闭对话框并开始刷新
           setTimeout(() => {
             dialogVisible.value = false
             sseConnecting.value = false
-            ElMessage.success('账号添加成功')
-            
+
+            // 根据是否是重新登录显示不同提示
+            ElMessage.success(dialogType.value === 'edit' ? '重新登录成功' : '账号添加成功')
+
             // 显示更新账号信息提示
             ElMessage({
               type: 'info',
               message: '正在同步账号信息...',
               duration: 0
             })
-            
+
             // 触发刷新操作
             fetchAccounts().then(() => {
               // 刷新完成后关闭提示
@@ -660,7 +865,7 @@ const connectSSE = (platform, name) => {
       } else {
         // 登录失败，关闭连接
         closeSSEConnection()
-        
+
         // 2秒后重置状态，允许重试
         setTimeout(() => {
           sseConnecting.value = false
@@ -670,7 +875,7 @@ const connectSSE = (platform, name) => {
       }
     }
   }
-  
+
   // 监听错误
   eventSource.onerror = (error) => {
     console.error('SSE连接错误:', error)
@@ -690,14 +895,29 @@ const submitAccountForm = () => {
       } else {
         // 编辑账号逻辑
         try {
+          // 将平台名称转换为类型数字
+          const platformTypeMap = {
+            '快手': 1,
+            '抖音': 2,
+            '视频号': 3,
+            '小红书': 4
+          };
+          const type = platformTypeMap[accountForm.platform] || 1;
+
           const res = await accountApi.updateAccount({
             id: accountForm.id,
-            type: Number(accountForm.platform === '快手' ? 1 : accountForm.platform === '抖音' ? 2 : accountForm.platform === '视频号' ? 3 : 4),
+            type: type,
             userName: accountForm.name
           })
           if (res.code === 200) {
             // 更新状态管理中的账号
-            accountStore.updateAccount(accountForm.id, accountForm)
+            const updatedAccount = {
+              id: accountForm.id,
+              name: accountForm.name,
+              platform: accountForm.platform,
+              status: accountForm.status // Keep the existing status
+            };
+            accountStore.updateAccount(accountForm.id, updatedAccount)
             ElMessage.success('更新成功')
             dialogVisible.value = false
             // 刷新账号列表
@@ -785,6 +1005,16 @@ onBeforeUnmount(() => {
   }
   
   // 二维码容器样式
+  .clickable-status {
+    cursor: pointer;
+    transition: all 0.3s;
+
+    &:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.15);
+    }
+  }
+
   .qrcode-container {
     margin-top: 20px;
     display: flex;
