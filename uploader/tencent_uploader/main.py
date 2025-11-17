@@ -82,15 +82,16 @@ async def weixin_setup(account_file, handle=False):
 
 
 class TencentVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None, is_draft=False):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
         self.publish_date = publish_date
         self.account_file = account_file
         self.category = category
-        self.local_executable_path = LOCAL_CHROME_PATH
         self.headless = LOCAL_CHROME_HEADLESS
+        self.is_draft = is_draft  # 是否保存为草稿
+        self.local_executable_path = LOCAL_CHROME_PATH or None
 
     async def set_schedule_time_tencent(self, page, publish_date):
         label_element = page.locator("label").filter(has_text="定时").nth(1)
@@ -186,21 +187,37 @@ class TencentVideo(object):
     async def click_publish(self, page):
         while True:
             try:
-                publish_buttion = page.locator('div.form-btns button:has-text("发表")')
-                if await publish_buttion.count():
-                    await publish_buttion.click()
-                await page.wait_for_url("https://channels.weixin.qq.com/platform/post/list", timeout=5000)
-                tencent_logger.success("  [-]视频发布成功")
+                if self.is_draft:
+                    # 点击"保存草稿"按钮
+                    draft_button = page.locator('div.form-btns button:has-text("保存草稿")')
+                    if await draft_button.count():
+                        await draft_button.click()
+                    # 等待跳转到草稿箱页面或确认保存成功
+                    await page.wait_for_url("**/post/list**", timeout=5000)  # 使用通配符匹配包含post/list的URL
+                    tencent_logger.success("  [-]视频草稿保存成功")
+                else:
+                    # 点击"发表"按钮
+                    publish_button = page.locator('div.form-btns button:has-text("发表")')
+                    if await publish_button.count():
+                        await publish_button.click()
+                    await page.wait_for_url("https://channels.weixin.qq.com/platform/post/list", timeout=5000)
+                    tencent_logger.success("  [-]视频发布成功")
                 break
             except Exception as e:
                 current_url = page.url
-                if "https://channels.weixin.qq.com/platform/post/list" in current_url:
-                    tencent_logger.success("  [-]视频发布成功")
-                    break
+                if self.is_draft:
+                    # 检查是否在草稿相关的页面
+                    if "post/list" in current_url or "draft" in current_url:
+                        tencent_logger.success("  [-]视频草稿保存成功")
+                        break
                 else:
-                    tencent_logger.exception(f"  [-] Exception: {e}")
-                    tencent_logger.info("  [-] 视频正在发布中...")
-                    await asyncio.sleep(0.5)
+                    # 检查是否在发布列表页面
+                    if "https://channels.weixin.qq.com/platform/post/list" in current_url:
+                        tencent_logger.success("  [-]视频发布成功")
+                        break
+                tencent_logger.exception(f"  [-] Exception: {e}")
+                tencent_logger.info("  [-] 视频正在发布中...")
+                await asyncio.sleep(0.5)
 
     async def detect_upload_status(self, page):
         while True:

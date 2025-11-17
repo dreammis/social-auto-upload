@@ -296,6 +296,36 @@
             </el-radio-group>
           </div>
 
+          <!-- 草稿选项 (仅在视频号可见) -->
+          <div v-if="tab.selectedPlatform === 2" class="draft-section">
+            <el-checkbox
+              v-model="tab.isDraft"
+              label="视频号仅保存草稿(用手机发布)"
+              class="draft-checkbox"
+            />
+          </div>
+
+          <!-- 标签 (仅在抖音可见) -->
+          <div v-if="tab.selectedPlatform === 3" class="product-section">
+            <h3>商品链接</h3>
+            <el-input
+              v-model="tab.productTitle"
+              type="text"
+              :rows="1"
+              placeholder="请输入商品名称"
+              maxlength="200"
+              class="product-name-input"
+            />
+            <el-input
+              v-model="tab.productLink"
+              type="text"
+              :rows="1"
+              placeholder="请输入商品链接"
+              maxlength="200"
+              class="product-link-input"
+            />
+          </div>
+
           <!-- 标题输入 -->
           <div class="title-section">
             <h3>标题</h3>
@@ -457,7 +487,14 @@
           <!-- 操作按钮 -->
           <div class="action-buttons">
             <el-button size="small" @click="cancelPublish(tab)">取消</el-button>
-            <el-button size="small" type="primary" @click="confirmPublish(tab)">发布</el-button>
+            <el-button
+              size="small"
+              type="primary"
+              @click="confirmPublish(tab)"
+              :loading="tab.publishing || false"
+            >
+              {{ tab.publishing ? '发布中...' : '发布' }}
+            </el-button>
           </div>
         </div>
       </div>
@@ -526,7 +563,9 @@ const defaultTabInit = {
   videosPerDay: 1, // 每天发布视频数量
   dailyTimes: ['10:00'], // 每天发布时间点列表
   startDays: 0, // 从今天开始计算的发布天数，0表示明天，1表示后天
-  publishStatus: null // 发布状态，包含message和type
+  publishStatus: null, // 发布状态，包含message和type
+  publishing: false, // 发布状态，用于控制按钮loading效果
+  isDraft: false // 是否保存为草稿，仅视频号平台可见
 }
 
 // helper to create a fresh deep-copied tab from defaultTabInit
@@ -733,29 +772,40 @@ const cancelPublish = (tab) => {
 
 // 确认发布
 const confirmPublish = async (tab) => {
+  // 防止重复点击
+  if (tab.publishing) {
+    return Promise.reject(new Error('正在发布中，请稍候...'))
+  }
+
+  tab.publishing = true // 设置发布状态为进行中
+
   return new Promise((resolve, reject) => {
     // 数据验证
     if (tab.fileList.length === 0) {
       ElMessage.error('请先上传视频文件')
+      tab.publishing = false // 重置发布状态
       reject(new Error('请先上传视频文件'))
       return
     }
     if (!tab.title.trim()) {
       ElMessage.error('请输入标题')
+      tab.publishing = false // 重置发布状态
       reject(new Error('请输入标题'))
       return
     }
     if (!tab.selectedPlatform) {
       ElMessage.error('请选择发布平台')
+      tab.publishing = false // 重置发布状态
       reject(new Error('请选择发布平台'))
       return
     }
     if (tab.selectedAccounts.length === 0) {
       ElMessage.error('请选择发布账号')
+      tab.publishing = false // 重置发布状态
       reject(new Error('请选择发布账号'))
       return
     }
-    
+
     // 构造发布数据，符合后端API格式
     const publishData = {
       type: tab.selectedPlatform,
@@ -772,9 +822,10 @@ const confirmPublish = async (tab) => {
       startDays: tab.scheduleEnabled ? tab.startDays || 0 : 0, // 从今天开始计算的发布天数，0表示明天，1表示后天
       category: 0, //表示非原创
       productLink: tab.productLink.trim() || '', // 商品链接
-      productTitle: tab.productTitle.trim() || '' // 商品名称
+      productTitle: tab.productTitle.trim() || '', // 商品名称
+      isDraft: tab.isDraft // 是否保存为草稿，仅视频号平台使用
     }
-    
+
     // 调用后端发布API
     fetch(`${apiBaseUrl}/postVideo`, {
       method: 'POST',
@@ -814,6 +865,9 @@ const confirmPublish = async (tab) => {
         type: 'error'
       }
       reject(error)
+    })
+    .finally(() => {
+      tab.publishing = false // 重置发布状态
     })
   })
 }
@@ -1261,10 +1315,19 @@ const batchPublish = async () => {
           padding-top: 20px;
           border-top: 1px solid #ebeef5;
         }
+
+        .draft-section {
+          margin: 20px 0;
+
+          .draft-checkbox {
+            display: block;
+            margin: 10px 0;
+          }
+        }
       }
     }
   }
-  
+
   // 已上传文件列表样式
   .uploaded-files {
     margin-top: 20px;
