@@ -5,7 +5,7 @@ from playwright.async_api import Playwright, async_playwright
 import os
 import asyncio
 
-from conf import LOCAL_CHROME_PATH
+from conf import LOCAL_CHROME_PATH, LOCAL_CHROME_HEADLESS
 from utils.base_social_media import set_init_script
 from utils.files_times import get_absolute_path
 from utils.log import kuaishou_logger
@@ -13,7 +13,7 @@ from utils.log import kuaishou_logger
 
 async def cookie_auth(account_file):
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True)
+        browser = await playwright.chromium.launch(headless=LOCAL_CHROME_HEADLESS)
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
         # 创建一个新的页面
@@ -46,7 +46,7 @@ async def get_ks_cookie(account_file):
             'args': [
                 '--lang en-GB'
             ],
-            'headless': False,  # Set headless option here
+            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
@@ -70,6 +70,7 @@ class KSVideo(object):
         self.account_file = account_file
         self.date_format = '%Y-%m-%d %H:%M'
         self.local_executable_path = LOCAL_CHROME_PATH
+        self.headless = LOCAL_CHROME_HEADLESS
 
     async def handle_upload_error(self, page):
         kuaishou_logger.error("视频出错了，重新上传中")
@@ -80,12 +81,12 @@ class KSVideo(object):
         print(self.local_executable_path)
         if self.local_executable_path:
             browser = await playwright.chromium.launch(
-                headless=False,
+                headless=self.headless,
                 executable_path=self.local_executable_path,
             )
         else:
             browser = await playwright.chromium.launch(
-                headless=False
+                headless=self.headless
             )  # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(storage_state=f"{self.account_file}")
         context = await set_init_script(context)
