@@ -139,9 +139,10 @@ def upload_save():
         }), 200
 
     except Exception as e:
+        print(f"Upload failed: {e}")
         return jsonify({
             "code": 500,
-            "msg": str("upload failed!"),
+            "msg": f"upload failed: {e}",
             "data": None
         }), 500
 
@@ -157,18 +158,61 @@ def get_all_files():
             cursor.execute("SELECT * FROM file_records")
             rows = cursor.fetchall()
 
-            # 将结果转为字典列表
-            data = [dict(row) for row in rows]
+            # 将结果转为字典列表，并提取UUID
+            data = []
+            for row in rows:
+                row_dict = dict(row)
+                # 从 file_path 中提取 UUID (文件名的第一部分，下划线前)
+                if row_dict.get('file_path'):
+                    file_path_parts = row_dict['file_path'].split('_', 1)  # 只分割第一个下划线
+                    if len(file_path_parts) > 0:
+                        row_dict['uuid'] = file_path_parts[0]  # UUID 部分
+                    else:
+                        row_dict['uuid'] = ''
+                else:
+                    row_dict['uuid'] = ''
+                data.append(row_dict)
 
-        return jsonify({
-            "code": 200,
-            "msg": "success",
-            "data": data
-        }), 200
+            return jsonify({
+                "code": 200,
+                "msg": "success",
+                "data": data
+            }), 200
     except Exception as e:
         return jsonify({
             "code": 500,
             "msg": str("get file failed!"),
+            "data": None
+        }), 500
+
+
+@app.route("/getAccounts", methods=['GET'])
+def getAccounts():
+    """快速获取所有账号信息，不进行cookie验证"""
+    try:
+        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('''
+            SELECT * FROM user_info''')
+            rows = cursor.fetchall()
+            rows_list = [list(row) for row in rows]
+
+            print("\n📋 当前数据表内容（快速获取）：")
+            for row in rows:
+                print(row)
+
+            return jsonify(
+                {
+                    "code": 200,
+                    "msg": None,
+                    "data": rows_list
+                }), 200
+    except Exception as e:
+        print(f"获取账号列表时出错: {str(e)}")
+        return jsonify({
+            "code": 500,
+            "msg": f"获取账号列表失败: {str(e)}",
             "data": None
         }), 500
 
@@ -233,6 +277,18 @@ def delete_file():
                 }), 404
 
             record = dict(record)
+
+            # 获取文件路径并删除实际文件
+            file_path = Path(BASE_DIR / "videoFile" / record['file_path'])
+            if file_path.exists():
+                try:
+                    file_path.unlink()  # 删除文件
+                    print(f"✅ 实际文件已删除: {file_path}")
+                except Exception as e:
+                    print(f"⚠️ 删除实际文件失败: {e}")
+                    # 即使删除文件失败，也要继续删除数据库记录，避免数据不一致
+            else:
+                print(f"⚠️ 实际文件不存在: {file_path}")
 
             # 删除数据库记录
             cursor.execute("DELETE FROM file_records WHERE id = ?", (file_id,))
@@ -338,6 +394,7 @@ def postVideo():
     productLink = data.get('productLink', '')
     productTitle = data.get('productTitle', '')
     thumbnail_path = data.get('thumbnail', '')
+    is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
 
     videos_per_day = data.get('videosPerDay')
     daily_times = data.get('dailyTimes')
@@ -351,7 +408,7 @@ def postVideo():
                                start_days)
         case 2:
             post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                               start_days)
+                               start_days, is_draft)
         case 3:
             post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                       start_days, thumbnail_path, productLink, productTitle)
@@ -449,6 +506,127 @@ def postVideoBatch():
             "msg": None,
             "data": None
         }), 200
+
+# Cookie文件上传API
+@app.route('/uploadCookie', methods=['POST'])
+def upload_cookie():
+    try:
+        if 'file' not in request.files:
+            return jsonify({
+                "code": 500,
+                "msg": "没有找到Cookie文件",
+                "data": None
+            }), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                "code": 500,
+                "msg": "Cookie文件名不能为空",
+                "data": None
+            }), 400
+
+        if not file.filename.endswith('.json'):
+            return jsonify({
+                "code": 500,
+                "msg": "Cookie文件必须是JSON格式",
+                "data": None
+            }), 400
+
+        # 获取账号信息
+        account_id = request.form.get('id')
+        platform = request.form.get('platform')
+
+        if not account_id or not platform:
+            return jsonify({
+                "code": 500,
+                "msg": "缺少账号ID或平台信息",
+                "data": None
+            }), 400
+
+        # 从数据库获取账号的文件路径
+        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT filePath FROM user_info WHERE id = ?', (account_id,))
+            result = cursor.fetchone()
+
+        if not result:
+            return jsonify({
+                "code": 500,
+                "msg": "账号不存在",
+                "data": None
+            }), 404
+
+        # 保存上传的Cookie文件到对应路径
+        cookie_file_path = Path(BASE_DIR / "cookiesFile" / result['filePath'])
+        cookie_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        file.save(str(cookie_file_path))
+
+        # 更新数据库中的账号信息（可选，比如更新更新时间）
+        # 这里可以根据需要添加额外的处理逻辑
+
+        return jsonify({
+            "code": 200,
+            "msg": "Cookie文件上传成功",
+            "data": None
+        }), 200
+
+    except Exception as e:
+        print(f"上传Cookie文件时出错: {str(e)}")
+        return jsonify({
+            "code": 500,
+            "msg": f"上传Cookie文件失败: {str(e)}",
+            "data": None
+        }), 500
+
+
+# Cookie文件下载API
+@app.route('/downloadCookie', methods=['GET'])
+def download_cookie():
+    try:
+        file_path = request.args.get('filePath')
+        if not file_path:
+            return jsonify({
+                "code": 500,
+                "msg": "缺少文件路径参数",
+                "data": None
+            }), 400
+
+        # 验证文件路径的安全性，防止路径遍历攻击
+        cookie_file_path = Path(BASE_DIR / "cookiesFile" / file_path).resolve()
+        base_path = Path(BASE_DIR / "cookiesFile").resolve()
+
+        if not cookie_file_path.is_relative_to(base_path):
+            return jsonify({
+                "code": 500,
+                "msg": "非法文件路径",
+                "data": None
+            }), 400
+
+        if not cookie_file_path.exists():
+            return jsonify({
+                "code": 500,
+                "msg": "Cookie文件不存在",
+                "data": None
+            }), 404
+
+        # 返回文件
+        return send_from_directory(
+            directory=str(cookie_file_path.parent),
+            path=cookie_file_path.name,
+            as_attachment=True
+        )
+
+    except Exception as e:
+        print(f"下载Cookie文件时出错: {str(e)}")
+        return jsonify({
+            "code": 500,
+            "msg": f"下载Cookie文件失败: {str(e)}",
+            "data": None
+        }), 500
+
 
 # 包装函数：在线程中运行异步函数
 def run_async_function(type,id,status_queue):
