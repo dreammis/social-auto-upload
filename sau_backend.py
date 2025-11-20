@@ -32,8 +32,12 @@ def custom_static(filename):
 
 # 处理 favicon.ico 静态资源（未来打包用）
 @app.route('/favicon.ico')
-def favicon(filename):
-    return send_from_directory(os.path.join(current_dir, 'assets'), 'favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(current_dir, 'assets'), 'vite.svg')
+
+@app.route('/vite.svg')
+def vite_svg():
+    return send_from_directory(os.path.join(current_dir, 'assets'), 'vite.svg')
 
 # （未来打包用）
 @app.route('/')
