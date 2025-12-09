@@ -213,6 +213,8 @@ class DouYinVideo(object):
                 douyin_logger.success("  [-]视频发布成功")
                 break
             except:
+                # 尝试处理封面问题
+                await self.handle_auto_video_cover(page)
                 douyin_logger.info("  [-] 视频正在发布中...")
                 await page.screenshot(full_page=True)
                 await asyncio.sleep(0.5)
@@ -223,7 +225,43 @@ class DouYinVideo(object):
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
-    
+
+    async def handle_auto_video_cover(self, page):
+        """
+        处理必须设置封面的情况，点击推荐封面的第一个
+        """
+        # 1. 判断是否出现 "请设置封面后再发布" 的提示
+        # 必须确保提示是可见的 (is_visible)，因为 DOM 中可能存在隐藏的历史提示
+        if await page.get_by_text("请设置封面后再发布").first.is_visible():
+            print("  [-] 检测到需要设置封面提示...")
+
+            # 2. 定位“智能推荐封面”区域下的第一个封面
+            # 使用 class^= 前缀匹配，避免 hash 变化导致失效
+            recommend_cover = page.locator('[class^="recommendCover-"]').first
+
+            if await recommend_cover.count():
+                print("  [-] 正在选择第一个推荐封面...")
+                try:
+                    await recommend_cover.click()
+                    await asyncio.sleep(1)  # 等待选中生效
+
+                    # 3. 处理可能的确认弹窗 "是否确认应用此封面？"
+                    # 并不一定每次都会出现，健壮性判断：如果出现弹窗，则点击确定
+                    confirm_text = "是否确认应用此封面？"
+                    if await page.get_by_text(confirm_text).first.is_visible():
+                        print(f"  [-] 检测到确认弹窗: {confirm_text}")
+                        # 直接点击“确定”按钮，不依赖脆弱的 CSS 类名
+                        await page.get_by_role("button", name="确定").click()
+                        print("  [-] 已点击确认应用封面")
+                        await asyncio.sleep(1)
+
+                    print("  [-] 已完成封面选择流程")
+                    return True
+                except Exception as e:
+                    print(f"  [-] 选择封面失败: {e}")
+
+        return False
+
     async def set_thumbnail(self, page: Page, thumbnail_path: str):
         if thumbnail_path:
             douyin_logger.info('  [-] 正在设置视频封面...')
