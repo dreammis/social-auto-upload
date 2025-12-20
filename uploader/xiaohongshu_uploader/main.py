@@ -175,11 +175,60 @@ class XiaoHongShuVideo(object):
             await page.keyboard.press("Delete")
             await page.keyboard.type(self.title)
             await page.keyboard.press("Enter")
-        css_selector = ".ql-editor" # 不能加上 .ql-blank 属性，这样只能获取第一次非空状态
-        for index, tag in enumerate(self.tags, start=1):
-            await page.type(css_selector, "#" + tag)
-            await page.press(css_selector, "Space")
-        xiaohongshu_logger.info(f'总共添加{len(self.tags)}个话题')
+        # 尝试添加话题标签
+        try:
+            # 小红书改版后使用 Tiptap/ProseMirror 编辑器
+            # 优先尝试新选择器，否则回退到旧的 Quill 选择器
+            editor_selectors = [
+                ".tiptap.ProseMirror",  # 新版 Tiptap 编辑器
+                "[contenteditable='true'].tiptap",
+                "[data-placeholder]",
+                ".ql-editor",  # 旧版 Quill 编辑器
+            ]
+            
+            css_selector = None
+            for selector in editor_selectors:
+                if await page.locator(selector).count() > 0:
+                    css_selector = selector
+                    xiaohongshu_logger.info(f'找到编辑器: {selector}')
+                    break
+            
+            if css_selector:
+                # 点击编辑器激活
+                await page.locator(css_selector).click()
+                await asyncio.sleep(0.5)
+                added_tags = 0
+                for index, tag in enumerate(self.tags, start=1):
+                    await page.keyboard.type("#" + tag)
+                    await asyncio.sleep(1)  # 等待话题建议弹出
+                    # 等待话题建议弹出并选择
+                    try:
+                        # 使用话题建议容器选择器
+                        topic_container = page.locator("#creator-editor-topic-container")
+                        suggestion = topic_container.get_by_text(f"#{tag}", exact=True)
+                        if await suggestion.count() > 0:
+                            await suggestion.click(timeout=3000)
+                            added_tags += 1
+                            xiaohongshu_logger.info(f'  已选择话题: #{tag}')
+                        else:
+                            # 如果没有匹配，尝试选择第一个建议
+                            first_suggestion = topic_container.locator('.topic-item, .item, [class*="option"]').first
+                            if await first_suggestion.count() > 0:
+                                await first_suggestion.click(timeout=3000)
+                                added_tags += 1
+                                xiaohongshu_logger.info(f'  已选择首个话题建议: #{tag}')
+                            else:
+                                await page.keyboard.press("Space")
+                                xiaohongshu_logger.info(f'  未找到话题建议: #{tag}')
+                    except Exception as e:
+                        await page.keyboard.press("Space")
+                        xiaohongshu_logger.info(f'  选择话题失败: #{tag}, {str(e)}')
+                    await asyncio.sleep(0.5)
+                xiaohongshu_logger.info(f'总共添加{added_tags}个话题')
+            else:
+                xiaohongshu_logger.warning('未找到编辑器，跳过话题添加')
+        except Exception as e:
+            xiaohongshu_logger.warning(f'添加话题失败: {str(e)}，继续发布')
 
         # while True:
         #     # 判断重新上传按钮是否存在，如果不存在，代表视频正在上传，则等待
