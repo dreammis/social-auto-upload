@@ -1,0 +1,18 @@
+/* 统一调整编辑和停用按钮尺寸 */
+.el-button--small {
+  padding: 8px 15px !important;
+  font-size: 14px !important;
+  min-height: 32px !important;
+}
+
+/* 特别针对操作列的按钮 */
+.el-table-column .el-button--small {
+  padding: 8px 12px !important;
+  font-size: 14px !important;
+  min-height: 32px !important;
+}
+
+/* 确保按钮文字清晰 */
+.el-button--small span {
+  font-size: 14px !important;
+}

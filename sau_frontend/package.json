@@ -15,6 +15,7 @@
     "element-plus": "^2.9.11",
     "pinia": "^3.0.2",
     "sass": "^1.89.1",
+    "sortablejs": "^1.15.6",
     "vue": "^3.5.13",
     "vue-router": "^4.5.1"
   },

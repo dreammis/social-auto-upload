@@ -1,0 +1,93 @@
+/* 全局按钮样式统一 */
+
+/* 添加账号按钮样式 - 应用于所有确认按钮 */
+.el-button--primary {
+  background-color: #1C9399;
+  border-color: #1C9399;
+  color: #FFFFFF;
+  
+  &:hover {
+    background-color: #48D1CC;
+    border-color: #48D1CC;
+    color: #FFFFFF;
+  }
+  
+  &:active {
+    background-color: #166B6F;
+    border-color: #166B6F;
+    color: #FFFFFF;
+  }
+  
+  &:focus {
+    background-color: #1C9399;
+    border-color: #1C9399;
+    color: #FFFFFF;
+  }
+}
+
+/* 确保对话框中的确认按钮也使用相同样式 */
+.el-dialog__footer {
+  .el-button--primary {
+    background-color: #1C9399;
+    border-color: #1C9399;
+    color: #FFFFFF;
+    
+    &:hover {
+      background-color: #48D1CC;
+      border-color: #48D1CC;
+      color: #FFFFFF;
+    }
+    
+    &:active {
+      background-color: #166B6F;
+      border-color: #166B6F;
+      color: #FFFFFF;
+    }
+    
+    &:focus {
+      background-color: #1C9399;
+      border-color: #1C9399;
+      color: #FFFFFF;
+    }
+  }
+}
+
+/* 覆盖 Element Plus 默认样式 */
+.el-button--primary.is-plain {
+  background-color: #1C9399;
+  border-color: #1C9399;
+  color: #FFFFFF;
+  
+  &:hover {
+    background-color: #48D1CC;
+    border-color: #48D1CC;
+    color: #FFFFFF;
+  }
+  
+  &:active {
+    background-color: #166B6F;
+    border-color: #166B6F;
+    color: #FFFFFF;
+  }
+}
+
+/* 确保所有确认按钮都有统一的样式 */
+.confirm-btn,
+.dialog-confirm-btn,
+.el-button--primary[type="primary"] {
+  background-color: #1C9399;
+  border-color: #1C9399;
+  color: #FFFFFF;
+  
+  &:hover {
+    background-color: #48D1CC;
+    border-color: #48D1CC;
+    color: #FFFFFF;
+  }
+  
+  &:active {
+    background-color: #166B6F;
+    border-color: #166B6F;
+    color: #FFFFFF;
+  }
+}

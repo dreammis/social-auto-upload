@@ -8,12 +8,12 @@ ECHO.
 
 ECHO [1/2] Starting Python Backend Server in a new window...
 REM The START command launches a new process.
-REM The first quoted string "SAU Backend" is the title of the new window.
+REM The first quoted string "MPP Backend" is the title of the new window.
 REM cmd /k runs the command and keeps the window open to show logs.
-START "SAU Backend" cmd /k "python sau_backend.py"
+START "MPP Backend" cmd /k "cd sau_backend && python sau_backend.py"
 
 ECHO [2/2] Starting Vue.js Frontend Server in another new window...
-START "SAU Frontend" cmd /k "cd sau_frontend && npm run dev -- --host 0.0.0.0"
+START "MPP Frontend" cmd /k "cd sau_frontend && npm run dev -- --host 0.0.0.0"
 
 ECHO.
 ECHO ==================================================

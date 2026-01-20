@@ -440,6 +440,25 @@ onMounted(() => {
         .is-loading {
           animation: rotate 1s linear infinite;
         }
+        
+        // 上传素材按钮
+        .el-button--primary {
+          background-color: #1C9399;
+          border-color: #1C9399;
+          color: #FFFFFF;
+          
+          &:hover {
+            background-color: #48D1CC;
+            border-color: #48D1CC;
+            color: #FFFFFF;
+          }
+          
+          &:active {
+            background-color: #166B6F;
+            border-color: #166B6F;
+            color: #FFFFFF;
+          }
+        }
       }
     }
     

@@ -1,20 +1,21 @@
 <template>
   <div id="app">
     <el-container>
-      <el-aside :width="isCollapse ? '64px' : '200px'">
+      <el-aside :width="isCollapse ? '64px' : '230px'">
         <div class="sidebar">
           <div class="logo">
-            <img v-show="isCollapse" src="/vite.svg" alt="Logo" class="logo-img">
-            <h2 v-show="!isCollapse">自媒体自动化运营系统</h2>
+            <img v-show="isCollapse" src="@/assets/yun.svg" alt="Logo" class="logo-img">
+            <img v-show="!isCollapse" src="@/assets/yun.svg" alt="Logo" class="logo-img">
+            <h2 v-show="!isCollapse">自媒体发布平台</h2>
           </div>
           <el-menu
             :router="true"
             :default-active="activeMenu"
             :collapse="isCollapse"
             class="sidebar-menu"
-            background-color="#001529"
+            background-color="#1C9399"
             text-color="#fff"
-            active-text-color="#409EFF"
+            active-text-color="#C1ECF0"
           >
             <el-menu-item index="/">
               <el-icon><HomeFilled /></el-icon>
@@ -32,10 +33,14 @@
               <el-icon><Upload /></el-icon>
               <span>发布中心</span>
             </el-menu-item>
-            <el-menu-item index="/website">
+            <el-menu-item index="/publish-task-records">
+              <el-icon><List /></el-icon>
+              <span>任务发布记录</span>
+            </el-menu-item>
+            <!-- <el-menu-item index="/website">
               <el-icon><Monitor /></el-icon>
               <span>网站</span>
-            </el-menu-item>
+            </el-menu-item> -->
             <el-menu-item index="/data">
               <el-icon><DataAnalysis /></el-icon>
               <span>数据</span>
@@ -67,7 +72,7 @@ import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { 
   HomeFilled, User, Monitor, DataAnalysis, 
-  Fold, Picture, Upload
+  Picture, Upload, Fold, List
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -98,7 +103,7 @@ const toggleSidebar = () => {
 }
 
 .el-aside {
-  background-color: #001529;
+  background-color: #1C9399;
   color: #fff;
   height: 100vh;
   overflow: hidden;
@@ -110,12 +115,12 @@ const toggleSidebar = () => {
     height: 100%;
     
     .logo {
-      height: 60px;
-      padding: 0 16px;
-      display: flex;
-      align-items: center;
-      background-color: #002140;
-      overflow: hidden;
+        height: 60px;
+        padding: 0 16px;
+        display: flex;
+        align-items: center;
+        background-color: #1C9399;
+        overflow: hidden;
       
       .logo-img {
         width: 32px;
@@ -125,8 +130,9 @@ const toggleSidebar = () => {
       
       h2 {
         color: #fff;
-        font-size: 16px;
-        font-weight: 600;
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: 1px;
         white-space: nowrap;
         margin: 0;
       }
@@ -139,11 +145,22 @@ const toggleSidebar = () => {
       .el-menu-item {
         display: flex;
         align-items: center;
+        font-size: 15px;
         
         .el-icon {
           margin-right: 10px;
-          font-size: 18px;
+          font-size: 20px;
         }
+      }
+      
+      .el-menu-item:hover {
+        background-color: #C1ECF0;
+        color: #1C9399;
+      }
+      
+      .el-menu-item.is-active {
+        background-color: #C1ECF0;
+        color: #1C9399;
       }
     }
   }
