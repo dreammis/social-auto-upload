@@ -25,5 +25,15 @@ export const accountApi = {
   // 删除账号
   deleteAccount(id) {
     return http.get(`/deleteAccount?id=${id}`)
+  },
+
+  // 访问平台个人中心
+  visitPlatformHomepage(id) {
+    return http.get(`/getPlatformHomepage?id=${id}`)
+  },
+
+  // 重新登录账号获取Cookie
+  reLogin(id) {
+    return http.get(`/reLogin?id=${id}`)
   }
 }

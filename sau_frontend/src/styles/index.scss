@@ -4,6 +4,12 @@
 // 导入变量
 @use './variables.scss' as *;
 
+// 导入全局按钮样式
+@use './global-buttons.scss';
+
+// 导入按钮尺寸样式
+@use './button-size.scss';
+
 // 全局样式
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',

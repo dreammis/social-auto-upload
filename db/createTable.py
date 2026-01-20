@@ -34,6 +34,22 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS file_records (
 )
 ''')
 
+# 创建发布任务记录表
+cursor.execute('''CREATE TABLE IF NOT EXISTS publish_task_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一标识每条记录
+    task_id TEXT NOT NULL,                -- 任务ID，用于关联批次任务
+    filename TEXT NOT NULL,               -- 文件名
+    file_id INTEGER,                      -- 文件ID，关联file_records表
+    account_id INTEGER NOT NULL,          -- 账号ID，关联user_info表
+    account_name TEXT NOT NULL,           -- 账号名
+    platform_name TEXT NOT NULL,          -- 平台名称
+    platform_type INTEGER NOT NULL,       -- 平台类型
+    status TEXT NOT NULL DEFAULT '待发布',-- 发布状态：待发布、发布中、发布成功、发布失败
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP, -- 创建时间
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP, -- 更新时间
+    error_msg TEXT                        -- 错误信息，发布失败时存储
+)
+''')
 
 # 提交更改
 conn.commit()
