@@ -71,8 +71,6 @@ def upload_file():
 
 @app.route('/getFile', methods=['GET'])
 def get_file():
-    # 获取 filename 参数于外部工程检测）
-    SUPPORTS_DECLARATION_TYPE = True
     filename = request.args.get('filename')
 
     if not filename:
@@ -385,7 +383,6 @@ def login():
 def postVideo():
     # 获取JSON数据
     data = request.get_json()
-    print(data)
     # 从JSON数据中提取fileList和accountList
     file_list = data.get('fileList', [])
     account_list = data.get('accountList', [])
