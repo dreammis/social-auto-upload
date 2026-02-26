@@ -71,7 +71,8 @@ def upload_file():
 
 @app.route('/getFile', methods=['GET'])
 def get_file():
-    # 获取 filename 参数
+    # 获取 filename 参数于外部工程检测）
+    SUPPORTS_DECLARATION_TYPE = True
     filename = request.args.get('filename')
 
     if not filename:
@@ -384,7 +385,7 @@ def login():
 def postVideo():
     # 获取JSON数据
     data = request.get_json()
-
+    print(data)
     # 从JSON数据中提取fileList和accountList
     file_list = data.get('fileList', [])
     account_list = data.get('accountList', [])
@@ -399,6 +400,19 @@ def postVideo():
     productTitle = data.get('productTitle', '')
     thumbnail_path = data.get('thumbnail', '')
     is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
+    
+    # 直接从前端发送的declaration_info对象中获取数据
+    declaration_info = data.get('declaration_info', None)
+    
+    # 如果前端发送了declaration_info，确保其格式正确
+    if declaration_info:
+        # 兼容前端默认值：将“取材站外”映射为抖音页面的“内容取材网络”
+        if declaration_info.get('declaration_type') == '取材站外':
+            declaration_info['declaration_type'] = '内容取材网络'
+        
+        # 确保isDraft字段存在
+        if 'isDraft' not in declaration_info:
+            declaration_info['isDraft'] = is_draft
 
     videos_per_day = data.get('videosPerDay')
     daily_times = data.get('dailyTimes')
@@ -415,7 +429,7 @@ def postVideo():
                                start_days, is_draft)
         case 3:
             post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                      start_days, thumbnail_path, productLink, productTitle)
+                      start_days, thumbnail_path, productLink, productTitle, declaration_info)
         case 4:
             post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                       start_days)
@@ -484,7 +498,21 @@ def postVideoBatch():
             category = None
         productLink = data.get('productLink', '')
         productTitle = data.get('productTitle', '')
-
+        thumbnail_path = data.get('thumbnail', '')
+        is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
+        
+        # 直接从前端发送的declaration_info对象中获取数据
+        declaration_info = data.get('declaration_info', None)
+        
+        # 如果前端发送了declaration_info，确保其格式正确
+        if declaration_info:
+            # 兼容前端默认值：将"取材站外"映射为抖音页面的"内容取材网络"
+            if declaration_info.get('declaration_type') == '取材站外':
+                declaration_info['declaration_type'] = '内容取材网络'
+            
+            # 确保isDraft字段存在
+            if 'isDraft' not in declaration_info:
+                declaration_info['isDraft'] = is_draft
         videos_per_day = data.get('videosPerDay')
         daily_times = data.get('dailyTimes')
         start_days = data.get('startDays')
@@ -499,7 +527,7 @@ def postVideoBatch():
                                    start_days)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, productLink, productTitle)
+                          start_days, thumbnail_path, productLink, productTitle, declaration_info)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
