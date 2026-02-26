@@ -400,11 +400,8 @@ class DouYinVideo(object):
             declaration_type = declaration_info.get('declaration_type')
             declaration_location = declaration_info.get('declaration_location')
             declaration_date = declaration_info.get('declaration_date')
-            
+        
             target = None
-            # 打印页面上的所有文本，帮助诊断问题
-            page_content = await page.content()
-            print("Page content snippet:", page_content[:2000])  # 只打印前2000个字符
             
             # 尝试查找添加声明按钮
             add_declaration_count = await page.get_by_text("添加声明").count()
@@ -457,94 +454,10 @@ class DouYinVideo(object):
                 await option.scroll_into_view_if_needed()
                 await option.click()
                 if declaration_type == "内容自行拍摄":  #//todo 暂时选择不了地区，后续有时间再优化
-                    if declaration_location and isinstance(declaration_location, (list, tuple)):
-                        # 优先在弹窗内部查找级联触发器
-                        dialog = None
-                        if await page.locator(".semi-modal-content").count():
-                            dialog = page.locator(".semi-modal-content").first
-                        trigger = None
-                        if dialog and await dialog.locator(".semi-cascader-selection").count():
-                            trigger = dialog.locator(".semi-cascader-selection").first
-                        elif await page.locator(".semi-cascader-selection").count():
-                            trigger = page.locator(".semi-cascader-selection").first
-                        elif dialog and await dialog.locator(".semi-cascader-arrow").count():
-                            trigger = dialog.locator(".semi-cascader-arrow").first
-                        elif await page.locator(".semi-cascader-arrow").count():
-                            trigger = page.locator(".semi-cascader-arrow").first
-                        if trigger:
-                            await trigger.scroll_into_view_if_needed()
-                            await trigger.click()
-                            await page.wait_for_timeout(300)
-                            for index, item in enumerate(declaration_location):
-                                # 确保当前列的列表出现
-                                await page.wait_for_selector('[role="listbox"]', timeout=5000)
-                                panels = page.locator('[role="listbox"]')
-                                current_panel = panels.last
-                                # 在当前列内寻找匹配项
-                                opt = None
-                                # 1) 标准 role=option
-                                if await current_panel.locator(f'[role="option"]:has-text("{item}")').count():
-                                    opt = current_panel.locator(f'[role="option"]:has-text("{item}")').first
-                                # 2) Semi 组件的 option 容器
-                                elif await current_panel.locator(f'.semi-cascader-option:has-text("{item}")').count():
-                                    opt = current_panel.locator(f'.semi-cascader-option:has-text("{item}")').first
-                                # 3) 全局 fallback（少用）
-                                elif await page.get_by_role("option", name=item, exact=False).count():
-                                    opt = page.get_by_role("option", name=item, exact=False).first
-                                elif dialog and await dialog.locator(f'text="{item}"').count():
-                                    opt = dialog.locator(f'text="{item}"').first
-                                elif await page.get_by_text(item).count():
-                                    opt = page.get_by_text(item).first
-                                if opt:
-                                    try:
-                                        await opt.scroll_into_view_if_needed()
-                                        # 有些层级需要 hover 才展开下一级
-                                        try:
-                                            await opt.click()
-                                        except:
-                                            await opt.hover()
-                                            await page.wait_for_timeout(150)
-                                            await opt.click()
-                                        # 若不是最后一级，等下一个列面板出现
-                                        if index < len(declaration_location) - 1:
-                                            await page.wait_for_timeout(300)
-                                            await page.wait_for_selector('[role="listbox"]', timeout=5000)
-                                    except Exception as e:
-                                        douyin_logger.error(f"[-] 点击地点选项失败: {item}, {e}")
-                                else:
-                                    douyin_logger.error(f"[-] 未找到地点选项: {item}")
-                    if declaration_date:
-                        if await page.get_by_placeholder("设置拍摄日期").count():
-                            picker = page.get_by_placeholder("设置拍摄日期").first
-                            await picker.scroll_into_view_if_needed()
-                            await picker.click()
-                            await page.keyboard.press("Control+KeyA")
-                            await page.keyboard.type(str(declaration_date))
-                            await page.keyboard.press("Enter")
+                    await self._handle_self_shooting_declaration(page, declaration_location, declaration_date)
+                            
                 elif declaration_type == "内容取材网络":
-                    # 多策略点击“取材站外”
-                    clicked = False
-                    candidates = [
-                        page.locator("label:has-text('取材站外')").first,
-                        page.locator("[role='radio']:has-text('取材站外')").first,
-                        page.get_by_text("取材站外").first
-                    ]
-                    for cand in candidates:
-                        try:
-                            if await cand.count():
-                                await cand.scroll_into_view_if_needed()
-                                # 优先点内层控件，避免label遮挡问题
-                                inner = cand.locator(".semi-radio-inner")
-                                if await inner.count():
-                                    await inner.click()
-                                else:
-                                    await cand.click()
-                                clicked = True
-                                break
-                        except:
-                            pass
-                    if not clicked:
-                        douyin_logger.error("[-] 未能点击到'取材站外'单选项")
+                    await self._handle_network_material_declaration(page)
             else:
                 douyin_logger.error("[-] 未找到声明选项")
                 return False
@@ -554,9 +467,103 @@ class DouYinVideo(object):
                 await page.get_by_role("button", name="完成").click()
             await page.wait_for_timeout(500)
             return True
+            
         except Exception as e:
             douyin_logger.error(f"[-] 设置自主声明时出错: {str(e)}")
             return False
+
+    async def _handle_self_shooting_declaration(self, page: Page, declaration_location, declaration_date):
+        """处理内容自行拍摄声明"""
+        if declaration_location and isinstance(declaration_location, (list, tuple)):
+            # 优先在弹窗内部查找级联触发器
+            dialog = None
+            if await page.locator(".semi-modal-content").count():
+                dialog = page.locator(".semi-modal-content").first
+            trigger = None
+            if dialog and await dialog.locator(".semi-cascader-selection").count():
+                trigger = dialog.locator(".semi-cascader-selection").first
+            elif await page.locator(".semi-cascader-selection").count():
+                trigger = page.locator(".semi-cascader-selection").first
+            elif dialog and await dialog.locator(".semi-cascader-arrow").count():
+                trigger = dialog.locator(".semi-cascader-arrow").first
+            elif await page.locator(".semi-cascader-arrow").count():
+                trigger = page.locator(".semi-cascader-arrow").first
+            if trigger:
+                await trigger.scroll_into_view_if_needed()
+                await trigger.click()
+                await page.wait_for_timeout(300)
+                for index, item in enumerate(declaration_location):
+                    # 确保当前列的列表出现
+                    await page.wait_for_selector('[role="listbox"]', timeout=5000)
+                    panels = page.locator('[role="listbox"]')
+                    current_panel = panels.last
+                    # 在当前列内寻找匹配项
+                    opt = None
+                    # 1) 标准 role=option
+                    if await current_panel.locator(f'[role="option"]:has-text("{item}")').count():
+                        opt = current_panel.locator(f'[role="option"]:has-text("{item}")').first
+                    # 2) Semi 组件的 option 容器
+                    elif await current_panel.locator(f'.semi-cascader-option:has-text("{item}")').count():
+                        opt = current_panel.locator(f'.semi-cascader-option:has-text("{item}")').first
+                    # 3) 全局 fallback（少用）
+                    elif await page.get_by_role("option", name=item, exact=False).count():
+                        opt = page.get_by_role("option", name=item, exact=False).first
+                    elif dialog and await dialog.locator(f'text="{item}"').count():
+                        opt = dialog.locator(f'text="{item}"').first
+                    elif await page.get_by_text(item).count():
+                        opt = page.get_by_text(item).first
+                    if opt:
+                        try:
+                            await opt.scroll_into_view_if_needed()
+                            # 有些层级需要 hover 才展开下一级
+                            try:
+                                await opt.click()
+                            except:
+                                await opt.hover()
+                                await page.wait_for_timeout(150)
+                                await opt.click()
+                            # 若不是最后一级，等下一个列面板出现
+                            if index < len(declaration_location) - 1:
+                                await page.wait_for_timeout(300)
+                                await page.wait_for_selector('[role="listbox"]', timeout=5000)
+                        except Exception as e:
+                            douyin_logger.error(f"[-] 点击地点选项失败: {item}, {e}")
+                    else:
+                        douyin_logger.error(f"[-] 未找到地点选项: {item}")
+        if declaration_date:
+            if await page.get_by_placeholder("设置拍摄日期").count():
+                picker = page.get_by_placeholder("设置拍摄日期").first
+                await picker.scroll_into_view_if_needed()
+                await picker.click()
+                await page.keyboard.press("Control+KeyA")
+                await page.keyboard.type(str(declaration_date))
+                await page.keyboard.press("Enter")
+
+    async def _handle_network_material_declaration(self, page: Page):
+        """处理内容取材网络声明"""
+        # 多策略点击"取材站外"
+        clicked = False
+        candidates = [
+            page.locator("label:has-text('取材站外')").first,
+            page.locator("[role='radio']:has-text('取材站外')").first,
+            page.get_by_text("取材站外").first
+        ]
+        for cand in candidates:
+            try:
+                if await cand.count():
+                    await cand.scroll_into_view_if_needed()
+                    # 优先点内层控件，避免label遮挡问题
+                    inner = cand.locator(".semi-radio-inner")
+                    if await inner.count():
+                        await inner.click()
+                    else:
+                        await cand.click()
+                    clicked = True
+                    break
+            except:
+                pass
+        if not clicked:
+            douyin_logger.error("[-] 未能点击到'取材站外'单选项")        
 
     async def main(self):
         async with async_playwright() as playwright:

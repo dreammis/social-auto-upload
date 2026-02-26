@@ -443,36 +443,6 @@
             </template>
           </el-dialog>
 
-          <!-- 标签 (仅在抖音可见) -->
-          <!-- <div v-if="tab.selectedPlatform === 3" class="product-section">
-            <h3>商品链接</h3>
-            <el-input
-              v-model="tab.productTitle"
-              type="text"
-              :rows="1"
-              placeholder="请输入商品名称"
-              maxlength="200"
-              class="product-name-input"
-            />
-            <el-input
-              v-model="tab.productLink"
-              type="text"
-              :rows="1"
-              placeholder="请输入商品链接"
-              maxlength="200"
-              class="product-link-input"
-            />
-            <h3 style="margin-top: 10px;">请选择声明类型（单选）</h3>
-            <el-radio-group v-model="tab.declaration_type">
-              <el-radio label="内容自行拍摄">内容自行拍摄</el-radio>
-              <el-radio label="内容取材网络">内容取材网络</el-radio>
-              <el-radio label="内容由AI生成">内容由AI生成</el-radio>
-              <el-radio label="可能引人不适">可能引人不适</el-radio>
-              <el-radio label="虚构演绎，仅供娱乐">虚构演绎，仅供娱乐</el-radio>
-              <el-radio label="危险行为，请勿模仿">危险行为，请勿模仿</el-radio>
-            </el-radio-group>
-          </div> -->
-
           <!-- 定时发布 -->
           <div class="schedule-section">
             <h3>定时发布</h3>

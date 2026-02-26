@@ -401,18 +401,7 @@ def postVideo():
     thumbnail_path = data.get('thumbnail', '')
     is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
     
-    # 直接从前端发送的declaration_info对象中获取数据
-    declaration_info = data.get('declaration_info', None)
-    
-    # 如果前端发送了declaration_info，确保其格式正确
-    if declaration_info:
-        # 兼容前端默认值：将“取材站外”映射为抖音页面的“内容取材网络”
-        if declaration_info.get('declaration_type') == '取材站外':
-            declaration_info['declaration_type'] = '内容取材网络'
-        
-        # 确保isDraft字段存在
-        if 'isDraft' not in declaration_info:
-            declaration_info['isDraft'] = is_draft
+    declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
 
     videos_per_day = data.get('videosPerDay')
     daily_times = data.get('dailyTimes')
@@ -499,20 +488,9 @@ def postVideoBatch():
         productLink = data.get('productLink', '')
         productTitle = data.get('productTitle', '')
         thumbnail_path = data.get('thumbnail', '')
-        is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
+
+        declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
         
-        # 直接从前端发送的declaration_info对象中获取数据
-        declaration_info = data.get('declaration_info', None)
-        
-        # 如果前端发送了declaration_info，确保其格式正确
-        if declaration_info:
-            # 兼容前端默认值：将"取材站外"映射为抖音页面的"内容取材网络"
-            if declaration_info.get('declaration_type') == '取材站外':
-                declaration_info['declaration_type'] = '内容取材网络'
-            
-            # 确保isDraft字段存在
-            if 'isDraft' not in declaration_info:
-                declaration_info['isDraft'] = is_draft
         videos_per_day = data.get('videosPerDay')
         daily_times = data.get('dailyTimes')
         start_days = data.get('startDays')
