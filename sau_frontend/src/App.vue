@@ -32,13 +32,9 @@
               <el-icon><Upload /></el-icon>
               <span>发布中心</span>
             </el-menu-item>
-            <el-menu-item index="/website">
-              <el-icon><Monitor /></el-icon>
-              <span>网站</span>
-            </el-menu-item>
-            <el-menu-item index="/data">
+            <el-menu-item index="/about">
               <el-icon><DataAnalysis /></el-icon>
-              <span>数据</span>
+              <span>关于</span>
             </el-menu-item>
           </el-menu>
         </div>
@@ -65,8 +61,8 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { 
-  HomeFilled, User, Monitor, DataAnalysis, 
+import {
+  HomeFilled, User, DataAnalysis,
   Fold, Picture, Upload
 } from '@element-plus/icons-vue'
 

@@ -34,8 +34,8 @@ request.interceptors.response.use(
     if (data.code === 200 || data.success) {
       return data
     } else {
-      ElMessage.error(data.message || '请求失败')
-      return Promise.reject(new Error(data.message || '请求失败'))
+      ElMessage.error(data.msg || data.message || '请求失败')
+      return Promise.reject(new Error(data.msg || data.message || '请求失败'))
     }
   },
   (error) => {

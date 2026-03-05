@@ -22,9 +22,8 @@ export const useAccountStore = defineStore('account', () => {
         type: item[1],
         filePath: item[2],
         name: item[3],
-        status: item[4] === 1 ? '正常' : '异常',
-        platform: platformTypes[item[1]] || '未知',
-        avatar: '/vite.svg' // 默认使用vite.svg作为头像
+        status: item[4] === -1 ? '验证中' : (item[4] === 1 ? '正常' : '异常'),
+        platform: platformTypes[item[1]] || '未知'
       }
     })
   }
