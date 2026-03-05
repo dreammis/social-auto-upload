@@ -433,6 +433,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { accountApi } from '@/api/account'
 import { useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
+import { http } from '@/utils/request'
 
 // 获取账号状态管理
 const accountStore = useAccountStore()
@@ -452,9 +453,8 @@ const fetchAccountsQuick = async () => {
     if (res.code === 200 && res.data) {
       // 将所有账号的状态暂时设为"验证中"
       const accountsWithPendingStatus = res.data.map(account => {
-        // account[4] 是状态字段，暂时设为"验证中"
         const updatedAccount = [...account];
-        updatedAccount[4] = '验证中'; // 临时状态
+        updatedAccount[4] = -1; // -1 表示验证中的临时状态
         return updatedAccount;
       });
       accountStore.setAccounts(accountsWithPendingStatus);
@@ -713,24 +713,13 @@ const handleUploadCookie = (row) => {
       formData.append('id', row.id)
       formData.append('platform', row.platform)
 
-      // 发送上传请求
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
-      const response = await fetch(`${baseUrl}/uploadCookie`, {
-        method: 'POST',
-        body: formData
-      })
+      // 使用统一的http封装发送上传请求
+      const result = await http.upload('/uploadCookie', formData)
 
-      const result = await response.json()
-
-      if (result.code === 200) {
-        ElMessage.success('Cookie文件上传成功')
-        // 刷新账号列表以显示更新
-        fetchAccounts()
-      } else {
-        ElMessage.error(result.msg || 'Cookie文件上传失败')
-      }
+      ElMessage.success('Cookie文件上传成功')
+      // 刷新账号列表以显示更新
+      fetchAccounts()
     } catch (error) {
-      console.error('上传Cookie文件失败:', error)
       ElMessage.error('Cookie文件上传失败')
     } finally {
       document.body.removeChild(input)
@@ -811,22 +800,17 @@ const connectSSE = (platform, name) => {
   // 监听消息
   eventSource.onmessage = (event) => {
     const data = event.data
-    console.log('SSE消息:', data)
 
     // 如果还没有二维码数据，且数据长度较长，认为是二维码
     if (!qrCodeData.value && data.length > 100) {
       try {
-        // 确保数据是有效的base64编码
-        // 如果数据已经包含了data:image前缀，直接使用
         if (data.startsWith('data:image')) {
           qrCodeData.value = data
         } else {
-          // 否则添加前缀
           qrCodeData.value = `data:image/png;base64,${data}`
         }
-        console.log('设置二维码数据，长度:', data.length)
       } catch (error) {
-        console.error('处理二维码数据出错:', error)
+        // 处理二维码数据出错
       }
     }
     // 如果收到状态码
@@ -897,10 +881,10 @@ const submitAccountForm = () => {
         try {
           // 将平台名称转换为类型数字
           const platformTypeMap = {
-            '快手': 1,
-            '抖音': 2,
-            '视频号': 3,
-            '小红书': 4
+            '小红书': 1,
+            '视频号': 2,
+            '抖音': 3,
+            '快手': 4
           };
           const type = platformTypeMap[accountForm.platform] || 1;
 

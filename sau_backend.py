@@ -48,14 +48,14 @@ def index():  # put application's code here
 def upload_file():
     if 'file' not in request.files:
         return jsonify({
-            "code": 200,
+            "code": 400,
             "data": None,
             "msg": "No file part in the request"
         }), 400
     file = request.files['file']
     if file.filename == '':
         return jsonify({
-            "code": 200,
+            "code": 400,
             "data": None,
             "msg": "No selected file"
         }), 400
@@ -67,7 +67,7 @@ def upload_file():
         file.save(filepath)
         return jsonify({"code":200,"msg": "File uploaded successfully", "data": f"{uuid_v1}_{file.filename}"}), 200
     except Exception as e:
-        return jsonify({"code":200,"msg": str(e),"data":None}), 500
+        return jsonify({"code":500,"msg": str(e),"data":None}), 500
 
 @app.route('/getFile', methods=['GET'])
 def get_file():
@@ -75,11 +75,11 @@ def get_file():
     filename = request.args.get('filename')
 
     if not filename:
-        return {"error": "filename is required"}, 400
+        return jsonify({"code": 400, "msg": "filename is required", "data": None}), 400
 
     # 防止路径穿越攻击
     if '..' in filename or filename.startswith('/'):
-        return {"error": "Invalid filename"}, 400
+        return jsonify({"code": 400, "msg": "Invalid filename", "data": None}), 400
 
     # 拼接完整路径
     file_path = str(Path(BASE_DIR / "videoFile"))
@@ -316,7 +316,16 @@ def delete_file():
 
 @app.route('/deleteAccount', methods=['GET'])
 def delete_account():
-    account_id = int(request.args.get('id'))
+    account_id = request.args.get('id')
+
+    if not account_id or not account_id.isdigit():
+        return jsonify({
+            "code": 400,
+            "msg": "Invalid or missing account ID",
+            "data": None
+        }), 400
+
+    account_id = int(account_id)
 
     try:
         # 获取数据库连接
@@ -337,6 +346,16 @@ def delete_account():
 
             record = dict(record)
 
+            # 删除关联的cookie文件
+            if record.get('filePath'):
+                cookie_file_path = Path(BASE_DIR / "cookiesFile" / record['filePath'])
+                if cookie_file_path.exists():
+                    try:
+                        cookie_file_path.unlink()
+                        print(f"✅ Cookie文件已删除: {cookie_file_path}")
+                    except Exception as e:
+                        print(f"⚠️ 删除Cookie文件失败: {e}")
+
             # 删除数据库记录
             cursor.execute("DELETE FROM user_info WHERE id = ?", (account_id,))
             conn.commit()
@@ -350,7 +369,7 @@ def delete_account():
     except Exception as e:
         return jsonify({
             "code": 500,
-            "msg": str("delete failed!"),
+            "msg": f"delete failed: {str(e)}",
             "data": None
         }), 500
 
@@ -385,6 +404,9 @@ def postVideo():
     # 获取JSON数据
     data = request.get_json()
 
+    if not data:
+        return jsonify({"code": 400, "msg": "请求数据不能为空", "data": None}), 400
+
     # 从JSON数据中提取fileList和accountList
     file_list = data.get('fileList', [])
     account_list = data.get('accountList', [])
@@ -403,29 +425,52 @@ def postVideo():
     videos_per_day = data.get('videosPerDay')
     daily_times = data.get('dailyTimes')
     start_days = data.get('startDays')
+
+    # 参数校验
+    if not file_list:
+        return jsonify({"code": 400, "msg": "文件列表不能为空", "data": None}), 400
+    if not account_list:
+        return jsonify({"code": 400, "msg": "账号列表不能为空", "data": None}), 400
+    if not type:
+        return jsonify({"code": 400, "msg": "平台类型不能为空", "data": None}), 400
+    if not title:
+        return jsonify({"code": 400, "msg": "标题不能为空", "data": None}), 400
+
     # 打印获取到的数据（仅作为示例）
     print("File List:", file_list)
     print("Account List:", account_list)
-    match type:
-        case 1:
-            post_video_xhs(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                               start_days)
-        case 2:
-            post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                               start_days, is_draft)
-        case 3:
-            post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                      start_days, thumbnail_path, productLink, productTitle)
-        case 4:
-            post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                      start_days)
-    # 返回响应给客户端
-    return jsonify(
-        {
-            "code": 200,
-            "msg": None,
+
+    try:
+        match type:
+            case 1:
+                post_video_xhs(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                                   start_days)
+            case 2:
+                post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                                   start_days, is_draft)
+            case 3:
+                post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days, thumbnail_path, productLink, productTitle)
+            case 4:
+                post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days)
+            case _:
+                return jsonify({"code": 400, "msg": f"不支持的平台类型: {type}", "data": None}), 400
+
+        # 返回响应给客户端
+        return jsonify(
+            {
+                "code": 200,
+                "msg": "发布任务已提交",
+                "data": None
+            }), 200
+    except Exception as e:
+        print(f"发布视频时出错: {str(e)}")
+        return jsonify({
+            "code": 500,
+            "msg": f"发布失败: {str(e)}",
             "data": None
-        }), 200
+        }), 500
 
 
 @app.route('/updateUserinfo', methods=['POST'])
@@ -470,7 +515,7 @@ def postVideoBatch():
     data_list = request.get_json()
 
     if not isinstance(data_list, list):
-        return jsonify({"error": "Expected a JSON array"}), 400
+        return jsonify({"code": 400, "msg": "Expected a JSON array", "data": None}), 400
     for data in data_list:
         # 从JSON数据中提取fileList和accountList
         file_list = data.get('fileList', [])
@@ -484,6 +529,7 @@ def postVideoBatch():
             category = None
         productLink = data.get('productLink', '')
         productTitle = data.get('productTitle', '')
+        is_draft = data.get('isDraft', False)
 
         videos_per_day = data.get('videosPerDay')
         daily_times = data.get('dailyTimes')
@@ -493,10 +539,11 @@ def postVideoBatch():
         print("Account List:", account_list)
         match type:
             case 1:
-                return
+                post_video_xhs(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                               start_days)
             case 2:
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                                   start_days)
+                                   start_days, is_draft)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days, productLink, productTitle)
@@ -517,7 +564,7 @@ def upload_cookie():
     try:
         if 'file' not in request.files:
             return jsonify({
-                "code": 500,
+                "code": 400,
                 "msg": "没有找到Cookie文件",
                 "data": None
             }), 400
@@ -525,14 +572,14 @@ def upload_cookie():
         file = request.files['file']
         if file.filename == '':
             return jsonify({
-                "code": 500,
+                "code": 400,
                 "msg": "Cookie文件名不能为空",
                 "data": None
             }), 400
 
         if not file.filename.endswith('.json'):
             return jsonify({
-                "code": 500,
+                "code": 400,
                 "msg": "Cookie文件必须是JSON格式",
                 "data": None
             }), 400
@@ -543,7 +590,7 @@ def upload_cookie():
 
         if not account_id or not platform:
             return jsonify({
-                "code": 500,
+                "code": 400,
                 "msg": "缺少账号ID或平台信息",
                 "data": None
             }), 400

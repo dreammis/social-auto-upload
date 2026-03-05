@@ -296,6 +296,15 @@
             </el-radio-group>
           </div>
 
+          <!-- 原创声明 -->
+          <div class="original-section">
+            <el-checkbox
+              v-model="tab.isOriginal"
+              label="声明原创"
+              class="original-checkbox"
+            />
+          </div>
+
           <!-- 草稿选项 (仅在视频号可见) -->
           <div v-if="tab.selectedPlatform === 2" class="draft-section">
             <el-checkbox
@@ -411,27 +420,6 @@
             </template>
           </el-dialog>
 
-          <!-- 标签 (仅在抖音可见) -->
-          <div v-if="tab.selectedPlatform === 3" class="product-section">
-            <h3>商品链接</h3>
-            <el-input
-              v-model="tab.productTitle"
-              type="text"
-              :rows="1"
-              placeholder="请输入商品名称"
-              maxlength="200"
-              class="product-name-input"
-            />
-            <el-input
-              v-model="tab.productLink"
-              type="text"
-              :rows="1"
-              placeholder="请输入商品链接"
-              maxlength="200"
-              class="product-link-input"
-            />
-          </div>
-
           <!-- 定时发布 -->
           <div class="schedule-section">
             <h3>定时发布</h3>
@@ -509,6 +497,7 @@ import { ElMessage } from 'element-plus'
 import { useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
 import { materialApi } from '@/api/material'
+import { http } from '@/utils/request'
 
 // API base URL
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
@@ -565,7 +554,8 @@ const defaultTabInit = {
   startDays: 0, // 从今天开始计算的发布天数，0表示明天，1表示后天
   publishStatus: null, // 发布状态，包含message和type
   publishing: false, // 发布状态，用于控制按钮loading效果
-  isDraft: false // 是否保存为草稿，仅视频号平台可见
+  isDraft: false, // 是否保存为草稿，仅视频号平台可见
+  isOriginal: false // 是否标记为原创
 }
 
 // helper to create a fresh deep-copied tab from defaultTabInit
@@ -663,7 +653,6 @@ const handleUploadSuccess = (response, file, tab) => {
     }))]
     
     ElMessage.success('文件上传成功')
-    console.log('上传成功:', fileInfo)
   } else {
     ElMessage.error(response.msg || '上传失败')
   }
@@ -672,7 +661,6 @@ const handleUploadSuccess = (response, file, tab) => {
 // 处理文件上传失败
 const handleUploadError = (error) => {
   ElMessage.error('文件上传失败')
-  console.error('上传错误:', error)
 }
 
 // 删除已上传文件
@@ -774,102 +762,77 @@ const cancelPublish = (tab) => {
 const confirmPublish = async (tab) => {
   // 防止重复点击
   if (tab.publishing) {
-    return Promise.reject(new Error('正在发布中，请稍候...'))
+    throw new Error('正在发布中，请稍候...')
   }
 
   tab.publishing = true // 设置发布状态为进行中
 
-  return new Promise((resolve, reject) => {
-    // 数据验证
-    if (tab.fileList.length === 0) {
-      ElMessage.error('请先上传视频文件')
-      tab.publishing = false // 重置发布状态
-      reject(new Error('请先上传视频文件'))
-      return
-    }
-    if (!tab.title.trim()) {
-      ElMessage.error('请输入标题')
-      tab.publishing = false // 重置发布状态
-      reject(new Error('请输入标题'))
-      return
-    }
-    if (!tab.selectedPlatform) {
-      ElMessage.error('请选择发布平台')
-      tab.publishing = false // 重置发布状态
-      reject(new Error('请选择发布平台'))
-      return
-    }
-    if (tab.selectedAccounts.length === 0) {
-      ElMessage.error('请选择发布账号')
-      tab.publishing = false // 重置发布状态
-      reject(new Error('请选择发布账号'))
-      return
-    }
+  // 数据验证
+  if (tab.fileList.length === 0) {
+    ElMessage.error('请先上传视频文件')
+    tab.publishing = false
+    throw new Error('请先上传视频文件')
+  }
+  if (!tab.title.trim()) {
+    ElMessage.error('请输入标题')
+    tab.publishing = false
+    throw new Error('请输入标题')
+  }
+  if (!tab.selectedPlatform) {
+    ElMessage.error('请选择发布平台')
+    tab.publishing = false
+    throw new Error('请选择发布平台')
+  }
+  if (tab.selectedAccounts.length === 0) {
+    ElMessage.error('请选择发布账号')
+    tab.publishing = false
+    throw new Error('请选择发布账号')
+  }
 
-    // 构造发布数据，符合后端API格式
-    const publishData = {
-      type: tab.selectedPlatform,
-      title: tab.title,
-      tags: tab.selectedTopics, // 不带#号的话题列表
-      fileList: tab.fileList.map(file => file.path), // 只发送文件路径
-      accountList: tab.selectedAccounts.map(accountId => {
-        const account = accountStore.accounts.find(acc => acc.id === accountId)
-        return account ? account.filePath : accountId
-      }), // 发送账号的文件路径
-      enableTimer: tab.scheduleEnabled ? 1 : 0, // 是否启用定时发布，开启传1，不开启传0
-      videosPerDay: tab.scheduleEnabled ? tab.videosPerDay || 1 : 1, // 每天发布视频数量，1-55
-      dailyTimes: tab.scheduleEnabled ? tab.dailyTimes || ['10:00'] : ['10:00'], // 每天发布时间点
-      startDays: tab.scheduleEnabled ? tab.startDays || 0 : 0, // 从今天开始计算的发布天数，0表示明天，1表示后天
-      category: 0, //表示非原创
-      productLink: tab.productLink.trim() || '', // 商品链接
-      productTitle: tab.productTitle.trim() || '', // 商品名称
-      isDraft: tab.isDraft // 是否保存为草稿，仅视频号平台使用
-    }
+  // 构造发布数据，符合后端API格式
+  const publishData = {
+    type: tab.selectedPlatform,
+    title: tab.title,
+    tags: tab.selectedTopics, // 不带#号的话题列表
+    fileList: tab.fileList.map(file => file.path), // 只发送文件路径
+    accountList: tab.selectedAccounts.map(accountId => {
+      const account = accountStore.accounts.find(acc => acc.id === accountId)
+      return account ? account.filePath : accountId
+    }), // 发送账号的文件路径
+    enableTimer: tab.scheduleEnabled ? 1 : 0,
+    videosPerDay: tab.scheduleEnabled ? tab.videosPerDay || 1 : 1,
+    dailyTimes: tab.scheduleEnabled ? tab.dailyTimes || ['10:00'] : ['10:00'],
+    startDays: tab.scheduleEnabled ? tab.startDays || 0 : 0,
+    category: tab.isOriginal ? 1 : 0, // 1表示原创，0表示非原创
+    productLink: tab.productLink.trim() || '',
+    productTitle: tab.productTitle.trim() || '',
+    isDraft: tab.isDraft
+  }
 
-    // 调用后端发布API
-    fetch(`${apiBaseUrl}/postVideo`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders.value
-      },
-      body: JSON.stringify(publishData)
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.code === 200) {
-        tab.publishStatus = {
-          message: '发布成功',
-          type: 'success'
-        }
-        // 清空当前tab的数据
-        tab.fileList = []
-        tab.displayFileList = []
-        tab.title = ''
-        tab.selectedTopics = []
-        tab.selectedAccounts = []
-        tab.scheduleEnabled = false
-        resolve()
-      } else {
-        tab.publishStatus = {
-          message: `发布失败：${data.msg || '发布失败'}`,
-          type: 'error'
-        }
-        reject(new Error(data.msg || '发布失败'))
-      }
-    })
-    .catch(error => {
-      console.error('发布错误:', error)
-      tab.publishStatus = {
-        message: '发布失败，请检查网络连接',
-        type: 'error'
-      }
-      reject(error)
-    })
-    .finally(() => {
-      tab.publishing = false // 重置发布状态
-    })
-  })
+  // 调用后端发布API（使用统一的http封装）
+  try {
+    const data = await http.post('/postVideo', publishData)
+    tab.publishStatus = {
+      message: '发布成功',
+      type: 'success'
+    }
+    // 清空当前tab的数据
+    tab.fileList = []
+    tab.displayFileList = []
+    tab.title = ''
+    tab.selectedTopics = []
+    tab.selectedAccounts = []
+    tab.scheduleEnabled = false
+  } catch (error) {
+    console.error('发布错误:', error)
+    tab.publishStatus = {
+      message: `发布失败：${error.message || '请检查网络连接'}`,
+      type: 'error'
+    }
+    throw error
+  } finally {
+    tab.publishing = false
+  }
 }
 
 // 显示上传选项
@@ -1320,6 +1283,15 @@ const batchPublish = async () => {
           margin: 20px 0;
 
           .draft-checkbox {
+            display: block;
+            margin: 10px 0;
+          }
+        }
+
+        .original-section {
+          margin: 10px 0 20px;
+
+          .original-checkbox {
             display: block;
             margin: 10px 0;
           }
