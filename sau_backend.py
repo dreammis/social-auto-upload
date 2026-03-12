@@ -84,7 +84,6 @@ def upload_file():
 
 @app.route('/getFile', methods=['GET'])
 def get_file():
-    # 获取 filename 参数
     filename = request.args.get('filename')
 
     if not filename:
@@ -478,6 +477,8 @@ def postVideo():
     productTitle = data.get('productTitle', '')
     thumbnail_path = data.get('thumbnail', '')
     is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
+    
+    declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
 
     videos_per_day = data.get('videosPerDay')
     daily_times = data.get('dailyTimes')
@@ -507,7 +508,7 @@ def postVideo():
                                    start_days, is_draft)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_path, productLink, productTitle)
+                          start_days, thumbnail_path, productLink, productTitle, declaration_info)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
@@ -587,7 +588,9 @@ def postVideoBatch():
         productLink = data.get('productLink', '')
         productTitle = data.get('productTitle', '')
         is_draft = data.get('isDraft', False)
-
+        thumbnail_path = data.get('thumbnail', '')
+        declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
+        
         videos_per_day = data.get('videosPerDay')
         daily_times = data.get('dailyTimes')
         start_days = data.get('startDays')
@@ -603,7 +606,7 @@ def postVideoBatch():
                                    start_days, is_draft)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, productLink, productTitle)
+                          start_days, thumbnail_path, productLink, productTitle, declaration_info)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
