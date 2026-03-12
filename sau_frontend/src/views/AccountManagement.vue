@@ -742,7 +742,7 @@ const handleUploadCookie = (row) => {
 
       ElMessage.success('Cookie文件上传成功')
       // 刷新账号列表以显示更新
-      fetchAccounts()
+      fetchAccountsQuick()
     } catch (error) {
       ElMessage.error('Cookie文件上传失败')
     } finally {
@@ -870,7 +870,7 @@ const connectSSE = (platform, name, accountId = null) => {
             })
 
             // 触发刷新操作
-            fetchAccounts().then(() => {
+            fetchAccountsQuick().then(() => {
               // 刷新完成后关闭提示
               ElMessage.closeAll()
               ElMessage.success('账号信息已更新')
@@ -938,7 +938,7 @@ const submitAccountForm = () => {
             ElMessage.success('更新成功')
             dialogVisible.value = false
             // 刷新账号列表
-            fetchAccounts()
+            fetchAccountsQuick()
           } else {
             ElMessage.error(res.msg || '更新账号失败')
           }
