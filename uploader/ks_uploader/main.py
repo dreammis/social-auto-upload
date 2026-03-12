@@ -62,6 +62,8 @@ async def get_ks_cookie(account_file):
 
 
 class KSVideo(object):
+    upload_page = "https://cp.kuaishou.com/article/publish/video"
+
     def __init__(self, title, file_path, tags, publish_date: datetime, account_file):
         self.title = title  # 视频标题
         self.file_path = file_path
@@ -93,11 +95,11 @@ class KSVideo(object):
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
-        await page.goto("https://cp.kuaishou.com/article/publish/video")
+        await page.goto(self.upload_page)
         kuaishou_logger.info('正在上传-------{}.mp4'.format(self.title))
         # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
         kuaishou_logger.info('正在打开主页...')
-        await page.wait_for_url("https://cp.kuaishou.com/article/publish/video")
+        await page.wait_for_url(self.upload_page)
         # 点击 "上传视频" 按钮
         upload_button = page.locator("button[class^='_upload-btn']")
         await upload_button.wait_for(state='visible')  # 确保按钮可见
