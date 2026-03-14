@@ -62,6 +62,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button v-if="scope.row.status === '异常'" size="small" type="warning" @click="handleReLogin(scope.row)">重新登录</el-button>
+                    <el-button v-if="scope.row.status === '正常'" size="small" type="success" @click="handleOpenPlatformUploadPage(scope.row)">上传页</el-button>
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
@@ -132,6 +134,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button v-if="scope.row.status === '异常'" size="small" type="warning" @click="handleReLogin(scope.row)">重新登录</el-button>
+                    <el-button v-if="scope.row.status === '正常'" size="small" type="success" @click="handleOpenPlatformUploadPage(scope.row)">上传页</el-button>
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
@@ -202,6 +206,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button v-if="scope.row.status === '异常'" size="small" type="warning" @click="handleReLogin(scope.row)">重新登录</el-button>
+                    <el-button v-if="scope.row.status === '正常'" size="small" type="success" @click="handleOpenPlatformUploadPage(scope.row)">上传页</el-button>
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
@@ -272,6 +278,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button v-if="scope.row.status === '异常'" size="small" type="warning" @click="handleReLogin(scope.row)">重新登录</el-button>
+                    <el-button v-if="scope.row.status === '正常'" size="small" type="success" @click="handleOpenPlatformUploadPage(scope.row)">上传页</el-button>
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
@@ -342,6 +350,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button v-if="scope.row.status === '异常'" size="small" type="warning" @click="handleReLogin(scope.row)">重新登录</el-button>
+                    <el-button v-if="scope.row.status === '正常'" size="small" type="success" @click="handleOpenPlatformUploadPage(scope.row)">上传页</el-button>
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
@@ -361,7 +371,7 @@
     <!-- 添加/编辑账号对话框 -->
     <el-dialog
       v-model="dialogVisible"
-      :title="dialogType === 'add' ? '添加账号' : '编辑账号'"
+      :title="dialogTitle"
       width="500px"
       :close-on-click-modal="false"
       :close-on-press-escape="!sseConnecting"
@@ -583,8 +593,13 @@ const handleSearch = () => {
 
 // 对话框相关
 const dialogVisible = ref(false)
-const dialogType = ref('add') // 'add' 或 'edit'
+const dialogType = ref('add') // 'add'、'edit' 或 'relogin'
 const accountFormRef = ref(null)
+const dialogTitle = computed(() => {
+  if (dialogType.value === 'add') return '添加账号'
+  if (dialogType.value === 'relogin') return '重新登录'
+  return '编辑账号'
+})
 
 // 账号表单
 const accountForm = reactive({
@@ -619,6 +634,15 @@ const handleAddAccount = () => {
   qrCodeData.value = ''
   loginStatus.value = ''
   dialogVisible.value = true
+}
+
+const handleOpenPlatformUploadPage = async (row) => {
+  try {
+    await accountApi.openUploadPage(row.id)
+    ElMessage.success(`已为 ${row.name} 打开上传页`)
+  } catch (error) {
+    console.error('打开上传页失败:', error)
+  }
 }
 
 // 编辑账号
@@ -718,7 +742,7 @@ const handleUploadCookie = (row) => {
 
       ElMessage.success('Cookie文件上传成功')
       // 刷新账号列表以显示更新
-      fetchAccounts()
+      fetchAccountsQuick()
     } catch (error) {
       ElMessage.error('Cookie文件上传失败')
     } finally {
@@ -732,7 +756,7 @@ const handleUploadCookie = (row) => {
 // 重新登录账号
 const handleReLogin = (row) => {
   // 设置表单信息
-  dialogType.value = 'edit'
+  dialogType.value = 'relogin'
   Object.assign(accountForm, {
     id: row.id,
     name: row.name,
@@ -750,7 +774,7 @@ const handleReLogin = (row) => {
 
   // 立即开始登录流程
   setTimeout(() => {
-    connectSSE(row.platform, row.name)
+    connectSSE(row.platform, row.name, row.id)
   }, 300)
 }
 
@@ -772,7 +796,7 @@ const closeSSEConnection = () => {
 }
 
 // 建立SSE连接
-const connectSSE = (platform, name) => {
+const connectSSE = (platform, name, accountId = null) => {
   // 关闭可能存在的连接
   closeSSEConnection()
 
@@ -793,7 +817,14 @@ const connectSSE = (platform, name) => {
 
   // 创建SSE连接
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
-  const url = `${baseUrl}/login?type=${type}&id=${encodeURIComponent(name)}`
+  const params = new URLSearchParams({
+    type,
+    id: name
+  })
+  if (accountId !== null && accountId !== undefined) {
+    params.set('accountId', String(accountId))
+  }
+  const url = `${baseUrl}/login?${params.toString()}`
 
   eventSource = new EventSource(url)
 
@@ -829,7 +860,7 @@ const connectSSE = (platform, name) => {
             sseConnecting.value = false
 
             // 根据是否是重新登录显示不同提示
-            ElMessage.success(dialogType.value === 'edit' ? '重新登录成功' : '账号添加成功')
+            ElMessage.success(dialogType.value === 'relogin' ? '重新登录成功' : '账号添加成功')
 
             // 显示更新账号信息提示
             ElMessage({
@@ -839,7 +870,7 @@ const connectSSE = (platform, name) => {
             })
 
             // 触发刷新操作
-            fetchAccounts().then(() => {
+            fetchAccountsQuick().then(() => {
               // 刷新完成后关闭提示
               ElMessage.closeAll()
               ElMessage.success('账号信息已更新')
@@ -876,6 +907,8 @@ const submitAccountForm = () => {
       if (dialogType.value === 'add') {
         // 建立SSE连接
         connectSSE(accountForm.platform, accountForm.name)
+      } else if (dialogType.value === 'relogin') {
+        connectSSE(accountForm.platform, accountForm.name, accountForm.id)
       } else {
         // 编辑账号逻辑
         try {
@@ -905,7 +938,7 @@ const submitAccountForm = () => {
             ElMessage.success('更新成功')
             dialogVisible.value = false
             // 刷新账号列表
-            fetchAccounts()
+            fetchAccountsQuick()
           } else {
             ElMessage.error(res.msg || '更新账号失败')
           }

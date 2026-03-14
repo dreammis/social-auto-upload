@@ -82,6 +82,8 @@ async def weixin_setup(account_file, handle=False):
 
 
 class TencentVideo(object):
+    upload_page = "https://channels.weixin.qq.com/platform/post/create"
+
     def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None, is_draft=False):
         self.title = title  # 视频标题
         self.file_path = file_path
@@ -145,10 +147,10 @@ class TencentVideo(object):
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
-        await page.goto("https://channels.weixin.qq.com/platform/post/create")
+        await page.goto(self.upload_page)
         tencent_logger.info(f'[+]正在上传-------{self.title}.mp4')
         # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
-        await page.wait_for_url("https://channels.weixin.qq.com/platform/post/create")
+        await page.wait_for_url(self.upload_page)
         # await page.wait_for_selector('input[type="file"]', timeout=10000)
         file_input = page.locator('input[type="file"]')
         await file_input.set_input_files(self.file_path)
