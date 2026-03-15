@@ -11,7 +11,12 @@ SOCIAL_MEDIA_KUAISHOU = "kuaishou"
 
 
 def get_supported_social_media() -> List[str]:
-    return [SOCIAL_MEDIA_DOUYIN, SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK, SOCIAL_MEDIA_KUAISHOU]
+    return [
+        SOCIAL_MEDIA_DOUYIN,
+        SOCIAL_MEDIA_TENCENT,
+        SOCIAL_MEDIA_TIKTOK,
+        SOCIAL_MEDIA_KUAISHOU,
+    ]
 
 
 def get_cli_action() -> List[str]:

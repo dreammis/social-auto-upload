@@ -1,9 +1,7 @@
 import sqlite3
-import json
-import os
 
 # 数据库文件路径（如果不存在会自动创建）
-db_file = './database.db'
+db_file = "./database.db"
 
 # 如果数据库已存在，则删除旧的表（可选）
 # if os.path.exists(db_file):
@@ -14,7 +12,7 @@ conn = sqlite3.connect(db_file)
 cursor = conn.cursor()
 
 # 创建账号记录表
-cursor.execute('''
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS user_info (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     type INTEGER NOT NULL,
@@ -22,17 +20,17 @@ CREATE TABLE IF NOT EXISTS user_info (
     userName TEXT NOT NULL,
     status INTEGER DEFAULT 0
 )
-''')
+""")
 
 # 创建文件记录表
-cursor.execute('''CREATE TABLE IF NOT EXISTS file_records (
+cursor.execute("""CREATE TABLE IF NOT EXISTS file_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一标识每条记录
     filename TEXT NOT NULL,               -- 文件名
     filesize REAL,                     -- 文件大小（单位：MB）
     upload_time DATETIME DEFAULT CURRENT_TIMESTAMP, -- 上传时间，默认当前时间
     file_path TEXT                        -- 文件路径
 )
-''')
+""")
 
 
 # 提交更改
