@@ -7,6 +7,7 @@ import uuid
 from pathlib import Path
 from queue import Queue
 from flask_cors import CORS
+from werkzeug.utils import secure_filename
 from myUtils.auth import check_cookie
 from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 from conf import BASE_DIR
@@ -16,8 +17,7 @@ from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_
 active_queues = {}
 app = Flask(__name__)
 
-#允许所有来源跨域访问
-CORS(app)
+CORS(app, origins=["http://localhost:*"])
 
 # 限制上传文件大小为160MB
 app.config['MAX_CONTENT_LENGTH'] = 160 * 1024 * 1024
@@ -61,11 +61,14 @@ def upload_file():
         }), 400
     try:
         # 保存文件到指定位置
+        safe_name = secure_filename(file.filename)
+        if not safe_name:
+            return jsonify({"code": 400, "data": None, "msg": "Invalid filename"}), 400
         uuid_v1 = uuid.uuid1()
         print(f"UUID v1: {uuid_v1}")
-        filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{file.filename}")
+        filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{safe_name}")
         file.save(filepath)
-        return jsonify({"code":200,"msg": "File uploaded successfully", "data": f"{uuid_v1}_{file.filename}"}), 200
+        return jsonify({"code":200,"msg": "File uploaded successfully", "data": f"{uuid_v1}_{safe_name}"}), 200
     except Exception as e:
         return jsonify({"code":500,"msg": str(e),"data":None}), 500
 
@@ -108,9 +111,14 @@ def upload_save():
     # 获取表单中的自定义文件名（可选）
     custom_filename = request.form.get('filename', None)
     if custom_filename:
-        filename = custom_filename + "." + file.filename.split('.')[-1]
+        safe_original = secure_filename(file.filename)
+        ext = safe_original.rsplit('.', 1)[-1] if '.' in safe_original else ''
+        filename = secure_filename(custom_filename) + ('.' + ext if ext else '')
     else:
-        filename = file.filename
+        filename = secure_filename(file.filename)
+
+    if not filename:
+        return jsonify({"code": 400, "data": None, "msg": "Invalid filename"}), 400
 
     try:
         # 生成 UUID v1
@@ -397,6 +405,7 @@ def login():
     response.headers['X-Accel-Buffering'] = 'no'  # 关键：禁用 Nginx 缓冲
     response.headers['Content-Type'] = 'text/event-stream'
     response.headers['Connection'] = 'keep-alive'
+    response.call_on_close(on_close)
     return response
 
 @app.route('/postVideo', methods=['POST'])
@@ -705,13 +714,16 @@ def run_async_function(type,id,status_queue):
 
 # SSE 流生成器函数
 def sse_stream(status_queue):
-    while True:
-        if not status_queue.empty():
-            msg = status_queue.get()
-            yield f"data: {msg}\n\n"
-        else:
-            # 避免 CPU 占满
-            time.sleep(0.1)
+    try:
+        while True:
+            if not status_queue.empty():
+                msg = status_queue.get()
+                yield f"data: {msg}\n\n"
+            else:
+                # 避免 CPU 占满
+                time.sleep(0.1)
+    except GeneratorExit:
+        pass
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0' ,port=5409)
