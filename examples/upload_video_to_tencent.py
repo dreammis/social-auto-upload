@@ -7,7 +7,7 @@ from utils.constant import TencentZoneTypes
 from utils.files_times import generate_schedule_time_next_day, get_title_and_hashtags
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     filepath = Path(BASE_DIR) / "videos"
     account_file = Path(BASE_DIR / "cookies" / "tencent_uploader" / "account.json")
     # 获取视频目录
@@ -24,5 +24,7 @@ if __name__ == '__main__':
         print(f"视频文件名：{file}")
         print(f"标题：{title}")
         print(f"Hashtag：{tags}")
-        app = TencentVideo(title, file, tags, publish_datetimes[index], account_file, category)
+        app = TencentVideo(
+            title, file, tags, publish_datetimes[index], account_file, category
+        )
         asyncio.run(app.main(), debug=False)

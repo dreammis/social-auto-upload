@@ -17,7 +17,7 @@ def log_formatter(record: dict) -> str:
         "DEBUG": "#8598ea",
         "WARNING": "#dcad5a",
         "SUCCESS": "#3dd08d",
-        "ERROR": "#ae2c2c"
+        "ERROR": "#ae2c2c",
     }
     color = colors.get(record["level"].name, "#b3cfe7")
     return f"<fg #70acde>{{time:YYYY-MM-DD HH:mm:ss}}</fg #70acde> | <fg {color}>{{level}}</fg {color}>: <light-white>{{message}}</light-white>\n"
@@ -30,11 +30,20 @@ def create_logger(log_name: str, file_path: str):
     :param str file_path: Optional path to log file
     :returns: Configured logger
     """
+
     def filter_record(record):
         return record["extra"].get("business_name") == log_name
 
     Path(BASE_DIR / file_path).parent.mkdir(exist_ok=True)
-    logger.add(Path(BASE_DIR / file_path), filter=filter_record, level="INFO", rotation="10 MB", retention="10 days", backtrace=True, diagnose=True)
+    logger.add(
+        Path(BASE_DIR / file_path),
+        filter=filter_record,
+        level="INFO",
+        rotation="10 MB",
+        retention="10 days",
+        backtrace=True,
+        diagnose=True,
+    )
     return logger.bind(business_name=log_name)
 
 
@@ -43,11 +52,11 @@ logger.remove()
 # Add a standard console handler
 logger.add(stdout, colorize=True, format=log_formatter)
 
-douyin_logger = create_logger('douyin', 'logs/douyin.log')
-tencent_logger = create_logger('tencent', 'logs/tencent.log')
-xhs_logger = create_logger('xhs', 'logs/xhs.log')
-tiktok_logger = create_logger('tiktok', 'logs/tiktok.log')
-bilibili_logger = create_logger('bilibili', 'logs/bilibili.log')
-kuaishou_logger = create_logger('kuaishou', 'logs/kuaishou.log')
-baijiahao_logger = create_logger('baijiahao', 'logs/baijiahao.log')
-xiaohongshu_logger = create_logger('xiaohongshu', 'logs/xiaohongshu.log')
+douyin_logger = create_logger("douyin", "logs/douyin.log")
+tencent_logger = create_logger("tencent", "logs/tencent.log")
+xhs_logger = create_logger("xhs", "logs/xhs.log")
+tiktok_logger = create_logger("tiktok", "logs/tiktok.log")
+bilibili_logger = create_logger("bilibili", "logs/bilibili.log")
+kuaishou_logger = create_logger("kuaishou", "logs/kuaishou.log")
+baijiahao_logger = create_logger("baijiahao", "logs/baijiahao.log")
+xiaohongshu_logger = create_logger("xiaohongshu", "logs/xiaohongshu.log")

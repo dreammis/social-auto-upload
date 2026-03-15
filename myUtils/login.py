@@ -9,30 +9,34 @@ import uuid
 from pathlib import Path
 from conf import BASE_DIR, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 
+
 # 统一获取浏览器启动配置（防风控+引入本地浏览器）
 def get_browser_options():
     options = {
-        'headless': LOCAL_CHROME_HEADLESS,
-        'args': [
-            '--disable-blink-features=AutomationControlled',  # 核心防爬屏蔽：去掉 window.navigator.webdriver 标签
-            '--lang=zh-CN',
-            '--disable-infobars',
-            '--start-maximized'
-        ]
+        "headless": LOCAL_CHROME_HEADLESS,
+        "args": [
+            "--disable-blink-features=AutomationControlled",  # 核心防爬屏蔽：去掉 window.navigator.webdriver 标签
+            "--lang=zh-CN",
+            "--disable-infobars",
+            "--start-maximized",
+        ],
     }
     # 如果用户在 conf.py 里配置了本地 Chrome，就用本地的，这样成功率极高
     if LOCAL_CHROME_PATH:
-        options['executable_path'] = LOCAL_CHROME_PATH
+        options["executable_path"] = LOCAL_CHROME_PATH
 
     return options
 
+
 # 抖音登录
-async def douyin_cookie_gen(id,status_queue):
+async def douyin_cookie_gen(id, status_queue):
     url_changed_event = asyncio.Event()
+
     async def on_url_change():
         # 检查是否是主框架的变化
         if page.url != original_url:
             url_changed_event.set()
+
     async with async_playwright() as playwright:
         options = get_browser_options()
         # Make sure to run headed.
@@ -50,11 +54,17 @@ async def douyin_cookie_gen(id,status_queue):
         print("✅ 图片地址:", src)
         status_queue.put(src)
         # 监听页面的 'framenavigated' 事件，只关注主框架的变化
-        page.on('framenavigated',
-                lambda frame: asyncio.create_task(on_url_change()) if frame == page.main_frame else None)
+        page.on(
+            "framenavigated",
+            lambda frame: asyncio.create_task(on_url_change())
+            if frame == page.main_frame
+            else None,
+        )
         try:
             # 等待 URL 变化或超时
-            await asyncio.wait_for(url_changed_event.wait(), timeout=200)  # 最多等待 200 秒
+            await asyncio.wait_for(
+                url_changed_event.wait(), timeout=200
+            )  # 最多等待 200 秒
             print("监听页面跳转成功")
         except asyncio.TimeoutError:
             print("监听页面跳转超时")
@@ -81,18 +91,22 @@ async def douyin_cookie_gen(id,status_queue):
         await browser.close()
         with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
             cursor = conn.cursor()
-            cursor.execute('''
+            cursor.execute(
+                """
                                 INSERT INTO user_info (type, filePath, userName, status)
                                 VALUES (?, ?, ?, ?)
-                                ''', (3, f"{uuid_v1}.json", id, 1))
+                                """,
+                (3, f"{uuid_v1}.json", id, 1),
+            )
             conn.commit()
             print("✅ 用户状态已记录")
         status_queue.put("200")
 
 
 # 视频号登录
-async def get_tencent_cookie(id,status_queue):
+async def get_tencent_cookie(id, status_queue):
     url_changed_event = asyncio.Event()
+
     async def on_url_change():
         # 检查是否是主框架的变化
         if page.url != original_url:
@@ -100,10 +114,8 @@ async def get_tencent_cookie(id,status_queue):
 
     async with async_playwright() as playwright:
         options = {
-            'args': [
-                '--lang en-GB'
-            ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
+            "args": ["--lang en-GB"],
+            "headless": LOCAL_CHROME_HEADLESS,  # Set headless option here
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
@@ -116,8 +128,12 @@ async def get_tencent_cookie(id,status_queue):
         original_url = page.url
 
         # 监听页面的 'framenavigated' 事件，只关注主框架的变化
-        page.on('framenavigated',
-                lambda frame: asyncio.create_task(on_url_change()) if frame == page.main_frame else None)
+        page.on(
+            "framenavigated",
+            lambda frame: asyncio.create_task(on_url_change())
+            if frame == page.main_frame
+            else None,
+        )
 
         # 等待 iframe 出现（最多等 60 秒）
         iframe_locator = page.frame_locator("iframe").first
@@ -132,7 +148,9 @@ async def get_tencent_cookie(id,status_queue):
 
         try:
             # 等待 URL 变化或超时
-            await asyncio.wait_for(url_changed_event.wait(), timeout=200)  # 最多等待 200 秒
+            await asyncio.wait_for(
+                url_changed_event.wait(), timeout=200
+            )  # 最多等待 200 秒
             print("监听页面跳转成功")
         except asyncio.TimeoutError:
             status_queue.put("500")
@@ -147,7 +165,7 @@ async def get_tencent_cookie(id,status_queue):
         cookies_dir = Path(BASE_DIR / "cookiesFile")
         cookies_dir.mkdir(exist_ok=True)
         await context.storage_state(path=cookies_dir / f"{uuid_v1}.json")
-        result = await check_cookie(2,f"{uuid_v1}.json")
+        result = await check_cookie(2, f"{uuid_v1}.json")
         if not result:
             status_queue.put("500")
             await page.close()
@@ -160,27 +178,31 @@ async def get_tencent_cookie(id,status_queue):
 
         with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
             cursor = conn.cursor()
-            cursor.execute('''
+            cursor.execute(
+                """
                                 INSERT INTO user_info (type, filePath, userName, status)
                                 VALUES (?, ?, ?, ?)
-                                ''', (2, f"{uuid_v1}.json", id, 1))
+                                """,
+                (2, f"{uuid_v1}.json", id, 1),
+            )
             conn.commit()
             print("✅ 用户状态已记录")
         status_queue.put("200")
 
+
 # 快手登录
-async def get_ks_cookie(id,status_queue):
+async def get_ks_cookie(id, status_queue):
     url_changed_event = asyncio.Event()
+
     async def on_url_change():
         # 检查是否是主框架的变化
         if page.url != original_url:
             url_changed_event.set()
+
     async with async_playwright() as playwright:
         options = {
-            'args': [
-                '--lang en-GB'
-            ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
+            "args": ["--lang en-GB"],
+            "headless": LOCAL_CHROME_HEADLESS,  # Set headless option here
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
@@ -201,12 +223,18 @@ async def get_ks_cookie(id,status_queue):
         print("✅ 图片地址:", src)
         status_queue.put(src)
         # 监听页面的 'framenavigated' 事件，只关注主框架的变化
-        page.on('framenavigated',
-                lambda frame: asyncio.create_task(on_url_change()) if frame == page.main_frame else None)
+        page.on(
+            "framenavigated",
+            lambda frame: asyncio.create_task(on_url_change())
+            if frame == page.main_frame
+            else None,
+        )
 
         try:
             # 等待 URL 变化或超时
-            await asyncio.wait_for(url_changed_event.wait(), timeout=200)  # 最多等待 200 秒
+            await asyncio.wait_for(
+                url_changed_event.wait(), timeout=200
+            )  # 最多等待 200 秒
             print("监听页面跳转成功")
         except asyncio.TimeoutError:
             status_queue.put("500")
@@ -234,16 +262,20 @@ async def get_ks_cookie(id,status_queue):
 
         with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
             cursor = conn.cursor()
-            cursor.execute('''
+            cursor.execute(
+                """
                                         INSERT INTO user_info (type, filePath, userName, status)
                                         VALUES (?, ?, ?, ?)
-                                        ''', (4, f"{uuid_v1}.json", id, 1))
+                                        """,
+                (4, f"{uuid_v1}.json", id, 1),
+            )
             conn.commit()
             print("✅ 用户状态已记录")
         status_queue.put("200")
 
+
 # 小红书登录
-async def xiaohongshu_cookie_gen(id,status_queue):
+async def xiaohongshu_cookie_gen(id, status_queue):
     url_changed_event = asyncio.Event()
 
     async def on_url_change():
@@ -253,10 +285,8 @@ async def xiaohongshu_cookie_gen(id,status_queue):
 
     async with async_playwright() as playwright:
         options = {
-            'args': [
-                '--lang en-GB'
-            ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
+            "args": ["--lang en-GB"],
+            "headless": LOCAL_CHROME_HEADLESS,  # Set headless option here
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
@@ -266,7 +296,7 @@ async def xiaohongshu_cookie_gen(id,status_queue):
         # Pause the page, and start recording manually.
         page = await context.new_page()
         await page.goto("https://creator.xiaohongshu.com/")
-        await page.locator('img.css-wemwzq').click()
+        await page.locator("img.css-wemwzq").click()
 
         img_locator = page.get_by_role("img").nth(2)
         # 获取 src 属性值
@@ -275,12 +305,18 @@ async def xiaohongshu_cookie_gen(id,status_queue):
         print("✅ 图片地址:", src)
         status_queue.put(src)
         # 监听页面的 'framenavigated' 事件，只关注主框架的变化
-        page.on('framenavigated',
-                lambda frame: asyncio.create_task(on_url_change()) if frame == page.main_frame else None)
+        page.on(
+            "framenavigated",
+            lambda frame: asyncio.create_task(on_url_change())
+            if frame == page.main_frame
+            else None,
+        )
 
         try:
             # 等待 URL 变化或超时
-            await asyncio.wait_for(url_changed_event.wait(), timeout=200)  # 最多等待 200 秒
+            await asyncio.wait_for(
+                url_changed_event.wait(), timeout=200
+            )  # 最多等待 200 秒
             print("监听页面跳转成功")
         except asyncio.TimeoutError:
             status_queue.put("500")
@@ -308,13 +344,17 @@ async def xiaohongshu_cookie_gen(id,status_queue):
 
         with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
             cursor = conn.cursor()
-            cursor.execute('''
+            cursor.execute(
+                """
                            INSERT INTO user_info (type, filePath, userName, status)
                            VALUES (?, ?, ?, ?)
-                           ''', (1, f"{uuid_v1}.json", id, 1))
+                           """,
+                (1, f"{uuid_v1}.json", id, 1),
+            )
             conn.commit()
             print("✅ 用户状态已记录")
         status_queue.put("200")
+
 
 # a = asyncio.run(xiaohongshu_cookie_gen(4,None))
 # print(a)
