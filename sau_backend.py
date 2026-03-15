@@ -7,6 +7,7 @@ import uuid
 from pathlib import Path
 from queue import Queue
 from flask_cors import CORS
+from werkzeug.utils import secure_filename
 from myUtils.auth import check_cookie
 from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 from conf import BASE_DIR
@@ -16,8 +17,7 @@ from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_
 active_queues = {}
 app = Flask(__name__)
 
-#允许所有来源跨域访问
-CORS(app)
+CORS(app, origins=["http://localhost:*"])
 
 # 限制上传文件大小为160MB
 app.config['MAX_CONTENT_LENGTH'] = 160 * 1024 * 1024
@@ -63,9 +63,12 @@ def upload_file():
         # 保存文件到指定位置
         uuid_v1 = uuid.uuid1()
         print(f"UUID v1: {uuid_v1}")
-        filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{file.filename}")
+        safe_name = secure_filename(file.filename)
+        if not safe_name:
+            return jsonify({"code": 400, "data": None, "msg": "Invalid filename"}), 400
+        filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{safe_name}")
         file.save(filepath)
-        return jsonify({"code":200,"msg": "File uploaded successfully", "data": f"{uuid_v1}_{file.filename}"}), 200
+        return jsonify({"code":200,"msg": "File uploaded successfully", "data": f"{uuid_v1}_{safe_name}"}), 200
     except Exception as e:
         return jsonify({"code":500,"msg": str(e),"data":None}), 500
 
@@ -108,14 +111,18 @@ def upload_save():
     # 获取表单中的自定义文件名（可选）
     custom_filename = request.form.get('filename', None)
     if custom_filename:
-        filename = custom_filename + "." + file.filename.split('.')[-1]
+        ext = file.filename.rsplit('.', 1)[-1] if '.' in file.filename else ''
+        raw = f"{custom_filename}.{ext}" if ext else custom_filename
+        filename = secure_filename(raw)
     else:
-        filename = file.filename
+        filename = secure_filename(file.filename)
+
+    if not filename:
+        return jsonify({"code": 400, "data": None, "msg": "Invalid filename"}), 400
 
     try:
         # 生成 UUID v1
         uuid_v1 = uuid.uuid1()
-        print(f"UUID v1: {uuid_v1}")
 
         # 构造文件名和路径
         final_filename = f"{uuid_v1}_{filename}"
@@ -392,11 +399,12 @@ def login():
     # 启动异步任务线程
     thread = threading.Thread(target=run_async_function, args=(type,id,status_queue), daemon=True)
     thread.start()
-    response = Response(sse_stream(status_queue,), mimetype='text/event-stream')
+    response = Response(sse_stream(status_queue), mimetype='text/event-stream')
     response.headers['Cache-Control'] = 'no-cache'
     response.headers['X-Accel-Buffering'] = 'no'  # 关键：禁用 Nginx 缓冲
     response.headers['Content-Type'] = 'text/event-stream'
     response.headers['Connection'] = 'keep-alive'
+    response.call_on_close(on_close)
     return response
 
 @app.route('/postVideo', methods=['POST'])
@@ -534,22 +542,22 @@ def postVideoBatch():
         videos_per_day = data.get('videosPerDay')
         daily_times = data.get('dailyTimes')
         start_days = data.get('startDays')
-        # 打印获取到的数据（仅作为示例）
-        print("File List:", file_list)
-        print("Account List:", account_list)
-        match type:
-            case 1:
-                post_video_xhs(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                               start_days)
-            case 2:
-                post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                                   start_days, is_draft)
-            case 3:
-                post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, productLink, productTitle)
-            case 4:
-                post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days)
+        try:
+            match type:
+                case 1:
+                    post_video_xhs(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                                   start_days)
+                case 2:
+                    post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                                       start_days, is_draft)
+                case 3:
+                    post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                              start_days, productLink, productTitle)
+                case 4:
+                    post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                              start_days)
+        except Exception:
+            pass
     # 返回响应给客户端
     return jsonify(
         {
@@ -705,13 +713,16 @@ def run_async_function(type,id,status_queue):
 
 # SSE 流生成器函数
 def sse_stream(status_queue):
-    while True:
-        if not status_queue.empty():
-            msg = status_queue.get()
-            yield f"data: {msg}\n\n"
-        else:
-            # 避免 CPU 占满
-            time.sleep(0.1)
+    try:
+        while True:
+            if not status_queue.empty():
+                msg = status_queue.get()
+                yield f"data: {msg}\n\n"
+            else:
+                # 避免 CPU 占满
+                time.sleep(0.1)
+    except GeneratorExit:
+        pass
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0' ,port=5409)
