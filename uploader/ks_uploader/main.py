@@ -21,11 +21,13 @@ async def cookie_auth(account_file):
         # 访问指定的 URL
         await page.goto("https://cp.kuaishou.com/article/publish/video")
         try:
-            await page.wait_for_selector("div.names div.container div.name:text('机构服务')", timeout=5000)  # 等待5秒
+            await page.wait_for_selector(
+                "div.names div.container div.name:text('机构服务')", timeout=5000
+            )  # 等待5秒
 
             kuaishou_logger.info("[+] 等待5秒 cookie 失效")
             return False
-        except:
+        except Exception:
             kuaishou_logger.success("[+] cookie 有效")
             return True
 
@@ -35,7 +37,9 @@ async def ks_setup(account_file, handle=False):
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
             return False
-        kuaishou_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
+        kuaishou_logger.info(
+            "[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件"
+        )
         await get_ks_cookie(account_file)
     return True
 
@@ -43,10 +47,8 @@ async def ks_setup(account_file, handle=False):
 async def get_ks_cookie(account_file):
     async with async_playwright() as playwright:
         options = {
-            'args': [
-                '--lang en-GB'
-            ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
+            "args": ["--lang en-GB"],
+            "headless": LOCAL_CHROME_HEADLESS,  # Set headless option here
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
@@ -68,13 +70,15 @@ class KSVideo(object):
         self.tags = tags
         self.publish_date = publish_date
         self.account_file = account_file
-        self.date_format = '%Y-%m-%d %H:%M'
+        self.date_format = "%Y-%m-%d %H:%M"
         self.local_executable_path = LOCAL_CHROME_PATH
         self.headless = LOCAL_CHROME_HEADLESS
 
     async def handle_upload_error(self, page):
         kuaishou_logger.error("视频出错了，重新上传中")
-        await page.locator('div.progress-div [class^="upload-btn-input"]').set_input_files(self.file_path)
+        await page.locator(
+            'div.progress-div [class^="upload-btn-input"]'
+        ).set_input_files(self.file_path)
 
     async def upload(self, playwright: Playwright) -> None:
         # 使用 Chromium 浏览器启动一个浏览器实例
@@ -94,13 +98,13 @@ class KSVideo(object):
         page = await context.new_page()
         # 访问指定的 URL
         await page.goto("https://cp.kuaishou.com/article/publish/video")
-        kuaishou_logger.info('正在上传-------{}.mp4'.format(self.title))
+        kuaishou_logger.info("正在上传-------{}.mp4".format(self.title))
         # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
-        kuaishou_logger.info('正在打开主页...')
+        kuaishou_logger.info("正在打开主页...")
         await page.wait_for_url("https://cp.kuaishou.com/article/publish/video")
         # 点击 "上传视频" 按钮
         upload_button = page.locator("button[class^='_upload-btn']")
-        await upload_button.wait_for(state='visible')  # 确保按钮可见
+        await upload_button.wait_for(state="visible")  # 确保按钮可见
 
         async with page.expect_file_chooser() as fc_info:
             await upload_button.click()
@@ -187,7 +191,7 @@ class KSVideo(object):
                 await asyncio.sleep(1)
 
         await context.storage_state(path=self.account_file)  # 保存cookie
-        kuaishou_logger.info('cookie更新完毕！')
+        kuaishou_logger.info("cookie更新完毕！")
         await asyncio.sleep(2)  # 这里延迟是为了方便眼睛直观的观看
         # 关闭浏览器上下文和浏览器实例
         await context.close()
@@ -200,11 +204,18 @@ class KSVideo(object):
     async def set_schedule_time(self, page, publish_date):
         kuaishou_logger.info("click schedule")
         publish_date_hour = publish_date.strftime("%Y-%m-%d %H:%M:%S")
-        await page.locator("label:text('发布时间')").locator('xpath=following-sibling::div').locator(
-            '.ant-radio-input').nth(1).click()
+        await (
+            page.locator("label:text('发布时间')")
+            .locator("xpath=following-sibling::div")
+            .locator(".ant-radio-input")
+            .nth(1)
+            .click()
+        )
         await asyncio.sleep(1)
 
-        await page.locator('div.ant-picker-input input[placeholder="选择日期时间"]').click()
+        await page.locator(
+            'div.ant-picker-input input[placeholder="选择日期时间"]'
+        ).click()
         await asyncio.sleep(1)
 
         await page.keyboard.press("Control+KeyA")
