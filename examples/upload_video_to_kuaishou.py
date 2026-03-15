@@ -6,7 +6,7 @@ from uploader.ks_uploader.main import ks_setup, KSVideo
 from utils.files_times import generate_schedule_time_next_day, get_title_and_hashtags
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     filepath = Path(BASE_DIR) / "videos"
     account_file = Path(BASE_DIR / "cookies" / "ks_uploader" / "account.json")
     # 获取视频目录

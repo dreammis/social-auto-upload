@@ -14,14 +14,14 @@ def get_absolute_path(relative_path: str, base_dir: str = None) -> str:
 
 def get_title_and_hashtags(filename):
     """
-  获取视频标题和 hashtag
+    获取视频标题和 hashtag
 
-  Args:
-    filename: 视频文件名
+    Args:
+      filename: 视频文件名
 
-  Returns:
-    视频标题和 hashtag 列表
-  """
+    Returns:
+      视频标题和 hashtag 列表
+    """
 
     # 获取视频标题和 hashtag txt 文件名
     txt_filename = filename.replace(".mp4", ".txt")
@@ -38,7 +38,9 @@ def get_title_and_hashtags(filename):
     return title, hashtags
 
 
-def generate_schedule_time_next_day(total_videos, videos_per_day = 1, daily_times=None, timestamps=False, start_days=0):
+def generate_schedule_time_next_day(
+    total_videos, videos_per_day=1, daily_times=None, timestamps=False, start_days=0
+):
     """
     Generate a schedule for video uploads, starting from the next day.
 
@@ -72,8 +74,13 @@ def generate_schedule_time_next_day(total_videos, videos_per_day = 1, daily_time
 
         # Calculate the time for the current video
         hour = daily_times[daily_video_index]
-        time_offset = timedelta(days=day, hours=hour - current_time.hour, minutes=-current_time.minute,
-                                seconds=-current_time.second, microseconds=-current_time.microsecond)
+        time_offset = timedelta(
+            days=day,
+            hours=hour - current_time.hour,
+            minutes=-current_time.minute,
+            seconds=-current_time.second,
+            microseconds=-current_time.microsecond,
+        )
         timestamp = current_time + time_offset
 
         schedule.append(timestamp)

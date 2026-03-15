@@ -19,9 +19,13 @@ def async_retry(timeout=60, max_retries=None):
                         raise Exception(f"Failed after {max_retries} retries.") from e
                     if time.time() - start_time > timeout:
                         print(f"Function timeout after {timeout} seconds.")
-                        raise TimeoutError(f"Function execution exceeded {timeout} seconds timeout.") from e
+                        raise TimeoutError(
+                            f"Function execution exceeded {timeout} seconds timeout."
+                        ) from e
                     print(f"Attempt {attempts} failed: {e}. Retrying...")
-                    await asyncio.sleep(1)  # Sleep to avoid tight loop or provide backoff logic here
+                    await asyncio.sleep(
+                        1
+                    )  # Sleep to avoid tight loop or provide backoff logic here
 
         return wrapper
 

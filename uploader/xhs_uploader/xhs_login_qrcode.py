@@ -8,16 +8,16 @@ from xhs import XhsClient
 from uploader.xhs_uploader.main import sign
 
 # pip install qrcode
-if __name__ == '__main__':
+if __name__ == "__main__":
     xhs_client = XhsClient(sign=sign, timeout=60)
     print(datetime.datetime.now())
     qr_res = xhs_client.get_qrcode()
     qr_id = qr_res["qr_id"]
     qr_code = qr_res["code"]
 
-    qr = qrcode.QRCode(version=1, error_correction=qrcode.ERROR_CORRECT_L,
-                       box_size=50,
-                       border=1)
+    qr = qrcode.QRCode(
+        version=1, error_correction=qrcode.ERROR_CORRECT_L, box_size=50, border=1
+    )
     qr.add_data(qr_res["url"])
     qr.make()
     qr.print_ascii()
