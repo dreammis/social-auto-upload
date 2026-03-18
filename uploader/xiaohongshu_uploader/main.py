@@ -144,7 +144,7 @@ class XiaoHongShuVideo(object):
                     upload_success = False
                     for stage in stage_elements:
                         text_content = await page.evaluate('(element) => element.textContent', stage)
-                        if '上传成功' in text_content:
+                        if '上传成功' in text_content or '检测' in text_content or '视频' in text_content:
                             upload_success = True
                             break
                     if upload_success:
@@ -164,22 +164,110 @@ class XiaoHongShuVideo(object):
         # 这里为了避免页面变化，故使用相对位置定位：作品标题父级右侧第一个元素的input子元素
         await asyncio.sleep(1)
         xiaohongshu_logger.info(f'  [-] 正在填充标题和话题...')
-        title_container = page.locator('div.plugin.title-container').locator('input.d-text')
-        if await title_container.count():
-            await title_container.fill(self.title[:30])
-        else:
-            titlecontainer = page.locator(".notranslate")
-            await titlecontainer.click()
-            await page.keyboard.press("Backspace")
-            await page.keyboard.press("Control+KeyA")
-            await page.keyboard.press("Delete")
-            await page.keyboard.type(self.title)
-            await page.keyboard.press("Enter")
-        css_selector = ".ql-editor" # 不能加上 .ql-blank 属性，这样只能获取第一次非空状态
-        for index, tag in enumerate(self.tags, start=1):
-            await page.type(css_selector, "#" + tag)
-            await page.press(css_selector, "Space")
-        xiaohongshu_logger.info(f'总共添加{len(self.tags)}个话题')
+        
+        # 填充标题和话题（合并到同一个Tiptap编辑器）
+        try:
+            # 小红书改版后使用 Tiptap/ProseMirror 编辑器
+            # 优先尝试新选择器，否则回退到旧的 Quill 选择器
+            editor_selectors = [
+                "div[contenteditable='true'][role='textbox'][translate='no'].tiptap.ProseMirror",  # 最精确的选择器
+                ".tiptap.ProseMirror",  # 新版 Tiptap 编辑器
+                "[contenteditable='true'].tiptap",
+                "[data-placeholder]",
+                ".ql-editor",  # 旧版 Quill 编辑器
+            ]
+            
+            editor_selector = None
+            for selector in editor_selectors:
+                if await page.locator(selector).count() > 0:
+                    editor_selector = selector
+                    xiaohongshu_logger.info(f'找到编辑器: {selector}')
+                    break
+            
+            if editor_selector:
+                # 等待编辑器加载完成
+                await page.wait_for_selector(editor_selector, timeout=10000)
+                editor = page.locator(editor_selector)
+                
+                # 点击编辑器激活
+                await editor.click()
+                await asyncio.sleep(0.5)
+                
+                # 清空编辑器内容
+                await page.keyboard.press("Control+KeyA")
+                await page.keyboard.press("Delete")
+                
+                # 输入标题
+                await editor.type(self.title[:30])
+                xiaohongshu_logger.info('  [-] 标题填充成功')
+                
+                # 输入话题
+                added_tags = 0
+                for index, tag in enumerate(self.tags, start=1):
+                    # 在标题后添加空格，然后输入话题
+                    if index == 1:
+                        await page.keyboard.press("Enter")
+                        await page.keyboard.press("Enter")
+                    await page.keyboard.type("#" + tag)
+                    await asyncio.sleep(1)  # 等待话题建议弹出
+                    # 等待话题建议弹出并选择
+                    try:
+                        # 使用话题建议容器选择器
+                        topic_container = page.locator("#creator-editor-topic-container")
+                        suggestion = topic_container.get_by_text(f"#{tag}", exact=True)
+                        if await suggestion.count() > 0:
+                            await suggestion.click(timeout=3000)
+                            added_tags += 1
+                            xiaohongshu_logger.info(f'  已选择话题: #{tag}')
+                        else:
+                            # 如果没有匹配，尝试选择第一个建议
+                            first_suggestion = topic_container.locator('.topic-item, .item, [class*="option"]').first
+                            if await first_suggestion.count() > 0:
+                                await first_suggestion.click(timeout=3000)
+                                added_tags += 1
+                                xiaohongshu_logger.info(f'  已选择首个话题建议: #{tag}')
+                            else:
+                                await page.keyboard.press("Space")
+                                xiaohongshu_logger.info(f'  未找到话题建议: #{tag}')
+                    except Exception as e:
+                        await page.keyboard.press("Space")
+                        xiaohongshu_logger.info(f'  选择话题失败: #{tag}, {str(e)}')
+                    await asyncio.sleep(0.5)
+                xiaohongshu_logger.info(f'总共添加{added_tags}个话题')
+            else:
+                xiaohongshu_logger.warning('未找到编辑器，尝试备用方法')
+                # 备用方法：使用原始选择器
+                try:
+                    # 尝试填充标题
+                    title_container = page.locator('div.plugin.title-container').locator('input.d-text')
+                    if await title_container.count():
+                        await title_container.fill(self.title[:30])
+                        xiaohongshu_logger.info('  [-] 使用备用方法填充标题成功')
+                    else:
+                        # 第二备用方法
+                        titlecontainer = page.locator(".notranslate")
+                        await titlecontainer.click()
+                        await page.keyboard.press("Backspace")
+                        await page.keyboard.press("Control+KeyA")
+                        await page.keyboard.press("Delete")
+                        await page.keyboard.type(self.title)
+                        await page.keyboard.press("Enter")
+                        xiaohongshu_logger.info('  [-] 使用第二备用方法填充标题成功')
+                    
+                    # 尝试填充话题
+                    if await page.locator(".ql-editor").count() > 0:
+                        css_selector = ".ql-editor"
+                        await page.locator(css_selector).click()
+                        for index, tag in enumerate(self.tags, start=1):
+                            await page.type(css_selector, "#" + tag)
+                            await page.press(css_selector, "Space")
+                        xiaohongshu_logger.info(f'使用备用方法添加{len(self.tags)}个话题')
+                except Exception as e:
+                    xiaohongshu_logger.error(f'备用方法失败: {str(e)}')
+        except Exception as e:
+            xiaohongshu_logger.error(f'  [-] 填充标题和话题失败: {str(e)}')
+            # 截图保存以便分析
+            await page.screenshot(path=f"editor_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
 
         # while True:
         #     # 判断重新上传按钮是否存在，如果不存在，代表视频正在上传，则等待
