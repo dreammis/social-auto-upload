@@ -57,14 +57,20 @@ def _print_ascii_qrcode(qrcode) -> None:
     print(empty_line)
 
 
-def print_terminal_qrcode(qrcode_content: str, qrcode_path: Path, app_name: str) -> None:
+def print_terminal_qrcode(
+    qrcode_content: str,
+    qrcode_path: Path,
+    app_name: str,
+    compact: bool = True,
+    border: int = 0,
+) -> None:
     print()
     print(f"请使用{app_name}扫描下方二维码登录：")
     qrcode = segno.make(qrcode_content, error="L", boost_error=False)
     try:
         if hasattr(sys.stdout, "reconfigure"):
             sys.stdout.reconfigure(encoding="utf-8")
-        qrcode.terminal(compact=True, border=0)
+        qrcode.terminal(compact=compact, border=border)
     except (UnicodeEncodeError, OSError):
         print("当前终端不支持 Unicode 二维码字符，已切换为 ASCII 打印：")
         _print_ascii_qrcode(qrcode)

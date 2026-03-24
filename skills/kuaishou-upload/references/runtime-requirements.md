@@ -33,7 +33,7 @@ PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright" patchright i
 ### 如果 `sau` 已经在 PATH 中
 
 ```bash
-sau douyin --help
+sau kuaishou --help
 ```
 
 ### 如果虚拟环境存在，但还没有激活
@@ -42,7 +42,7 @@ PowerShell：
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-sau douyin --help
+sau kuaishou --help
 ```
 
 ### 如果你想直接调用可执行文件
@@ -50,18 +50,18 @@ sau douyin --help
 PowerShell：
 
 ```powershell
-.\.venv\Scripts\sau.exe douyin --help
+.\.venv\Scripts\sau.exe kuaishou --help
 ```
 
 ### 如果你更倾向于使用 uv
 
 ```bash
-uv run sau douyin --help
+uv run sau kuaishou --help
 ```
 
 ## 无头和有头模式
 
 - 使用 `--headless` 表示无头模式
 - 使用 `--headed` 表示有头模式
-- 如果用户明确要求无头登录，也要预期 CLI 会通过控制台输出或临时图片路径提供二维码相关提示
+- 快手登录如果遇到二维码展示问题，优先切到 `--headed`
 - 如果登录过程中已经生成了本地二维码图片，agent 应优先直接把图片展示/发送给用户扫码，不要只告诉用户图片路径

@@ -1,12 +1,17 @@
 # CLI 使用说明
 
-项目现在提供一个更直接的抖音 CLI 入口，默认推荐使用 `sau`。
+项目现在提供一个统一的 CLI 入口 `sau`，当前主线已经接入：
+
+- `douyin`
+- `kuaishou`
 
 实现说明：
 
 - `sau_cli.py` 是当前 CLI 的主入口和唯一主要实现文件
 - `sau.exe` 是安装后在 Windows 虚拟环境里自动生成的命令入口，本质上还是调用 `sau_cli.py`
-- 如果需要给 OpenClaw、Codex 等 agent 使用，可参考仓库内 skill：`skills/douyin-upload/`
+- 如果需要给 OpenClaw、Codex 等 agent 使用，可参考仓库内 skill：
+  - `skills/douyin-upload/`
+  - `skills/kuaishou-upload/`
 
 ## 安装 CLI 入口
 
@@ -20,6 +25,7 @@ uv pip install -e .
 
 ```bash
 sau douyin --help
+sau kuaishou --help
 ```
 
 ## 安装 patchright 浏览器
@@ -40,13 +46,32 @@ sau douyin upload-video --account creator --file videos/demo.mp4 --title "示例
 sau douyin upload-note --account creator --images videos/1.png videos/2.png --note "图文示例" --tags 图文,测试
 ```
 
+## 快手 CLI 子命令
+
+```bash
+sau kuaishou login --account creator
+sau kuaishou login --account creator --headed
+sau kuaishou check --account creator
+sau kuaishou upload-video --account creator --file videos/demo.mp4 --title "示例标题" --tags 运动,训练
+sau kuaishou upload-note --account creator --images videos/1.png videos/2.png videos/3.png --note "图文示例" --tags 图文,测试
+```
+
+## 登录二维码说明
+
+- 抖音和快手登录过程中，CLI / uploader 可能会生成临时二维码图片
+- 对普通用户来说，可以直接打开该图片扫码
+- 对可操作本地文件的 agent 来说，不要只把图片路径告诉用户
+- 这类二维码图片本身就是给用户扫码的，agent 应优先直接展示/发送本地图片给用户
+
 ## 定时发布
 
-视频和图文都支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到 `scheduled` 发布策略；不传则默认立即发布。
+抖音和快手的视频、图文都支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到 `scheduled` 发布策略；不传则默认立即发布。
 
 ```bash
 sau douyin upload-video --account creator --file videos/demo.mp4 --title "示例标题" --schedule "2026-03-24 21:30"
 sau douyin upload-note --account creator --images videos/1.png videos/2.png --note "图文示例" --schedule "2026-03-24 21:30"
+sau kuaishou upload-video --account creator --file videos/demo.mp4 --title "示例标题" --schedule "2026-03-24 21:30"
+sau kuaishou upload-note --account creator --images videos/1.png videos/2.png videos/3.png --note "图文示例" --schedule "2026-03-24 21:30"
 ```
 
 ## 运行时参数
@@ -72,6 +97,11 @@ CLI 将 `debug` 和 `headless` 拆成了两个独立维度：
 --title "示例标题"
 --tags 运动,训练
 --thumbnail videos/demo.png
+```
+
+抖音额外支持：
+
+```bash
 --product-link https://example.com/item
 --product-title 示例商品
 ```
@@ -86,7 +116,7 @@ CLI 将 `debug` 和 `headless` 拆成了两个独立维度：
 
 图文上传当前限制：
 
-- 最多 35 张图片
-- 不支持 GIF
+- 抖音：最多 35 张图片，不支持 GIF
+- 快手：支持多张图片，建议传真实不同文件，不要把同一路径重复多次
 
 后续维护 CLI 时，优先看 `sau_cli.py` 和 `uploader/`。

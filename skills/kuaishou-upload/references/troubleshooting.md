@@ -6,15 +6,15 @@
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-sau douyin --help
+sau kuaishou --help
 ```
 
 ```powershell
-.\.venv\Scripts\sau.exe douyin --help
+.\.venv\Scripts\sau.exe kuaishou --help
 ```
 
 ```bash
-uv run sau douyin --help
+uv run sau kuaishou --help
 ```
 
 如果当前环境还没有安装项目：
@@ -28,24 +28,23 @@ uv pip install -e .
 先检查 cookie 状态：
 
 ```bash
-sau douyin check --account <account>
+sau kuaishou check --account <account>
 ```
 
 如果无效，就重新登录：
 
 ```bash
-sau douyin login --account <account>
+sau kuaishou login --account <account>
 ```
 
-## 无头登录二维码处理
+## 登录二维码问题
 
-如果用户无法使用终端二维码输出：
+如果用户反馈二维码在终端里不好扫：
 
-- 查找 CLI 打印出来的临时二维码图片
-- agent 不要只把图片路径回给用户
+- 优先让用户切到 `--headed`
+- 如果 CLI / uploader 已经生成临时二维码图片，agent 不要只回图片路径
 - agent 应优先直接把本地二维码图片展示/发送给用户扫码
-
-如果终端二维码显示不正常，优先使用保存下来的图片路径，而不是反复尝试随机的终端设置。
+- 图片路径只作为补充信息
 
 ## 上传参数缺失
 
@@ -65,14 +64,12 @@ sau douyin login --account <account>
 - `--images`
 - `--note`
 
-## 图片限制
+## 图文上传只有一张生效
 
-对 `upload-note` 来说：
+如果用户一次传了多张图片，但页面只识别到一张，先确认：
 
-- 不支持 GIF
-- 最多 35 张图片
-
-如果超出这些限制，先减少图片数量或替换文件格式，再重试。
+- `--images` 里传的是不是真正不同的文件
+- 不是同一路径重复多次
 
 ## 定时发布
 

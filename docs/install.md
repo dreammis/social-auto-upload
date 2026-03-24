@@ -83,6 +83,7 @@ Windows 也可以直接手动复制并重命名。
 ```bash
 sau --help
 sau douyin --help
+sau kuaishou --help
 ```
 
 如果命令找不到，优先确认：
@@ -96,6 +97,15 @@ sau douyin --help
 sau douyin login --account creator
 sau douyin check --account creator
 sau douyin upload-video --account creator --file videos/demo.mp4 --title "示例标题"
+```
+
+### 8. 快手主线示例
+
+```bash
+sau kuaishou login --account creator --headed
+sau kuaishou check --account creator
+sau kuaishou upload-video --account creator --file videos/demo.mp4 --title "示例标题"
+sau kuaishou upload-note --account creator --images videos/1.png videos/2.png videos/3.png --note "图文示例"
 ```
 
 ## For AI Agents
@@ -129,24 +139,35 @@ PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright" patchright i
 ```bash
 sau --help
 sau douyin --help
+sau kuaishou --help
 ```
 
-6. 如果用户的目标是抖音登录、cookie 校验、视频上传、图文上传，优先走 CLI：
+6. 如果用户的目标是抖音或快手的登录、cookie 校验、视频上传、图文上传，优先走 CLI：
 
 ```bash
 sau douyin login
 sau douyin check
 sau douyin upload-video
 sau douyin upload-note
+
+sau kuaishou login
+sau kuaishou check
+sau kuaishou upload-video
+sau kuaishou upload-note
 ```
 
 7. 如果用户明确在使用 skill 系统，再引导其阅读：
 
 - `skills/douyin-upload/SKILL.md`
 - `skills/douyin-upload/references/cli-contract.md`
+- `skills/kuaishou-upload/SKILL.md`
+- `skills/kuaishou-upload/references/cli-contract.md`
 
 ### 对 agent 的额外说明
 
+- 当登录流程生成本地二维码图片时，不要只把图片路径发给用户
+- 这类二维码图片本身就是给用户扫码的，agent 应优先直接展示/发送本地图片给用户扫码
+- 如果环境支持查看本地图片，优先用查看图片能力把二维码展示出来；路径只作为补充信息
 - `requirements.txt` 目前是历史兼容文件，不是主安装入口
 - `uploader/` 是核心实现目录
 - `sau_cli.py` 是当前 CLI 主入口

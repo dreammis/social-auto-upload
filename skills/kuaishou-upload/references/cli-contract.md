@@ -1,4 +1,4 @@
-# 抖音 CLI 契约
+# 快手 CLI 契约
 
 这个 skill 默认假设当前环境已经安装并可调用 `sau` 命令。
 
@@ -7,19 +7,19 @@
 ### 登录
 
 ```bash
-sau douyin login --account <account>
+sau kuaishou login --account <account>
 ```
 
 - 必填参数:
   - `--account`
 - 作用:
-  - 启动抖音登录流程，为指定账号生成或刷新 cookie 文件
+  - 启动快手登录流程，为指定账号生成或刷新 cookie 文件
   - 如果登录过程中生成本地二维码图片，agent 应优先直接把图片展示/发送给用户扫码，而不是只回传路径
 
 ### 校验 cookie
 
 ```bash
-sau douyin check --account <account>
+sau kuaishou check --account <account>
 ```
 
 - 必填参数:
@@ -31,15 +31,13 @@ sau douyin check --account <account>
 ### 上传视频
 
 ```bash
-sau douyin upload-video \
+sau kuaishou upload-video \
   --account <account> \
   --file <video-path> \
   --title "<title>" \
   [--tags tag1,tag2] \
   [--schedule "YYYY-MM-DD HH:MM"] \
   [--thumbnail <image-path>] \
-  [--product-link <url>] \
-  [--product-title "<title>"] \
   [--debug] \
   [--headless | --headed]
 ```
@@ -52,8 +50,6 @@ sau douyin upload-video \
   - `--tags`
   - `--schedule`
   - `--thumbnail`
-  - `--product-link`
-  - `--product-title`
   - `--debug`
   - `--headless`
   - `--headed`
@@ -61,7 +57,7 @@ sau douyin upload-video \
 ### 上传图文
 
 ```bash
-sau douyin upload-note \
+sau kuaishou upload-note \
   --account <account> \
   --images <image-1> [image-2 ...] \
   --note "<content>" \
@@ -96,5 +92,4 @@ YYYY-MM-DD HH:MM
 
 - `upload-video` 每次命令只支持一个视频文件
 - `upload-note` 每次命令支持多张图片
-- `upload-note` 当前不支持 GIF
-- `upload-note` 当前最多支持 35 张图片
+- `upload-note` 当前要求传入真实的多张图片文件，而不是同一路径重复多次
