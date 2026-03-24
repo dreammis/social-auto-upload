@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "social-auto-upload"
+version = "0.1.0"
+description = "Social media auto uploader"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "loguru==0.7.3",
+  "opencv-python>=4.13.0.92",
+  "patchright==1.58.2",
+  "qrcode==8.2",
+  "requests==2.32.3",
+  "segno>=1.6.6",
+]
+
+[project.scripts]
+sau = "sau_cli:main"
+
+[project.optional-dependencies]
+bilibili = [
+  "biliup==0.4.98",
+]
+
+web = [
+  "Flask[async]==3.1.1",
+  "flask-cors==6.0.0",
+]
+
+[tool.uv]
+package = true
+
+[tool.setuptools]
+py-modules = ["cli_main", "conf", "sau_cli"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["uploader*", "utils*", "myUtils*"]
+
+[tool.setuptools.package-data]
+utils = ["stealth.min.js"]
