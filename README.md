@@ -200,3 +200,6 @@ sau douyin upload-video --account creator --file videos/demo.mp4 --title "示例
 > 如果这个项目对您有帮助，请给一个 ⭐ Star 以表示支持！
 
 [![Star History Chart](https://api.star-history.com/svg?repos=dreammis/social-auto-upload&type=Date)](https://star-history.com/#dreammis/social-auto-upload&Date)
+
+## Community
+LINUX DO - The New Ideal Community
