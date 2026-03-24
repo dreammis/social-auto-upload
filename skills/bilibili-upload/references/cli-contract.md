@@ -15,6 +15,10 @@ sau bilibili login --account <account>
 - 作用：
   - 自动准备 `biliup`
   - 触发 Bilibili 登录流程
+- 登录方式说明：
+  - 这个命令应该由用户自己在本地真实终端里运行
+  - 如果终端二维码显示不完整，可直接打开当前目录下的 `qrcode.png` 扫码
+  - agent 不应该在非交互环境里硬跑这个命令
 
 ### 校验账号
 

@@ -14,7 +14,7 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成 Bilibili 登录
 
 | 功能 | 命令入口 | 说明 |
 | --- | --- | --- |
-| 登录 | `sau bilibili login --account <name>` | 生成或刷新指定账号的登录信息 |
+| 登录 | `sau bilibili login --account <name>` | 需要用户自己在本地真实终端里执行，用于生成或刷新登录信息 |
 | 校验 | `sau bilibili check --account <name>` | 检查指定账号当前是否有效 |
 | 视频上传 | `sau bilibili upload-video ...` | 上传一条 Bilibili 视频 |
 
@@ -27,7 +27,7 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成 Bilibili 登录
 
 ## 命令选择建议
 
-- 用户没有登录信息，先用 `login`
+- 用户没有登录信息，先让用户自己在本地终端执行 `login`
 - 用户只想确认账号状态，先用 `check`
 - 用户要发视频，用 `upload-video`
 
@@ -37,6 +37,9 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成 Bilibili 登录
 - 如果 `sau` 不在 PATH 中，可以用仓库里的 `sau_cli.py`
 - 不要要求用户手动下载 `biliup`
 - 第一次运行 Bilibili 命令时，程序可能会自动联网准备 `biliup`
+- 对 agent 来说，不要在非交互环境里硬跑 `sau bilibili login`
+- 正确做法是让用户自己在本地终端执行 `sau bilibili login --account <name>`
+- 如果终端里的二维码显示不完整，提醒用户直接打开当前目录下的 `qrcode.png` 扫码
 
 ## 模板文件
 

@@ -93,6 +93,10 @@ class BilibiliVideoUploadRequest:
     publish_date: datetime | int
 
 
+def has_interactive_terminal() -> bool:
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
 def resolve_runtime_home() -> Path:
     return Path(BASE_DIR)
 
@@ -151,7 +155,18 @@ async def check_kuaishou_account(account_name: str) -> bool:
 
 async def login_bilibili_account(account_name: str) -> dict:
     account_file = resolve_account_file("bilibili", account_name)
-    result = run_biliup_command(["-u", str(account_file), "login"])
+    if not has_interactive_terminal():
+        return {
+            "success": False,
+            "message": (
+                "Bilibili login requires a local interactive terminal. "
+                f"Please run `sau bilibili login --account {account_name}` yourself in a local terminal. "
+                "If the terminal QR code does not render completely, open `./qrcode.png` and scan that image."
+            ),
+            "account_file": str(account_file),
+        }
+
+    result = run_biliup_command(["-u", str(account_file), "login"], interactive=True)
     success = result.returncode == 0
     return {
         "success": success,

@@ -1,4 +1,6 @@
 # login
+# Run this in a local interactive terminal.
+# If the terminal QR code is incomplete, open ./qrcode.png and scan that image.
 sau bilibili login --account creator
 
 # check

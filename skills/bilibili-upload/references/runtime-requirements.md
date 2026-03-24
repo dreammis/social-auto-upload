@@ -42,3 +42,8 @@ python sau_cli.py bilibili --help
 - 首次运行可能比其他平台更慢，因为要自动准备 `biliup`
 - 如果网络无法访问 GitHub Release，Bilibili 命令会失败
 - 一旦本地已经准备好 `biliup`，后续命令会直接复用
+- `sau bilibili login --account <name>` 需要用户自己在本地真实终端里执行
+- 如果终端二维码显示不完整，通常可以直接打开当前目录下的 `qrcode.png` 扫码
+- 如果国内网络访问 GitHub Release 较慢，可先用 `https://gh-proxy.com/` 或 `https://gh-proxy.org/` 辅助访问对应 release 地址排障
+- 示例：
+  - `https://gh-proxy.org/https://github.com/biliup/biliup/releases/download/v1.1.29/biliupR-v1.1.29-aarch64-linux.tar.xz`

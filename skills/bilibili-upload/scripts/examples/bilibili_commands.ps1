@@ -1,4 +1,6 @@
 # 登录
+# 建议由用户自己在本地真实终端里执行。
+# 如果终端二维码显示不完整，可以打开当前目录下的 qrcode.png 扫码。
 sau bilibili login --account creator
 
 # 校验
