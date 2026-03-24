@@ -1,3 +1,11 @@
+"""Legacy direct-uploader example for Kuaishou.
+
+Current mainline usage prefers:
+    sau kuaishou login --account creator
+    sau kuaishou upload-video ...
+    sau kuaishou upload-note ...
+"""
+
 import asyncio
 from datetime import datetime
 from pathlib import Path
@@ -35,7 +43,7 @@ def upload_video_to_kuaishou():
 
 
 def upload_note_to_kuaishou():
-    account_file = Path(BASE_DIR / "cookies" / "kuaishou_creator1.json")
+    account_file = Path(BASE_DIR / "cookies" / "kuaishou_creator.json")
     account_file.parent.mkdir(exist_ok=True)
 
     image_paths = [

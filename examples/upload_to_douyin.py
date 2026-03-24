@@ -1,3 +1,11 @@
+"""Legacy direct-uploader example for Douyin.
+
+Current mainline usage prefers:
+    sau douyin login --account creator
+    sau douyin upload-video ...
+    sau douyin upload-note ...
+"""
+
 import asyncio
 from datetime import datetime
 from pathlib import Path
