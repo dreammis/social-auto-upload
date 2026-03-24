@@ -125,9 +125,9 @@ async def check_douyin_account(account_name: str) -> bool:
     return await douyin_cookie_auth(str(account_file))
 
 
-async def login_kuaishou_account(account_name: str, headless: bool = True) -> bool:
+async def login_kuaishou_account(account_name: str, headless: bool = True) -> dict:
     account_file = resolve_account_file("kuaishou", account_name)
-    return await ks_setup(str(account_file), handle=True, headless=headless)
+    return await ks_setup(str(account_file), handle=True, return_detail=True, headless=headless)
 
 
 async def check_kuaishou_account(account_name: str) -> bool:
@@ -370,10 +370,10 @@ async def dispatch(args: argparse.Namespace) -> int:
 
     if args.platform == "kuaishou":
         if args.action == "login":
-            success = await login_kuaishou_account(args.account, headless=args.headless)
-            if not success:
-                raise RuntimeError("Kuaishou login flow failed")
-            print(f"Kuaishou login flow completed: {resolve_account_file('kuaishou', args.account)}")
+            result = await login_kuaishou_account(args.account, headless=args.headless)
+            if not result["success"]:
+                raise RuntimeError(result["message"])
+            print(f"Kuaishou login flow completed: {result['account_file']}")
             return 0
 
         if args.action == "check":

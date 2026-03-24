@@ -6,7 +6,7 @@ account="creator"
 video="videos/demo.mp4"
 thumbnail="videos/demo.png"
 
-sau kuaishou login --account "$account" --headed
+sau kuaishou login --account "$account"
 sau kuaishou check --account "$account"
 
 sau kuaishou upload-video \

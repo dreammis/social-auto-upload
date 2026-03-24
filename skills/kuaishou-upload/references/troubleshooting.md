@@ -41,7 +41,8 @@ sau kuaishou login --account <account>
 
 如果用户反馈二维码在终端里不好扫：
 
-- 优先让用户切到 `--headed`
+- 先优先使用 CLI / uploader 生成的本地二维码图片
+- 只有用户明确需要可见浏览器窗口，或图片方案仍然不方便时，再切到 `--headed`
 - 如果 CLI / uploader 已经生成临时二维码图片，agent 不要只回图片路径
 - agent 应优先直接把本地二维码图片展示/发送给用户扫码
 - 图片路径只作为补充信息

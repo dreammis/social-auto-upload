@@ -13,7 +13,7 @@ def main() -> None:
     account = "creator"
 
     commands = [
-        ["sau", "kuaishou", "login", "--account", account, "--headed"],
+        ["sau", "kuaishou", "login", "--account", account],
         ["sau", "kuaishou", "check", "--account", account],
         [
             "sau",

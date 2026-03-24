@@ -102,7 +102,7 @@ sau douyin upload-video --account creator --file videos/demo.mp4 --title "示例
 ### 8. 快手主线示例
 
 ```bash
-sau kuaishou login --account creator --headed
+sau kuaishou login --account creator
 sau kuaishou check --account creator
 sau kuaishou upload-video --account creator --file videos/demo.mp4 --title "示例标题"
 sau kuaishou upload-note --account creator --images videos/1.png videos/2.png videos/3.png --note "图文示例"

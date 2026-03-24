@@ -5,7 +5,7 @@ $video = "videos/demo.mp4"
 $thumbnail = "videos/demo.png"
 $noteImages = @("videos/1.png", "videos/2.png", "videos/3.png")
 
-sau kuaishou login --account $account --headed
+sau kuaishou login --account $account
 sau kuaishou check --account $account
 
 sau kuaishou upload-video `

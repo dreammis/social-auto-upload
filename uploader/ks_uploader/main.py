@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +34,33 @@ KUAISHOU_PUBLISH_STRATEGY_SCHEDULED = "scheduled"
 
 def _msg(emoji: str, text: str) -> str:
     return f"{emoji} {text}"
+
+
+async def _emit_qrcode_callback(qrcode_callback, payload: dict):
+    if not qrcode_callback:
+        return
+
+    callback_result = qrcode_callback(payload)
+    if inspect.isawaitable(callback_result):
+        await callback_result
+
+
+def _build_login_result(
+    success: bool,
+    status: str,
+    message: str,
+    account_file: str,
+    qrcode: dict | None = None,
+    current_url: str = "",
+) -> dict:
+    return {
+        "success": success,
+        "status": status,
+        "message": message,
+        "account_file": str(account_file),
+        "qrcode": qrcode,
+        "current_url": current_url,
+    }
 
 
 async def _is_ks_cookie_invalid(page: Page, timeout: int = 5000) -> bool:
@@ -69,7 +97,7 @@ async def _extract_ks_qrcode_src(page: Page) -> str:
     return qrcode_src
 
 
-async def _save_ks_qrcode(page: Page, account_file: str, previous_qrcode_path: Path | None = None) -> dict:
+async def _save_ks_qrcode(page: Page, account_file: str, previous_qrcode_path: Path | None = None, qrcode_callback=None) -> dict:
     qrcode_src = await _extract_ks_qrcode_src(page)
     qrcode_path = save_data_url_image(qrcode_src, build_login_qrcode_path(account_file, suffix="ks_login_qrcode"))
 
@@ -84,10 +112,12 @@ async def _save_ks_qrcode(page: Page, account_file: str, previous_qrcode_path: P
     else:
         kuaishou_logger.warning(_msg("😵", f"终端没法完整显示二维码，请打开 {qrcode_path} 扫码"))
 
-    return {
+    qrcode_info = {
         "image_path": str(qrcode_path),
         "image_data_url": qrcode_src,
     }
+    await _emit_qrcode_callback(qrcode_callback, qrcode_info)
+    return qrcode_info
 
 
 async def _is_ks_qrcode_expired(page: Page) -> bool:
@@ -134,21 +164,29 @@ async def cookie_auth(account_file):
             await browser.close()
 
 
-async def ks_setup(account_file, handle=False, headless: bool = LOCAL_CHROME_HEADLESS):
+async def ks_setup(account_file, handle=False, return_detail=False, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS):
     account_file = get_absolute_path(account_file, "ks_uploader")
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
-            return False
+            result = _build_login_result(False, "cookie_invalid", "cookie文件不存在或已失效", account_file)
+            return result if return_detail else False
         kuaishou_logger.info(_msg("🥹", "cookie 失效了，准备重新登录快手创作者平台"))
-        return await get_ks_cookie(account_file, headless=headless)
+        result = await get_ks_cookie(account_file, qrcode_callback=qrcode_callback, headless=headless)
+        return result if return_detail else result["success"]
 
-    return True
+    result = _build_login_result(True, "cookie_valid", "cookie有效", account_file)
+    return result if return_detail else True
 
 
-async def get_ks_cookie(account_file, headless: bool = LOCAL_CHROME_HEADLESS, poll_interval: int = 3, max_checks: int = 100):
+async def get_ks_cookie(
+    account_file,
+    qrcode_callback=None,
+    headless: bool = LOCAL_CHROME_HEADLESS,
+    poll_interval: int = 3,
+    max_checks: int = 100,
+):
     if headless:
-        kuaishou_logger.warning(_msg("😵", "快手登录暂未接入抖音那套二维码透传，先切到有头模式方便你扫码"))
-        headless = False
+        kuaishou_logger.info(_msg("🖼️", "快手登录将以无头模式运行，小人会输出终端二维码并保存本地二维码图片"))
 
     async with async_playwright() as playwright:
         if LOCAL_CHROME_PATH:
@@ -158,13 +196,14 @@ async def get_ks_cookie(account_file, headless: bool = LOCAL_CHROME_HEADLESS, po
         context = await browser.new_context()
         context = await set_init_script(context)
         qrcode_path = None
-        login_success = False
+        qrcode_info = None
+        result = _build_login_result(False, "failed", "快手登录失败", account_file)
         try:
             page = await context.new_page()
             await page.goto(KUAISHOU_LOGIN_URL)
             kuaishou_logger.info(_msg("🧍", "请在浏览器里扫码登录快手，小人正在耐心等待"))
 
-            qrcode_info = await _save_ks_qrcode(page, account_file)
+            qrcode_info = await _save_ks_qrcode(page, account_file, qrcode_callback=qrcode_callback)
             qrcode_path = Path(qrcode_info["image_path"])
 
             for _ in range(max_checks):
@@ -172,10 +211,18 @@ async def get_ks_cookie(account_file, headless: bool = LOCAL_CHROME_HEADLESS, po
                     await context.storage_state(path=account_file)
                     if await cookie_auth(account_file):
                         kuaishou_logger.success(_msg("🥳", "快手扫码登录成功，小人开心收工"))
-                        login_success = True
+                        result = _build_login_result(True, "success", "快手扫码登录成功", account_file, qrcode_info, page.url)
                     else:
                         kuaishou_logger.error(_msg("😢", "快手扫码完成了，但 cookie 校验失败"))
-                    return login_success
+                        result = _build_login_result(
+                            False,
+                            "cookie_invalid",
+                            "快手扫码流程结束，但 cookie 校验失败",
+                            account_file,
+                            qrcode_info,
+                            page.url,
+                        )
+                    return result
 
                 if qrcode_info and await _is_ks_qrcode_expired(page):
                     kuaishou_logger.warning(_msg("😵", "二维码失效了，小人马上去刷新"))
@@ -183,20 +230,35 @@ async def get_ks_cookie(account_file, headless: bool = LOCAL_CHROME_HEADLESS, po
                     if await refresh_button.count():
                         await refresh_button.click()
                         await asyncio.sleep(1)
-                    qrcode_info = await _save_ks_qrcode(page, account_file, qrcode_path)
+                    qrcode_info = await _save_ks_qrcode(
+                        page,
+                        account_file,
+                        qrcode_path,
+                        qrcode_callback=qrcode_callback,
+                    )
                     qrcode_path = Path(qrcode_info["image_path"])
 
                 await asyncio.sleep(poll_interval)
+
+            result = _build_login_result(
+                False,
+                "timeout",
+                "等待快手扫码登录超时",
+                account_file,
+                qrcode_info,
+                page.url,
+            )
         except Exception as exc:
-            kuaishou_logger.error(_msg("😢", f"登录失败: {exc}"))
+            result = _build_login_result(False, "failed", str(exc), account_file, current_url=page.url if "page" in locals() else "")
         finally:
             if remove_qrcode_file(qrcode_path):
                 kuaishou_logger.info(_msg("🧹", f"临时二维码文件已清理: {qrcode_path}"))
+            if not result["success"]:
+                kuaishou_logger.error(_msg("😢", f"登录失败: {result['message']}"))
             await context.close()
             await browser.close()
 
-    kuaishou_logger.error(_msg("😢", "等待快手扫码登录超时"))
-    return False
+    return result
 
 
 class KSBaseUploader(BaseVideoUploader):

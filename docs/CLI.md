@@ -50,7 +50,6 @@ sau douyin upload-note --account creator --images videos/1.png videos/2.png --no
 
 ```bash
 sau kuaishou login --account creator
-sau kuaishou login --account creator --headed
 sau kuaishou check --account creator
 sau kuaishou upload-video --account creator --file videos/demo.mp4 --title "示例标题" --tags 运动,训练
 sau kuaishou upload-note --account creator --images videos/1.png videos/2.png videos/3.png --note "图文示例" --tags 图文,测试
@@ -89,6 +88,11 @@ CLI 将 `debug` 和 `headless` 拆成了两个独立维度：
 - `--headed`: 有头模式运行
 
 如果都不传，CLI 当前默认按 `headless=True` 运行。
+
+补充：
+
+- 抖音和快手的 CLI 默认都是无头模式
+- 如果用户明确要求可见浏览器窗口，或确实需要人工看页面，再显式传 `--headed`
 
 ## 视频上传参数
 
