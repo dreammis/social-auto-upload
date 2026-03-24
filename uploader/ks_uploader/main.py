@@ -36,6 +36,16 @@ def _msg(emoji: str, text: str) -> str:
     return f"{emoji} {text}"
 
 
+def _print_ks_qrcode(qrcode_content: str, qrcode_path: Path) -> None:
+    try:
+        print_terminal_qrcode(qrcode_content, qrcode_path, "快手APP", compact=False, border=2)
+    except TypeError as exc:
+        if "unexpected keyword argument 'compact'" not in str(exc):
+            raise
+        kuaishou_logger.warning(_msg("😵", "检测到旧版二维码打印函数，小人切回兼容模式继续登录"))
+        print_terminal_qrcode(qrcode_content, qrcode_path, "快手APP")
+
+
 async def _emit_qrcode_callback(qrcode_callback, payload: dict):
     if not qrcode_callback:
         return
@@ -108,7 +118,7 @@ async def _save_ks_qrcode(page: Page, account_file: str, previous_qrcode_path: P
     kuaishou_logger.info(_msg("🖼️", f"二维码已经准备好啦，已保存到: {qrcode_path}"))
     qrcode_content = decode_qrcode_from_path(qrcode_path)
     if qrcode_content:
-        print_terminal_qrcode(qrcode_content, qrcode_path, "快手APP", compact=False, border=2)
+        _print_ks_qrcode(qrcode_content, qrcode_path)
     else:
         kuaishou_logger.warning(_msg("😵", f"终端没法完整显示二维码，请打开 {qrcode_path} 扫码"))
 
