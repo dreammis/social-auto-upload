@@ -84,6 +84,7 @@ Windows 也可以直接手动复制并重命名。
 sau --help
 sau douyin --help
 sau kuaishou --help
+sau bilibili --help
 ```
 
 如果命令找不到，优先确认：
@@ -107,6 +108,20 @@ sau kuaishou check --account creator
 sau kuaishou upload-video --account creator --file videos/demo.mp4 --title "示例标题"
 sau kuaishou upload-note --account creator --images videos/1.png videos/2.png videos/3.png --note "图文示例"
 ```
+
+### 9. Bilibili 主线示例
+
+```bash
+sau bilibili login --account creator
+sau bilibili check --account creator
+sau bilibili upload-video --account creator --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tid 249
+```
+
+补充说明：
+
+- 用户不需要手动安装 `biliup`
+- 首次运行 Bilibili 相关命令时，程序会自动下载 `biliup`
+- 后续运行会自动检查上游 release 并自动更新
 
 ## For AI Agents
 
@@ -140,6 +155,7 @@ PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright" patchright i
 sau --help
 sau douyin --help
 sau kuaishou --help
+sau bilibili --help
 ```
 
 6. 如果用户的目标是抖音或快手的登录、cookie 校验、视频上传、图文上传，优先走 CLI：
@@ -154,6 +170,10 @@ sau kuaishou login
 sau kuaishou check
 sau kuaishou upload-video
 sau kuaishou upload-note
+
+sau bilibili login
+sau bilibili check
+sau bilibili upload-video
 ```
 
 7. 如果用户明确在使用 skill 系统，再引导其阅读：
@@ -162,6 +182,8 @@ sau kuaishou upload-note
 - `skills/douyin-upload/references/cli-contract.md`
 - `skills/kuaishou-upload/SKILL.md`
 - `skills/kuaishou-upload/references/cli-contract.md`
+- `skills/bilibili-upload/SKILL.md`
+- `skills/bilibili-upload/references/cli-contract.md`
 
 ### 对 agent 的额外说明
 
@@ -172,3 +194,4 @@ sau kuaishou upload-note
 - `uploader/` 是核心实现目录
 - `sau_cli.py` 是当前 CLI 主入口
 - `docs/legacy-web.md` 是历史 Web 版本说明，不保证当前可用
+- Bilibili 首次运行时可能自动下载 `biliup`
