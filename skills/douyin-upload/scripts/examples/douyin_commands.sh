@@ -2,7 +2,9 @@
 
 set -euo pipefail
 
-account="creator"
+# account_name is user-defined. One account_name maps to one account file.
+# You can prepare multiple account names and run them in parallel.
+account="account_a"
 video="videos/demo.mp4"
 thumbnail="videos/demo.png"
 

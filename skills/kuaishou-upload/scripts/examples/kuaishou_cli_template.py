@@ -10,7 +10,9 @@ def run_command(command: list[str]) -> None:
 
 
 def main() -> None:
-    account = "creator"
+    account = "account_a"
+    # account_name is user-defined. One account_name maps to one account file.
+    # You can prepare multiple account names and run them in parallel.
 
     commands = [
         ["sau", "kuaishou", "login", "--account", account],

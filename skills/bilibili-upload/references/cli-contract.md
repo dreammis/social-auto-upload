@@ -15,6 +15,9 @@ sau bilibili login --account <account>
 - 作用：
   - 自动准备 `biliup`
   - 触发 Bilibili 登录流程
+- 账号说明：
+  - `--account` 传的是用户自定义的 `account_name`，不是固定只能叫 `creator`
+  - 一个 `account_name` 对应一个账号文件，可用于多账号隔离和并发任务
 - 登录方式说明：
   - 这个命令应该由用户自己在本地真实终端里运行
   - 如果终端二维码显示不完整，可直接打开当前目录下的 `qrcode.png` 扫码

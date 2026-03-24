@@ -342,12 +342,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     for action_name in ("login", "check"):
         action_parser = douyin_actions.add_parser(action_name, help=f"Douyin {action_name}")
-        action_parser.add_argument("--account", required=True, help="Douyin account alias")
+        action_parser.add_argument("--account", required=True, help="Douyin user-defined account_name")
         if action_name == "login":
             add_runtime_flags(action_parser)
 
     upload_video_parser = douyin_actions.add_parser("upload-video", help="Upload one video to Douyin")
-    upload_video_parser.add_argument("--account", required=True, help="Douyin account alias")
+    upload_video_parser.add_argument("--account", required=True, help="Douyin user-defined account_name")
     upload_video_parser.add_argument("--file", required=True, type=existing_file_path, help="Video file path")
     upload_video_parser.add_argument("--title", required=True, help="Video title")
     upload_video_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
@@ -358,7 +358,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_runtime_flags(upload_video_parser)
 
     upload_note_parser = douyin_actions.add_parser("upload-note", help="Upload one note to Douyin")
-    upload_note_parser.add_argument("--account", required=True, help="Douyin account alias")
+    upload_note_parser.add_argument("--account", required=True, help="Douyin user-defined account_name")
     upload_note_parser.add_argument("--images", required=True, nargs="+", type=existing_file_path, help="Image file paths")
     upload_note_parser.add_argument("--note", required=True, help="Note content")
     upload_note_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
@@ -370,12 +370,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     for action_name in ("login", "check"):
         action_parser = kuaishou_actions.add_parser(action_name, help=f"Kuaishou {action_name}")
-        action_parser.add_argument("--account", required=True, help="Kuaishou account alias")
+        action_parser.add_argument("--account", required=True, help="Kuaishou user-defined account_name")
         if action_name == "login":
             add_runtime_flags(action_parser)
 
     kuaishou_upload_video_parser = kuaishou_actions.add_parser("upload-video", help="Upload one video to Kuaishou")
-    kuaishou_upload_video_parser.add_argument("--account", required=True, help="Kuaishou account alias")
+    kuaishou_upload_video_parser.add_argument("--account", required=True, help="Kuaishou user-defined account_name")
     kuaishou_upload_video_parser.add_argument("--file", required=True, type=existing_file_path, help="Video file path")
     kuaishou_upload_video_parser.add_argument("--title", required=True, help="Video title")
     kuaishou_upload_video_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
@@ -384,7 +384,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_runtime_flags(kuaishou_upload_video_parser)
 
     kuaishou_upload_note_parser = kuaishou_actions.add_parser("upload-note", help="Upload one note to Kuaishou")
-    kuaishou_upload_note_parser.add_argument("--account", required=True, help="Kuaishou account alias")
+    kuaishou_upload_note_parser.add_argument("--account", required=True, help="Kuaishou user-defined account_name")
     kuaishou_upload_note_parser.add_argument("--images", required=True, nargs="+", type=existing_file_path, help="Image file paths")
     kuaishou_upload_note_parser.add_argument("--note", required=True, help="Note content")
     kuaishou_upload_note_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
@@ -396,10 +396,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     for action_name in ("login", "check"):
         action_parser = bilibili_actions.add_parser(action_name, help=f"Bilibili {action_name}")
-        action_parser.add_argument("--account", required=True, help="Bilibili account alias")
+        action_parser.add_argument("--account", required=True, help="Bilibili user-defined account_name")
 
     bilibili_upload_video_parser = bilibili_actions.add_parser("upload-video", help="Upload one video to Bilibili")
-    bilibili_upload_video_parser.add_argument("--account", required=True, help="Bilibili account alias")
+    bilibili_upload_video_parser.add_argument("--account", required=True, help="Bilibili user-defined account_name")
     bilibili_upload_video_parser.add_argument("--file", required=True, type=existing_file_path, help="Video file path")
     bilibili_upload_video_parser.add_argument("--title", required=True, help="Video title")
     bilibili_upload_video_parser.add_argument("--desc", required=True, help="Video description")

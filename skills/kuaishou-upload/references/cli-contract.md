@@ -15,6 +15,9 @@ sau kuaishou login --account <account>
 - 作用:
   - 启动快手登录流程，为指定账号生成或刷新 cookie 文件
   - 如果登录过程中生成本地二维码图片，agent 应优先直接把图片展示/发送给用户扫码，而不是只回传路径
+- 账号说明:
+  - `--account` 传的是用户自定义的 `account_name`，不是固定只能叫 `creator`
+  - 一个 `account_name` 对应一个账号文件，可用于多账号隔离和并发任务
 
 ### 校验 cookie
 

@@ -95,30 +95,32 @@ sau bilibili --help
 ### 7. 抖音主线示例
 
 ```bash
-sau douyin login --account creator
-sau douyin check --account creator
-sau douyin upload-video --account creator --file videos/demo.mp4 --title "示例标题"
+sau douyin login --account <account_name>
+sau douyin check --account <account_name>
+sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题"
 ```
 
 ### 8. 快手主线示例
 
 ```bash
-sau kuaishou login --account creator
-sau kuaishou check --account creator
-sau kuaishou upload-video --account creator --file videos/demo.mp4 --title "示例标题"
-sau kuaishou upload-note --account creator --images videos/1.png videos/2.png videos/3.png --note "图文示例"
+sau kuaishou login --account <account_name>
+sau kuaishou check --account <account_name>
+sau kuaishou upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题"
+sau kuaishou upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --note "图文示例"
 ```
 
 ### 9. Bilibili 主线示例
 
 ```bash
-sau bilibili login --account creator
-sau bilibili check --account creator
-sau bilibili upload-video --account creator --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tid 249
+sau bilibili login --account <account_name>
+sau bilibili check --account <account_name>
+sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tid 249
 ```
 
 补充说明：
 
+- `creator` 之类的名字只是示例值，真正传的是用户自定义的 `account_name`
+- 一个 `account_name` 对应一个账号文件，可以准备多个账号并发使用
 - 用户不需要手动安装 `biliup`
 - 首次运行 Bilibili 相关命令时，程序会自动下载 `biliup`
 - 后续运行会自动检查上游 release 并自动更新

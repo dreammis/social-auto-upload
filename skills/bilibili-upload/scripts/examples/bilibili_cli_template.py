@@ -9,6 +9,9 @@ from utils.constant import VideoZoneTypes
 
 
 def main() -> None:
+    account = "account_a"
+    # account_name is user-defined. One account_name maps to one account file.
+    # You can prepare multiple account names and run them in parallel.
     cli_path = Path(BASE_DIR) / "sau_cli.py"
     command = [
         sys.executable,
@@ -16,7 +19,7 @@ def main() -> None:
         "bilibili",
         "upload-video",
         "--account",
-        "creator",
+        account,
         "--file",
         str(Path(BASE_DIR) / "videos" / "demo.mp4"),
         "--title",
