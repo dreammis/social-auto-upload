@@ -9,9 +9,12 @@
 ## 目录
 
 - [💡 功能特性](#💡功能特性)
-- [🚀 支持的平台](#🚀支持的平台)
+- [🚀 当前主线](#🚀当前主线)
+- [📊 平台能力矩阵](#📊平台能力矩阵)
 - [💾 安装指南](#💾安装指南)
 - [🏁 快速开始](#🏁快速开始)
+- [🗂️ 重构计划](#🗂️重构计划)
+- [📣 近况说明](#📣近况说明)
 - [🐇 项目背景](#🐇项目背景)
 - [📃 详细文档](#📃详细文档)
 - [🐾 交流与支持](#🐾交流与支持)
@@ -21,169 +24,131 @@
 
 ## 💡功能特性
 
-### 已支持平台
+这个项目不是在和 agent 抢活，而是在补 AI 自媒体最后一公里里最容易翻车的那一段。
 
--   **国内平台**:
-    -   [x] 抖音
-    -   [x] 视频号
-    -   [x] Bilibili
-    -   [x] 小红书
-    -   [x] 快手
-    -   [x] 百家号
--   **国外平台**:
-    -   [x] TikTok
+- `social-auto-upload` 更偏向“经过大量验证的脚本化、程序化执行”
+- agent 更擅长“理解任务、编排流程、生成内容、调用工具”
+- 两者结合，通常比单纯依赖 agent 直接操作浏览器更稳
 
-### 核心功能
+为什么 agent 已经能操作浏览器了，还是需要这个项目？
 
--   [x] 定时上传 (Cron Job / Scheduled Upload)
--   [ ] Cookie 管理 (部分实现，持续优化中)
--   [ ] 国外平台 Proxy 设置 (部分实现)
+- agent 直接操作浏览器，很多时候要反复解析网页、读 DOM、截图理解、再决定下一步动作
+- 这类流程每次执行路径都可能不太一样，稳定性依赖当下页面状态、模型判断和上下文质量
+- 对上传、登录、定时发布这类高重复动作来说，这会额外消耗大量 token、算力和执行时间
+- 一旦平台页面有轻微波动，agent 还可能重新理解、重新试错，成本会继续上升
 
-### 计划支持与开发中
+这个项目的价值就在这里：
 
--   **平台扩展**:
-    -   [ ] YouTube
--   **功能增强**:
-    -   [x] 更易用的版本 (GUI / CLI 交互优化)
-    -   [x] API 封装
-    -   [x] Docker 部署
-    -   [ ] 自动化上传 (更智能的调度策略)
-    -   [ ] 多线程/异步上传优化
-    -   [ ] Slack/消息推送通知
+- 把高频、重复、已经跑通过很多次的平台动作，沉淀成稳定的 uploader / CLI / skill
+- 把“理解网页并临场决策”的不确定性，尽量收敛成“直接调用一个被验证过的能力”
+- 让 agent 少走弯路，少烧 token，把算力留给更适合 AI 的环节，比如选题、写文案、排流程、调度任务
+- 让整条链路更接近真正可持续的生产化，而不是每次都从零开始看页面、猜按钮、试流程
 
-### 2025.10.30目前现状
-该项目本人很长一段时间没维护了，有比较大的问题也是能简单快速修复就修复掉
+## 📊平台能力矩阵
 
-因为我自己也在创业，每天时间都用不完
+下表描述的是当前仓库内“实际已有实现”的能力，不代表都已经完成 CLI 化或 skill 化。
 
-目前问题主要集中在
-1. 小红书部分，这部分是直接适用xhs这个库来实现的
-2. web 端（vue版本），这个版本是群友LeeDebug他帮忙做的（再次感谢他）
+| 平台 | 登录/账号准备 | 视频上传 | 图文上传 | 定时发布 | CLI | Skill | 说明 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 抖音 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 当前主线重构最完整 |
+| Bilibili | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 依赖 `biliup` |
+| 小红书（浏览器版） | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 当前仓库有浏览器 uploader |
+| 快手 | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 浏览器自动化 |
+| 视频号 | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 对应 `tencent_uploader` |
+| 百家号 | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 浏览器自动化 |
+| TikTok | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 当前示例走 Chrome 版实现 |
 
-因为我日常也在用，我用的不是web端，而是最初`uploader`文件夹里的版本，也就是文档里提到的部分https://sap-doc.nasdaddy.com/
-所以这里一般遇到的问题，我都会尝试去解决，一并推送到该仓库
 
-目前能遇到的问题，基本上都比较小，可能是元素变化导致的
-在初期设计的时候，其实我已经参考了某些不可变元素去选择，极大的避免了后期因为平台页面修改导致的元素变化
+## 🚀当前主线
 
-该项目不仅仅是技术人员，有不少是非技术的从业人员，他们是没能力修复一个简单弱小的bug
-为了能帮助更多的人，所以呼吁**技术小伙伴**
+当前仓库这轮重构的主线很明确：
 
-如果大家
-- 修复了一些bug
-- 增加一些对大家有帮助的功能
+- 先把抖音链路打磨完整，作为 uploader / CLI / skill 的样板
+- 逐步把其他平台往统一结构上收敛
+- 默认围绕 `uv`、`patchright`、无头模式、CLI 化、Skill 化推进
+- Web 相关代码目前保留为历史版本，不是当前主要维护方向
 
-请积极的提出pr，我会想尽可能的确认后合并的，在此感谢大家对于开源项目的支持，帮助更多的人
+如果你是第一次使用这个项目：
 
-我自己也会尽100%的力量，在自己项目稳定后，修bug，加更多的平台，开发出gradio版本（更易部署），大家谅解
+- 安装看：[安装说明](./docs/install.md)
+- 更新看：[更新说明](./docs/update.md)
+- CLI 看：[CLI 使用说明](./docs/CLI.md)
+- agent / skill 看：[Douyin Upload Skill](./skills/douyin-upload/SKILL.md)
+- 历史 Web 说明看：[历史 Web 版本说明](./docs/legacy-web.md)
 
----
 
-## 🚀支持的平台
+## 📣近况说明
 
-本项目通过各平台对应的 `uploader` 模块实现视频上传功能。您可以在 `examples` 目录下找到各个平台的使用示例脚本。
+`2026.03.24`
 
-每个示例脚本展示了如何配置和调用相应的 uploader。
+最近我的重心一直都在创业上，而且手里还有一些项目没完全跑通，所以这个仓库前面有很长一段时间，我确实没有办法投入特别多精力去持续维护。
+
+这个项目不知不觉已经 `9k+ star` 了，社群里也已经有 `2000+` 小伙伴了。看到它真的在持续帮到大家，我心里还是挺开心的，也是真的很感谢大家一直以来的支持、反馈。
+
+所以我想，决定先停一下，抽一段时间出来，把这个项目好好重构和优化一轮。
+
+接下来这段时间，这个仓库应该会进入一个相对密集更新的阶段。我现在最想先做的事情主要有这几件：
+
+1. 使用更隐蔽、更稳定的自动化方案，尽量降低平台检测风险
+2. 补齐一些常用平台的图文能力，并逐步完成 CLI 化、Skill 化
+3. 陆续测试并上架到更多 skill 平台，让大家的龙虾、螃蟹、毛毛虫都能打通 AI 自媒体的最后一道关
+
+所以如果你之前觉得这个项目更新有点慢，哈哈哈，后面大概率会快很多。也欢迎大家继续关注，最近应该会是一段持续修、持续更、持续重构的阶段。
+
+## 🗂️重构计划
+
+项目正在进行一轮整体重构，当前重构重点是：
+
+- 各平台 uploader 的结构收敛
+- CLI 统一接入
+- 面向 OpenClaw、Codex、 Claude Code 等工具的 skill 化
+- 更换为 `patchright` 驱动，提升兼容性与隐蔽性
+- 主线优先围绕无头模式推进
+
+“无头模式（headless）”，指的是浏览器在后台运行，不弹出可见窗口，但自动化流程仍然会照常执行。这样更适合 CLI、服务端、自动任务和 agent 场景。
+
+Web 端相关代码仍然保留，但已经不是当前主线，不保证可直接运行，也不保证与当前 uploader/CLI 完全同步。
 
 ## 💾安装指南
 
-1.  **克隆项目**:
-    ```bash
-    git clone https://github.com/dreammis/social-auto-upload.git
-    cd social-auto-upload
-    ```
+安装、更新、环境准备不再在首页重复展开，统一收敛到文档里：
 
-2.  **安装依赖**:
-    建议在虚拟环境中安装依赖。
-    ```bash
-    conda create -n social-auto-upload python=3.10
-    conda activate social-auto-upload
-    # 挂载清华镜像 or 命令行代理
-    pip install -r requirements.txt
-    ```
+- 人类用户优先看：[安装说明](./docs/install.md)
+- 需要更新仓库时看：[更新说明](./docs/update.md)
+- 如果你是 CLI 用户，再配合看：[CLI 使用说明](./docs/CLI.md)
 
-3.  **安装 Playwright 浏览器驱动**:
-    ```bash
-    playwright install chromium firefox
-    ```
-    根据您的需求，至少需要安装 `chromium`。`firefox` 主要用于 TikTok 上传（旧版）。
+当前主线默认使用：
 
-4.  **修改配置文件**:
-    复制 `conf.example.py` 并重命名为 `conf.py`。
-    在 `conf.py` 中，您需要配置以下内容：
-    -   `LOCAL_CHROME_PATH`: 本地 Chrome 浏览器的路径，比如 `C:\Program Files\Google\Chrome\Application\chrome.exe` 保存。
-    
-    **临时解决方案**
+- `uv` 管理环境
+- `pyproject.toml` 管理依赖
+- `patchright` 作为浏览器驱动
+- `sau` 作为 CLI 入口
 
-    需要在根目录创建 `cookiesFile` 和 `videoFile` 两个文件夹，分别是 存储cookie文件 和 存储上传文件 的文件夹
-
-5.  **配置数据库**:
-    如果 db/database.db 文件不存在，您可以运行以下命令来初始化数据库：
-    ```bash
-    cd db
-    python createTable.py
-    ```
-    此命令将初始化 SQLite 数据库。
-
-6.  **启动后端项目**:
-    ```bash
-    python sau_backend.py
-    ```
-    后端项目将在 `http://localhost:5409` 启动。
-
-7.  **启动前端项目**:
-    ```bash
-    cd sau_frontend
-    npm install
-    npm run dev
-    ```
-    前端项目将在 `http://localhost:5173` 启动，在浏览器中打开此链接即可访问。
-
-
-> 非程序员用户可以参考：[新手级教程](https://juejin.cn/post/7372114027840208911)
-
+`requirements.txt` 目前主要用于历史兼容路径，普通用户不需要优先使用它。
 
 ## 🏁快速开始
 
-1.  **准备 Cookie**: 
-    大多数平台需要登录后的 Cookie 信息才能进行操作。请参照 examples 目录下各 `get_xxx_cookie.py` 脚本（例如 get_douyin_cookie.py, get_ks_cookie.py）的说明，运行脚本以生成并保存 Cookie 文件（通常在 `cookies/[PLATFORM]_uploader/account.json`）。
+### 方式 1：使用 CLI
 
-2.  **准备视频文件**: 
-    将需要上传的视频文件（通常为 `.mp4` 格式）放置在 videos 目录下。
-    部分平台支持视频封面，可以将封面图片（例如 `.png` 格式，与视频同名）也放在此目录。
-    如果需要上传标题及标签，请在视频文件旁边创建一个同名的 `.txt` 文件，内容为标题和标签，以换行分隔。
+当前只有抖音已经完成 CLI 化：
 
-3.  **修改并运行示例脚本**:
-    打开 examples 目录中您想使用的平台的上传脚本（例如 upload_video_to_douyin.py）。
-    -   根据脚本内的注释和说明，确认 Cookie 文件路径、视频文件路径等配置是否正确。
-    -   您可以修改脚本以适应您的具体需求，例如批量上传、自定义标题、标签等。
+```bash
+sau douyin login --account creator
+sau douyin check --account creator
+sau douyin upload-video --account creator --file videos/demo.mp4 --title "示例标题"
+```
 
-4.  **执行上传**:
-    运行修改后的示例脚本，例如：
-    ```bash
-    python examples/upload_video_to_douyin.py
-    ```
+### 方式 2：使用 examples
 
-## Docker 环境
-### 自己构建镜像
-1. **构建Docker镜像**:
-    ```
-   docker build -t social-auto-upload:latest .
-   ```
-2. **运行Docker容器**:
-    ```
-   docker run -d -it -p 5409:5409 social-auto-upload:latest
-   ```
-### 使用预构建镜像
-1. **拉取镜像**:
-    ```
-   docker pull gzxy/social-auto-upload:latest
-   ```
-2. **运行Docker容器**:
-    ```
-   docker run -d -it -p 5409:5409 gzxy/social-auto-upload:latest
-   ```
-启动容器后访问：[http://localhost:5409](http://localhost:5409)
+其他平台当前仍以 `examples/` 下的示例脚本为主，例如：
+
+- `examples/upload_to_douyin.py`
+- `examples/upload_video_to_bilibili.py`
+- `examples/upload_video_to_kuaishou.py`
+- `examples/upload_video_to_tencent.py`
+- `examples/upload_video_to_baijiahao.py`
+- `examples/upload_video_to_tiktok.py`
+- `examples/upload_video_to_xiaohongshu.py`
 
 ## 🐇项目背景
 

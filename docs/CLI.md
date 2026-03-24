@@ -5,11 +5,36 @@
 实现说明：
 
 - `sau_cli.py` 是当前 CLI 的主入口和唯一主要实现文件
+- `sau.exe` 是安装后在 Windows 虚拟环境里自动生成的命令入口，本质上还是调用 `sau_cli.py`
+- 如果需要给 OpenClaw、Codex 等 agent 使用，可参考仓库内 skill：`skills/douyin-upload/`
+
+## 安装 CLI 入口
+
+如果你希望直接使用 `sau` 命令，而不是手动执行 `python sau_cli.py`，先在项目根目录安装一次：
+
+```bash
+uv pip install -e .
+```
+
+安装后就可以直接使用：
+
+```bash
+sau douyin --help
+```
+
+## 安装 patchright 浏览器
+
+Windows 下推荐先指定镜像，再安装 Chromium：
+
+```powershell
+$env:PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright"; patchright install chromium
+```
 
 ## 抖音 CLI 子命令
 
 ```bash
 sau douyin login --account creator
+sau douyin login --account creator --headless
 sau douyin check --account creator
 sau douyin upload-video --account creator --file videos/demo.mp4 --title "示例标题" --tags 运动,训练
 sau douyin upload-note --account creator --images videos/1.png videos/2.png --note "图文示例" --tags 图文,测试
@@ -64,4 +89,4 @@ CLI 将 `debug` 和 `headless` 拆成了两个独立维度：
 - 最多 35 张图片
 - 不支持 GIF
 
-仓库内的轻量 skill 源位于 `skills/douyin-cli/`，后续维护 CLI 时应优先以这里和 `social_auto_upload/` 下的新入口为准。
+后续维护 CLI 时，优先看 `sau_cli.py` 和 `uploader/`。

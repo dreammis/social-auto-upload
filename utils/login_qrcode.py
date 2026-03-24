@@ -2,6 +2,7 @@
 from datetime import datetime
 import base64
 from pathlib import Path
+import sys
 
 import cv2
 import segno
@@ -43,10 +44,30 @@ def decode_qrcode_from_path(qrcode_path: Path) -> str | None:
     return qrcode_content or None
 
 
+def _print_ascii_qrcode(qrcode) -> None:
+    border = 1
+    rows = list(qrcode.matrix)
+    empty_line = "  " * (len(rows[0]) + border * 2)
+    print(empty_line)
+    for row in rows:
+        line = ["  "] * border
+        line.extend("##" if cell else "  " for cell in row)
+        line.extend(["  "] * border)
+        print("".join(line))
+    print(empty_line)
+
+
 def print_terminal_qrcode(qrcode_content: str, qrcode_path: Path, app_name: str) -> None:
     print()
     print(f"请使用{app_name}扫描下方二维码登录：")
-    segno.make(qrcode_content, error='L', boost_error=False).terminal(compact=True, border=0)
+    qrcode = segno.make(qrcode_content, error="L", boost_error=False)
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+        qrcode.terminal(compact=True, border=0)
+    except (UnicodeEncodeError, OSError):
+        print("当前终端不支持 Unicode 二维码字符，已切换为 ASCII 打印：")
+        _print_ascii_qrcode(qrcode)
     print("在 Windows 下建议使用 Windows Terminal（支持 UTF-8，可完整显示二维码）")
     print(f"否则请打开 {qrcode_path} 扫码")
     print()

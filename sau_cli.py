@@ -80,10 +80,9 @@ def parse_schedule(raw_schedule: str | None) -> datetime | int:
     return datetime.strptime(raw_schedule, SCHEDULE_FORMAT)
 
 
-async def login_account(account_name: str) -> Path:
+async def login_account(account_name: str, headless: bool = True) -> dict:
     account_file = resolve_account_file(account_name)
-    await douyin_setup(str(account_file), handle=True)
-    return account_file
+    return await douyin_setup(str(account_file), handle=True, return_detail=True, headless=headless)
 
 
 async def check_account(account_name: str) -> bool:
@@ -178,6 +177,8 @@ def build_parser() -> argparse.ArgumentParser:
     for action_name in ("login", "check"):
         action_parser = douyin_actions.add_parser(action_name, help=f"Douyin {action_name}")
         action_parser.add_argument("--account", required=True, help="Douyin account alias")
+        if action_name == "login":
+            add_runtime_flags(action_parser)
 
     upload_video_parser = douyin_actions.add_parser("upload-video", help="Upload one video to Douyin")
     upload_video_parser.add_argument("--account", required=True, help="Douyin account alias")
@@ -205,8 +206,10 @@ async def dispatch(args: argparse.Namespace) -> int:
         raise RuntimeError(f"Unsupported platform: {args.platform}")
 
     if args.action == "login":
-        account_file = await login_account(args.account)
-        print(f"Douyin login flow completed: {account_file}")
+        result = await login_account(args.account, headless=args.headless)
+        if not result["success"]:
+            raise RuntimeError(result["message"])
+        print(f"Douyin login flow completed: {result['account_file']}")
         return 0
 
     if args.action == "check":
