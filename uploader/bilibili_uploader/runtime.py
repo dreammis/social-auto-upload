@@ -142,7 +142,9 @@ def download_biliup_asset(release: dict, destination: Path) -> Path:
                 tar_file.extractall(extract_root)
 
         extracted_binary = _pick_executable(extract_root)
-        shutil.copy2(extracted_binary, destination)
+        temp_binary = destination.with_suffix(f"{destination.suffix}.tmp")
+        shutil.copy2(extracted_binary, temp_binary)
+        temp_binary.replace(destination)
         if _normalize_system() != "windows":
             destination.chmod(destination.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return destination
@@ -171,4 +173,6 @@ def run_biliup_command(arguments: list[str]) -> subprocess.CompletedProcess[str]
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
