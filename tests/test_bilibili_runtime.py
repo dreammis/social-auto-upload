@@ -20,8 +20,10 @@ class BiliupRuntimeTests(unittest.TestCase):
             "asset_url": "https://example.invalid/biliup.exe",
             "asset_name": "biliup.exe",
         }
-        with patch("uploader.bilibili_uploader.runtime.download_biliup_asset") as mock_download:
-            ensure_biliup_binary(force_check=True)
+        with patch("uploader.bilibili_uploader.runtime.read_local_biliup_version", return_value=None):
+            with patch("pathlib.Path.exists", return_value=False):
+                with patch("uploader.bilibili_uploader.runtime.download_biliup_asset") as mock_download:
+                    ensure_biliup_binary(force_check=True)
         mock_download.assert_called_once()
 
     @patch("uploader.bilibili_uploader.runtime.fetch_latest_release")
