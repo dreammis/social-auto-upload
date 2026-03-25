@@ -20,6 +20,11 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成抖音登录、c
 | 视频上传 | `sau douyin upload-video ...` | 上传并发布抖音视频 |
 | 图文上传 | `sau douyin upload-note ...` | 上传并发布抖音图文 |
 
+元数据约定：
+
+- 视频使用 `title + desc + tags`
+- 图文使用 `title + note + tags`
+
 ## 默认工作流
 
 1. 先确认 `references/runtime-requirements.md` 里的运行前提。

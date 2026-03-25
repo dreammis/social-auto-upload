@@ -63,7 +63,9 @@ sau douyin login --account <account>
 
 - `--account`
 - `--images`
-- `--note`
+- `--title`
+
+`--note` 当前是可选图文正文。
 
 ## 图片限制
 

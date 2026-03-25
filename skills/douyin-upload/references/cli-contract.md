@@ -38,6 +38,7 @@ sau douyin upload-video \
   --account <account> \
   --file <video-path> \
   --title "<title>" \
+  [--desc "<description>"] \
   [--tags tag1,tag2] \
   [--schedule "YYYY-MM-DD HH:MM"] \
   [--thumbnail <image-path>] \
@@ -52,6 +53,7 @@ sau douyin upload-video \
   - `--file`
   - `--title`
 - 可选参数:
+  - `--desc`
   - `--tags`
   - `--schedule`
   - `--thumbnail`
@@ -67,7 +69,8 @@ sau douyin upload-video \
 sau douyin upload-note \
   --account <account> \
   --images <image-1> [image-2 ...] \
-  --note "<content>" \
+  --title "<title>" \
+  [--note "<content>"] \
   [--tags tag1,tag2] \
   [--schedule "YYYY-MM-DD HH:MM"] \
   [--debug] \
@@ -77,8 +80,9 @@ sau douyin upload-note \
 - 必填参数:
   - `--account`
   - `--images`
-  - `--note`
+  - `--title`
 - 可选参数:
+  - `--note`
   - `--tags`
   - `--schedule`
   - `--debug`
@@ -99,5 +103,7 @@ YYYY-MM-DD HH:MM
 
 - `upload-video` 每次命令只支持一个视频文件
 - `upload-note` 每次命令支持多张图片
+- 视频描述字段统一使用 `--desc`
+- 图文正文统一使用 `--note`
 - `upload-note` 当前不支持 GIF
 - `upload-note` 当前最多支持 35 张图片

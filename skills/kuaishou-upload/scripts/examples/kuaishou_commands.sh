@@ -15,6 +15,7 @@ sau kuaishou upload-video \
   --account "$account" \
   --file "$video" \
   --title "Kuaishou video from bash" \
+  --desc "Kuaishou video description from bash" \
   --tags "cli,video" \
   --thumbnail "$thumbnail" \
   --headless
@@ -22,6 +23,7 @@ sau kuaishou upload-video \
 sau kuaishou upload-note \
   --account "$account" \
   --images "videos/1.png" "videos/2.png" "videos/3.png" \
+  --title "Kuaishou note title from bash" \
   --note "Kuaishou note from bash" \
   --tags "cli,note" \
   --headless

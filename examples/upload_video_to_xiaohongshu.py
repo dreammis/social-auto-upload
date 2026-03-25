@@ -1,3 +1,13 @@
+"""
+当前主线优先使用 CLI：
+
+    sau xiaohongshu login --account <account_name>
+    sau xiaohongshu upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介"
+    sau xiaohongshu upload-note --account <account_name> --images videos/1.png videos/2.png --title "图文标题" --note "图文正文"
+
+这个脚本保留为小红书 uploader 的调试入口 / 历史直连路径。
+"""
+
 import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path

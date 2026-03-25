@@ -380,6 +380,7 @@ class DouYinVideo(DouYinBaseUploader):
         productLink="",
         productTitle="",
         thumbnail_portrait_path=None,
+        desc: str | None = None,
         publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
@@ -398,6 +399,7 @@ class DouYinVideo(DouYinBaseUploader):
         self.thumbnail_portrait_path = thumbnail_portrait_path
         self.productLink = productLink
         self.productTitle = productTitle
+        self.desc = desc or ""
 
     async def validate_upload_args(self):
         await self.validate_base_args()
@@ -505,7 +507,7 @@ class DouYinVideo(DouYinBaseUploader):
 
         await asyncio.sleep(1)
         douyin_logger.info(_msg("✍️", "小人开始填标题、描述和话题"))
-        await self.fill_title_and_description(page, self.title, self.title, self.tags)
+        await self.fill_title_and_description(page, self.title, self.desc or self.title, self.tags)
         douyin_logger.info(_msg("🏷️", f"小人一共贴了 {len(self.tags)} 个话题"))
 
         while True:
@@ -578,6 +580,7 @@ class DouYinNote(DouYinBaseUploader):
         tags,
         publish_date: datetime | int,
         account_file,
+        title: str | None = None,
         publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
@@ -590,13 +593,14 @@ class DouYinNote(DouYinBaseUploader):
             headless=headless,
         )
         self.image_paths = image_paths
-        self.note = note
+        self.note = note or ""
+        self.title = title or (self.note[:30] if self.note else "")
         self.tags = tags or []
 
     async def validate_upload_args(self):
         await self.validate_base_args()
-        if not self.note or not str(self.note).strip():
-            raise ValueError("图文模式下，note 是必须的")
+        if not self.title or not str(self.title).strip():
+            raise ValueError("图文模式下，title 是必须的")
         if not self.image_paths:
             raise ValueError("图文模式下，图片是必须的")
 
@@ -634,7 +638,7 @@ class DouYinNote(DouYinBaseUploader):
 
         await asyncio.sleep(1)
         douyin_logger.info(_msg("✍️", "小人开始填标题、描述和话题"))
-        await self.fill_title_and_description(page, self.note, self.note, self.tags)
+        await self.fill_title_and_description(page, self.title, self.note, self.tags)
         douyin_logger.info(_msg("🏷️", f"小人一共贴了 {len(self.tags)} 个话题"))
 
         if self.publish_strategy == DOUYIN_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:

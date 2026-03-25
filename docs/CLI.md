@@ -4,6 +4,7 @@
 
 - `douyin`
 - `kuaishou`
+- `xiaohongshu`
 - `bilibili`
 
 实现说明：
@@ -13,6 +14,7 @@
 - 如果需要给 OpenClaw、Codex 等 agent 使用，可参考仓库内 skill：
   - `skills/douyin-upload/`
   - `skills/kuaishou-upload/`
+  - `skills/xiaohongshu-upload/`
   - `skills/bilibili-upload/`
 
 ## 安装 CLI 入口
@@ -28,6 +30,7 @@ uv pip install -e .
 ```bash
 sau douyin --help
 sau kuaishou --help
+sau xiaohongshu --help
 sau bilibili --help
 ```
 
@@ -45,8 +48,8 @@ $env:PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright"; patchr
 sau douyin login --account <account_name>
 sau douyin login --account <account_name> --headless
 sau douyin check --account <account_name>
-sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --tags 运动,训练
-sau douyin upload-note --account <account_name> --images videos/1.png videos/2.png --note "图文示例" --tags 图文,测试
+sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags 运动,训练
+sau douyin upload-note --account <account_name> --images videos/1.png videos/2.png --title "图文标题" --note "图文示例" --tags 图文,测试
 ```
 
 ## 快手 CLI 子命令
@@ -54,8 +57,17 @@ sau douyin upload-note --account <account_name> --images videos/1.png videos/2.p
 ```bash
 sau kuaishou login --account <account_name>
 sau kuaishou check --account <account_name>
-sau kuaishou upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --tags 运动,训练
-sau kuaishou upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --note "图文示例" --tags 图文,测试
+sau kuaishou upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags 运动,训练
+sau kuaishou upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文示例" --tags 图文,测试
+```
+
+## 小红书 CLI 子命令
+
+```bash
+sau xiaohongshu login --account <account_name>
+sau xiaohongshu check --account <account_name>
+sau xiaohongshu upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags 小红书,视频
+sau xiaohongshu upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文示例" --tags 图文,测试
 ```
 
 ## Bilibili CLI 子命令
@@ -70,6 +82,9 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 
 - `creator` 之类的名字只是示例值，真正传的是用户自定义的 `account_name`
 - 一个 `account_name` 对应一个账号文件，可以准备多个账号并发使用
+- 浏览器平台统一元数据约定：
+- 视频使用 `title + desc + tags`
+- 图文使用 `title + note + tags`
 - `sau bilibili ...` 会自动准备 `biliup`
 - 如果本地没有 `biliup`，第一次运行会自动下载
 - 如果上游 GitHub Release 有更新，运行时会先自动更新
@@ -77,7 +92,7 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 
 ## 登录二维码说明
 
-- 抖音和快手登录过程中，CLI / uploader 可能会生成临时二维码图片
+- 抖音、快手、小红书登录过程中，CLI / uploader 可能会生成临时二维码图片
 - 对普通用户来说，可以直接打开该图片扫码
 - 对可操作本地文件的 agent 来说，不要只把图片路径告诉用户
 - 这类二维码图片本身就是给用户扫码的，agent 应优先直接展示/发送本地图片给用户
@@ -85,13 +100,15 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 
 ## 定时发布
 
-抖音、快手、Bilibili 的视频上传都支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到对应平台的定时发布策略；不传则默认立即发布。
+抖音、快手、小红书的图文和视频上传，以及 Bilibili 的视频上传都支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到对应平台的定时发布策略；不传则默认立即发布。
 
 ```bash
-sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --schedule "2026-03-24 21:30"
-sau douyin upload-note --account <account_name> --images videos/1.png videos/2.png --note "图文示例" --schedule "2026-03-24 21:30"
-sau kuaishou upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --schedule "2026-03-24 21:30"
-sau kuaishou upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --note "图文示例" --schedule "2026-03-24 21:30"
+sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --schedule "2026-03-24 21:30"
+sau douyin upload-note --account <account_name> --images videos/1.png videos/2.png --title "图文标题" --note "图文示例" --schedule "2026-03-24 21:30"
+sau kuaishou upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --schedule "2026-03-24 21:30"
+sau kuaishou upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文示例" --schedule "2026-03-24 21:30"
+sau xiaohongshu upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --schedule "2026-03-24 21:30"
+sau xiaohongshu upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文示例" --schedule "2026-03-24 21:30"
 sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tid 249 --schedule "2026-03-24 21:30"
 ```
 
@@ -121,6 +138,7 @@ CLI 将 `debug` 和 `headless` 拆成了两个独立维度：
 ```bash
 --file videos/demo.mp4
 --title "示例标题"
+--desc "示例简介"
 --tags 运动,训练
 --thumbnail videos/demo.png
 ```
@@ -135,7 +153,6 @@ CLI 将 `debug` 和 `headless` 拆成了两个独立维度：
 Bilibili 额外要求：
 
 ```bash
---desc "视频简介"
 --tid 249
 ```
 
@@ -147,6 +164,7 @@ Bilibili 额外要求：
 
 ```bash
 --images videos/1.png videos/2.png videos/3.png
+--title "图文标题"
 --note "图文内容"
 --tags 图文,测试
 ```
@@ -155,5 +173,6 @@ Bilibili 额外要求：
 
 - 抖音：最多 35 张图片，不支持 GIF
 - 快手：支持多张图片，建议传真实不同文件，不要把同一路径重复多次
+- 小红书：支持多张图片，正文 `--note` 可选，但 `--title` 建议始终显式传入
 
 后续维护 CLI 时，优先看 `sau_cli.py`、`uploader/` 和 `skills/`。

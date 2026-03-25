@@ -358,6 +358,7 @@ class KSVideo(KSBaseUploader):
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
         thumbnail_path=None,
+        desc: str | None = None,
     ):
         super().__init__(
             publish_date=publish_date,
@@ -370,6 +371,7 @@ class KSVideo(KSBaseUploader):
         self.file_path = file_path
         self.tags = tags or []
         self.thumbnail_path = thumbnail_path
+        self.desc = desc or ""
 
     async def validate_upload_args(self):
         await self.validate_base_args()
@@ -462,7 +464,7 @@ class KSVideo(KSBaseUploader):
             await page.keyboard.press("Backspace")
             await page.keyboard.press("Control+KeyA")
             await page.keyboard.press("Delete")
-            await page.keyboard.type(self.title)
+            await page.keyboard.type(self.desc or self.title)
             await page.keyboard.press("Enter")
 
             for index, tag in enumerate(self.tags[:3], start=1):
@@ -541,6 +543,7 @@ class KSNote(KSBaseUploader):
         tags,
         publish_date: datetime | int,
         account_file,
+        title: str | None = None,
         publish_strategy: str | None = None,
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
@@ -553,13 +556,14 @@ class KSNote(KSBaseUploader):
             headless=headless,
         )
         self.image_paths = image_paths
-        self.note = note
+        self.note = note or ""
+        self.title = title or (self.note[:20] if self.note else "")
         self.tags = tags or []
 
     async def validate_upload_args(self):
         await self.validate_base_args()
-        if not self.note or not str(self.note).strip():
-            raise ValueError("快手图文上传时，note 是必须的")
+        if not self.title or not str(self.title).strip():
+            raise ValueError("快手图文上传时，title 是必须的")
         if not self.image_paths:
             raise ValueError("快手图文上传时，图片是必须的")
 

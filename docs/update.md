@@ -47,9 +47,11 @@ PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright" patchright i
 sau --help
 sau douyin --help
 sau kuaishou --help
+sau xiaohongshu --help
 sau bilibili --help
 sau douyin check --account your_account
 sau kuaishou check --account your_account
+sau xiaohongshu check --account your_account
 sau bilibili check --account your_account
 ```
 
@@ -57,6 +59,7 @@ sau bilibili check --account your_account
 
 - `skills/douyin-upload/SKILL.md`
 - `skills/kuaishou-upload/SKILL.md`
+- `skills/xiaohongshu-upload/SKILL.md`
 - `skills/bilibili-upload/SKILL.md`
 - `docs/CLI.md`
 
@@ -84,14 +87,16 @@ uv pip install -e .
 sau --help
 sau douyin --help
 sau kuaishou --help
+sau xiaohongshu --help
 sau bilibili --help
 ```
 
-5. 如果任务是抖音或快手链路，再继续验证：
+5. 如果任务是浏览器平台链路，再继续验证：
 
 ```bash
 sau douyin check --account test
 sau kuaishou check --account test
+sau xiaohongshu check --account test
 sau bilibili check --account test
 ```
 
@@ -103,6 +108,9 @@ sau bilibili check --account test
 - `skills/kuaishou-upload/SKILL.md`
 - `skills/kuaishou-upload/references/cli-contract.md`
 - `skills/kuaishou-upload/references/runtime-requirements.md`
+- `skills/xiaohongshu-upload/SKILL.md`
+- `skills/xiaohongshu-upload/references/cli-contract.md`
+- `skills/xiaohongshu-upload/references/runtime-requirements.md`
 - `skills/bilibili-upload/SKILL.md`
 - `skills/bilibili-upload/references/cli-contract.md`
 - `skills/bilibili-upload/references/runtime-requirements.md`

@@ -8,22 +8,22 @@ account="account_a"
 video="videos/demo.mp4"
 thumbnail="videos/demo.png"
 
-sau douyin login --account "$account" --headless
-sau douyin check --account "$account"
+sau xiaohongshu login --account "$account" --headless
+sau xiaohongshu check --account "$account"
 
-sau douyin upload-video \
+sau xiaohongshu upload-video \
   --account "$account" \
   --file "$video" \
-  --title "Douyin video from bash" \
-  --desc "Douyin video description from bash" \
+  --title "Xiaohongshu video from bash" \
+  --desc "Xiaohongshu video description from bash" \
   --tags "cli,video" \
   --thumbnail "$thumbnail" \
   --headless
 
-sau douyin upload-note \
+sau xiaohongshu upload-note \
   --account "$account" \
   --images "videos/1.png" "videos/2.png" \
-  --title "Douyin note title from bash" \
-  --note "Douyin note from bash" \
+  --title "Xiaohongshu note title from bash" \
+  --note "Xiaohongshu note from bash" \
   --tags "cli,note" \
   --headless

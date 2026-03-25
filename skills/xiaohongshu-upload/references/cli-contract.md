@@ -1,4 +1,4 @@
-# 快手 CLI 契约
+# 小红书 CLI 契约
 
 这个 skill 默认假设当前环境已经安装并可调用 `sau` 命令。
 
@@ -7,13 +7,13 @@
 ### 登录
 
 ```bash
-sau kuaishou login --account <account>
+sau xiaohongshu login --account <account>
 ```
 
 - 必填参数:
   - `--account`
 - 作用:
-  - 启动快手登录流程，为指定账号生成或刷新 cookie 文件
+  - 启动小红书登录流程，为指定账号生成或刷新 cookie 文件
   - 如果登录过程中生成本地二维码图片，agent 应优先直接把图片展示/发送给用户扫码，而不是只回传路径
 - 账号说明:
   - `--account` 传的是用户自定义的 `account_name`，不是固定只能叫 `creator`
@@ -22,7 +22,7 @@ sau kuaishou login --account <account>
 ### 校验 cookie
 
 ```bash
-sau kuaishou check --account <account>
+sau xiaohongshu check --account <account>
 ```
 
 - 必填参数:
@@ -34,7 +34,7 @@ sau kuaishou check --account <account>
 ### 上传视频
 
 ```bash
-sau kuaishou upload-video \
+sau xiaohongshu upload-video \
   --account <account> \
   --file <video-path> \
   --title "<title>" \
@@ -62,7 +62,7 @@ sau kuaishou upload-video \
 ### 上传图文
 
 ```bash
-sau kuaishou upload-note \
+sau xiaohongshu upload-note \
   --account <account> \
   --images <image-1> [image-2 ...] \
   --title "<title>" \
@@ -101,4 +101,3 @@ YYYY-MM-DD HH:MM
 - `upload-note` 每次命令支持多张图片
 - 视频描述字段统一使用 `--desc`
 - 图文正文统一使用 `--note`
-- `upload-note` 当前要求传入真实的多张图片文件，而不是同一路径重复多次

@@ -7,22 +7,22 @@ $video = "videos/demo.mp4"
 $thumbnail = "videos/demo.png"
 $noteImages = @("videos/1.png", "videos/2.png")
 
-sau douyin login --account $account --headless
-sau douyin check --account $account
+sau xiaohongshu login --account $account --headless
+sau xiaohongshu check --account $account
 
-sau douyin upload-video `
+sau xiaohongshu upload-video `
   --account $account `
   --file $video `
-  --title "Douyin video from PowerShell" `
-  --desc "Douyin video description from PowerShell" `
+  --title "Xiaohongshu video from PowerShell" `
+  --desc "Xiaohongshu video description from PowerShell" `
   --tags "cli,video" `
   --thumbnail $thumbnail `
   --headless
 
-sau douyin upload-note `
+sau xiaohongshu upload-note `
   --account $account `
   --images $noteImages `
-  --title "Douyin note title from PowerShell" `
-  --note "Douyin note from PowerShell" `
+  --title "Xiaohongshu note title from PowerShell" `
+  --note "Xiaohongshu note from PowerShell" `
   --tags "cli,note" `
   --headless

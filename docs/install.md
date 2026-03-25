@@ -84,6 +84,7 @@ Windows 也可以直接手动复制并重命名。
 sau --help
 sau douyin --help
 sau kuaishou --help
+sau xiaohongshu --help
 sau bilibili --help
 ```
 
@@ -97,7 +98,8 @@ sau bilibili --help
 ```bash
 sau douyin login --account <account_name>
 sau douyin check --account <account_name>
-sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题"
+sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介"
+sau douyin upload-note --account <account_name> --images videos/1.png videos/2.png --title "图文标题" --note "图文正文"
 ```
 
 ### 8. 快手主线示例
@@ -105,11 +107,20 @@ sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title 
 ```bash
 sau kuaishou login --account <account_name>
 sau kuaishou check --account <account_name>
-sau kuaishou upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题"
-sau kuaishou upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --note "图文示例"
+sau kuaishou upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介"
+sau kuaishou upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文正文"
 ```
 
-### 9. Bilibili 主线示例
+### 9. 小红书主线示例
+
+```bash
+sau xiaohongshu login --account <account_name>
+sau xiaohongshu check --account <account_name>
+sau xiaohongshu upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介"
+sau xiaohongshu upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文正文"
+```
+
+### 10. Bilibili 主线示例
 
 ```bash
 sau bilibili login --account <account_name>
@@ -121,6 +132,9 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 
 - `creator` 之类的名字只是示例值，真正传的是用户自定义的 `account_name`
 - 一个 `account_name` 对应一个账号文件，可以准备多个账号并发使用
+- 浏览器平台统一元数据约定：
+- 视频使用 `title + desc + tags`
+- 图文使用 `title + note + tags`
 - 用户不需要手动安装 `biliup`
 - 首次运行 Bilibili 相关命令时，程序会自动下载 `biliup`
 - 后续运行会自动检查上游 release 并自动更新
@@ -161,6 +175,7 @@ PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright" patchright i
 sau --help
 sau douyin --help
 sau kuaishou --help
+sau xiaohongshu --help
 sau bilibili --help
 ```
 
@@ -177,6 +192,11 @@ sau kuaishou check
 sau kuaishou upload-video
 sau kuaishou upload-note
 
+sau xiaohongshu login
+sau xiaohongshu check
+sau xiaohongshu upload-video
+sau xiaohongshu upload-note
+
 sau bilibili login
 sau bilibili check
 sau bilibili upload-video
@@ -188,6 +208,8 @@ sau bilibili upload-video
 - `skills/douyin-upload/references/cli-contract.md`
 - `skills/kuaishou-upload/SKILL.md`
 - `skills/kuaishou-upload/references/cli-contract.md`
+- `skills/xiaohongshu-upload/SKILL.md`
+- `skills/xiaohongshu-upload/references/cli-contract.md`
 - `skills/bilibili-upload/SKILL.md`
 - `skills/bilibili-upload/references/cli-contract.md`
 

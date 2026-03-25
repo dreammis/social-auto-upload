@@ -14,6 +14,7 @@ sau kuaishou upload-video `
   --account $account `
   --file $video `
   --title "Kuaishou video from PowerShell" `
+  --desc "Kuaishou video description from PowerShell" `
   --tags "cli,video" `
   --thumbnail $thumbnail `
   --headless
@@ -21,6 +22,7 @@ sau kuaishou upload-video `
 sau kuaishou upload-note `
   --account $account `
   --images $noteImages `
+  --title "Kuaishou note title from PowerShell" `
   --note "Kuaishou note from PowerShell" `
   --tags "cli,note" `
   --headless

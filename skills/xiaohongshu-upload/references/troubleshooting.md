@@ -6,15 +6,15 @@
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-sau kuaishou --help
+sau xiaohongshu --help
 ```
 
 ```powershell
-.\.venv\Scripts\sau.exe kuaishou --help
+.\.venv\Scripts\sau.exe xiaohongshu --help
 ```
 
 ```bash
-uv run sau kuaishou --help
+uv run sau xiaohongshu --help
 ```
 
 如果当前环境还没有安装项目：
@@ -28,24 +28,24 @@ uv pip install -e .
 先检查 cookie 状态：
 
 ```bash
-sau kuaishou check --account <account>
+sau xiaohongshu check --account <account>
 ```
 
 如果无效，就重新登录：
 
 ```bash
-sau kuaishou login --account <account>
+sau xiaohongshu login --account <account>
 ```
 
-## 登录二维码问题
+## 无头登录二维码处理
 
-如果用户反馈二维码在终端里不好扫：
+如果用户无法使用终端二维码输出：
 
-- 先优先使用 CLI / uploader 生成的本地二维码图片
-- 只有用户明确需要可见浏览器窗口，或图片方案仍然不方便时，再切到 `--headed`
-- 如果 CLI / uploader 已经生成临时二维码图片，agent 不要只回图片路径
+- 查找 CLI 打印出来的临时二维码图片
+- agent 不要只把图片路径回给用户
 - agent 应优先直接把本地二维码图片展示/发送给用户扫码
-- 图片路径只作为补充信息
+
+如果终端二维码显示不正常，优先使用保存下来的图片路径，而不是反复尝试随机的终端设置。
 
 ## 上传参数缺失
 
@@ -66,13 +66,6 @@ sau kuaishou login --account <account>
 - `--title`
 
 `--note` 当前是可选图文正文。
-
-## 图文上传只有一张生效
-
-如果用户一次传了多张图片，但页面只识别到一张，先确认：
-
-- `--images` 里传的是不是真正不同的文件
-- 不是同一路径重复多次
 
 ## 定时发布
 

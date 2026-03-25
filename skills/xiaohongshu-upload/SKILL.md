@@ -1,9 +1,9 @@
 ---
-name: kuaishou-upload
-description: 当 agent 需要通过已安装的 `sau` CLI 完成快手登录、cookie 校验、视频上传或图文发布时使用这个 skill。该 skill 适用于已经安装 `social-auto-upload` 且可调用 `sau` 命令的环境。优先使用这个 skill 进行稳定的命令式快手工作流，而不是一开始就阅读 uploader 源码。
+name: xiaohongshu-upload
+description: 当 agent 需要通过已安装的 `sau` CLI 完成小红书登录、cookie 校验、视频上传或图文发布时使用这个 skill。该 skill 适用于已经安装 `social-auto-upload` 且可调用 `sau` 命令的环境。优先使用这个 skill 进行稳定的命令式小红书工作流，而不是一开始就阅读 uploader 源码。
 ---
 
-# 快手上传 Skill
+# 小红书上传 Skill
 
 优先把 `sau` 作为主接口。
 
@@ -15,10 +15,10 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成快手登录、c
 
 | 功能 | 命令入口 | 说明 |
 | --- | --- | --- |
-| 快手登录 | `sau kuaishou login --account <name>` | 生成或刷新指定账号的 cookie |
-| cookie 校验 | `sau kuaishou check --account <name>` | 检查指定账号 cookie 是否有效 |
-| 视频上传 | `sau kuaishou upload-video ...` | 上传并发布快手视频 |
-| 图文上传 | `sau kuaishou upload-note ...` | 上传并发布快手图文 |
+| 小红书登录 | `sau xiaohongshu login --account <name>` | 生成或刷新指定账号的 cookie |
+| cookie 校验 | `sau xiaohongshu check --account <name>` | 检查指定账号 cookie 是否有效 |
+| 视频上传 | `sau xiaohongshu upload-video ...` | 上传并发布小红书视频 |
+| 图文上传 | `sau xiaohongshu upload-note ...` | 上传并发布小红书图文 |
 
 元数据约定：
 
@@ -29,15 +29,15 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成快手登录、c
 
 1. 先确认 `references/runtime-requirements.md` 里的运行前提。
 2. 再确认 `references/cli-contract.md` 里的命令契约。
-3. 执行匹配的 `sau kuaishou ...` 命令。
+3. 执行匹配的 `sau xiaohongshu ...` 命令。
 4. 如果命令失败，再看 `references/troubleshooting.md`。
 
 ## 支持动作
 
-- 使用 `sau kuaishou login --account <name>` 登录快手
-- 使用 `sau kuaishou check --account <name>` 校验 cookie 是否有效
-- 使用 `sau kuaishou upload-video ...` 上传快手视频
-- 使用 `sau kuaishou upload-note ...` 上传快手图文
+- 使用 `sau xiaohongshu login --account <name>` 登录小红书
+- 使用 `sau xiaohongshu check --account <name>` 校验 cookie 是否有效
+- 使用 `sau xiaohongshu upload-video ...` 上传小红书视频
+- 使用 `sau xiaohongshu upload-note ...` 上传小红书图文
 
 ## 命令选择建议
 
@@ -59,9 +59,9 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成快手登录、c
 
 当你需要稳定的命令模板时，使用 `scripts/examples/` 下的文件：
 
-- `kuaishou_commands.ps1`
-- `kuaishou_commands.sh`
-- `kuaishou_cli_template.py`
+- `xiaohongshu_commands.ps1`
+- `xiaohongshu_commands.sh`
+- `xiaohongshu_cli_template.py`
 
 ## 参考文档
 
