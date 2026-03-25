@@ -12,7 +12,7 @@ from conf import BASE_DIR, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 # 统一获取浏览器启动配置（防风控+引入本地浏览器）
 def get_browser_options():
     options = {
-        'headless': LOCAL_CHROME_HEADLESS,
+        'headless': False,
         'args': [
             '--disable-blink-features=AutomationControlled',  # 核心防爬屏蔽：去掉 window.navigator.webdriver 标签
             '--lang=zh-CN',
