@@ -5,6 +5,10 @@
 - `For Humans`：给正常使用仓库的开发者、创作者、CLI 用户看
 - `For AI Agents`：给 OpenClaw、Codex、Claude Code 一类 agent 看
 
+如果你是“正在使用 agent 客户端的人”，想先给 agent 一段启动提示词，而不是直接阅读下面的执行细节，先看：
+
+- [Agent Bootstrap Prompt](./agent-bootstrap.md)
+
 ## For Humans
 
 ### 1. 克隆项目

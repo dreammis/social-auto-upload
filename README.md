@@ -10,6 +10,7 @@
 
 - [💡 功能特性](#💡功能特性)
 - [💾 安装指南](#💾安装指南)
+- [🤖 AI Agent](#🤖ai-agent)
 - [🏁 快速开始](#🏁快速开始)
 - [🗂️ 重构计划](#🗂️重构计划)
 - [📣 近况说明](#📣近况说明)
@@ -39,14 +40,38 @@
 
 ## 💾安装指南
 
+### 自己上手使用
+如果你只是普通用户，不准备借助 agent 客户端，直接看
+
 安装、更新、环境准备已经统一收敛到文档：
 
 - [安装说明](./docs/install.md)
 - [更新说明](./docs/update.md)
 
-补充说明：
+
+### AGENT 
+
+```
+AI的发展毋庸置疑，希望你遇到这种安装和使用，不要再怯场，而是交给各种AI Agent来协助你
+```
+
+如果你准备把这个仓库直接交给 `OpenClaw`、`Codex`、`Claude Code` 来安装和使用
+
+先把仓库给 agent，再把这份启动提示词一起发给它：
+
+- [Agent Bootstrap Prompt](./docs/agent-bootstrap.md)
+
+这份提示词会引导 agent：
+
+- 优先按当前主线安装项目
+- 优先使用 `uv`、`sau` CLI 和 `skills/`
+- 先验证 `bilibili`、`douyin`、`kuaishou`、`xiaohongshu` 四个平台入口是否可用
+
+
+### 补充说明：
 
 - CLI 使用请看：[CLI 使用说明](./docs/CLI.md)
+- 如果你准备在 `OpenClaw`、`Codex`、`Claude Code / cc` 里使用本项目，先看：[Agent Bootstrap Prompt](./docs/agent-bootstrap.md)
 - agent / skill 请看：[Douyin Upload Skill](./skills/douyin-upload/SKILL.md)
 - agent / skill 请看：[Kuaishou Upload Skill](./skills/kuaishou-upload/SKILL.md)
 - agent / skill 请看：[Xiaohongshu Upload Skill](./skills/xiaohongshu-upload/SKILL.md)
@@ -54,7 +79,6 @@
 - 历史 Web 说明请看：[历史 Web 版本说明](./docs/legacy-web.md)
 - 其他单平台 skill 与整合型 skill 仍在开发中
 - `requirements.txt` 目前主要用于历史兼容路径，普通用户不需要优先使用它
-
 
 
 ## 📣近况说明
