@@ -1,31 +1,90 @@
 import asyncio
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from conf import BASE_DIR
-from uploader.xiaohongshu_uploader.main import xiaohongshu_setup, XiaoHongShuVideo
-from utils.files_times import generate_schedule_time_next_day, get_title_and_hashtags
+from uploader.xiaohongshu_uploader.main import XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE
+from uploader.xiaohongshu_uploader.main import XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED
+from uploader.xiaohongshu_uploader.main import XiaoHongShuNote
+from uploader.xiaohongshu_uploader.main import XiaoHongShuVideo
+
+
+ACCOUNT_FILE = Path(BASE_DIR / "cookies" / "xiaohongshu_uploader" / "account.json")
+
+
+def upload_video_to_xiaohongshu():
+    video_file = Path(BASE_DIR) / "videos" / "demo.mp4"
+    thumbnail_path = video_file.with_suffix(".png")
+    app = XiaoHongShuVideo(
+        title="小红书视频示例",
+        file_path=str(video_file),
+        desc="你好",
+        tags=["小红书", "视频示例", "调试入口"],
+        publish_strategy=XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE,
+        publish_date=0,
+        account_file=str(ACCOUNT_FILE),
+        thumbnail_path=str(thumbnail_path) if thumbnail_path.exists() else None,
+    )
+    asyncio.run(app.xiaohongshu_upload_video())
+
+
+def upload_video_to_xiaohongshu_scheduled():
+    video_file = Path(BASE_DIR) / "videos" / "demo.mp4"
+    thumbnail_path = video_file.with_suffix(".png")
+    publish_time = (datetime.now() + timedelta(hours=3)).replace(second=0, microsecond=0)
+    app = XiaoHongShuVideo(
+        title="小红书视频定时发布示例",
+        file_path=str(video_file),
+        desc="这是一条定时发布的小红书视频示例",
+        tags=["小红书", "定时发布", "调试入口"],
+        publish_strategy=XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED,
+        publish_date=publish_time,
+        account_file=str(ACCOUNT_FILE),
+        thumbnail_path=str(thumbnail_path) if thumbnail_path.exists() else None,
+    )
+    asyncio.run(app.xiaohongshu_upload_video())
+
+
+def upload_note_to_xiaohongshu():
+    image_candidates = [
+        Path(BASE_DIR) / "videos" / "demo.png",
+        Path(BASE_DIR) / "videos" / "demo1.png",
+        Path(BASE_DIR) / "videos" / "demo2.png",
+    ]
+    image_paths = [str(path) for path in image_candidates if path.exists()]
+    app = XiaoHongShuNote(
+        image_paths=image_paths,
+        note="小红书图文内容示例 #图文调试",
+        tags=["小红书图文", "自动上传", "调试入口"],
+        publish_strategy=XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE,
+        publish_date=0,
+        account_file=str(ACCOUNT_FILE),
+        title="小红书图文示例",
+    )
+    asyncio.run(app.xiaohongshu_upload_note())
+
+def upload_note_to_xiaohongshu_scheduled():
+    image_candidates = [
+        Path(BASE_DIR) / "videos" / "demo.png",
+        Path(BASE_DIR) / "videos" / "demo1.png",
+        Path(BASE_DIR) / "videos" / "demo2.png",
+    ]
+    image_paths = [str(path) for path in image_candidates if path.exists()]
+    publish_time = (datetime.now() + timedelta(hours=3)).replace(second=0, microsecond=0)
+    app = XiaoHongShuNote(
+        image_paths=image_paths,
+        note="小红书图文内容示例 #图文调试",
+        tags=["小红书图文", "自动上传", "调试入口"],
+        publish_strategy=XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED,
+        publish_date=publish_time,
+        account_file=str(ACCOUNT_FILE),
+        title="小红书图文示例",
+    )
+    asyncio.run(app.xiaohongshu_upload_note())
 
 
 if __name__ == '__main__':
-    filepath = Path(BASE_DIR) / "videos"
-    account_file = Path(BASE_DIR / "cookies" / "xiaohongshu_uploader" / "58a391ba-4082-11f0-a321-44e51723d63c.json")
-    # 获取视频目录
-    folder_path = Path(filepath)
-    # 获取文件夹中的所有文件
-    files = list(folder_path.glob("*.mp4"))
-    file_num = len(files)
-    publish_datetimes = generate_schedule_time_next_day(file_num, 1, daily_times=[16])
-    cookie_setup = asyncio.run(xiaohongshu_setup(account_file, handle=False))
-    for index, file in enumerate(files):
-        title, tags = get_title_and_hashtags(str(file))
-        thumbnail_path = file.with_suffix('.png')
-        # 打印视频文件名、标题和 hashtag
-        print(f"视频文件名：{file}")
-        print(f"标题：{title}")
-        print(f"Hashtag：{tags}")
-        # 暂时没有时间修复封面上传，故先隐藏掉该功能
-        # if thumbnail_path.exists():
-            # app = XiaoHongShuVideo(title, file, tags, publish_datetimes[index], account_file, thumbnail_path=thumbnail_path)
-        # else:
-        app = XiaoHongShuVideo(title, file, tags, 0, account_file)
-        asyncio.run(app.main(), debug=False)
+    # upload_video_to_xiaohongshu()
+    # upload_video_to_xiaohongshu_scheduled()
+    # upload_note_to_xiaohongshu()
+    upload_note_to_xiaohongshu_scheduled()
