@@ -153,10 +153,19 @@ def download_biliup_asset(release: dict, destination: Path) -> Path:
 def ensure_biliup_binary(force_check: bool = True) -> Path:
     binary_path = build_biliup_runtime_path()
     local_version = read_local_biliup_version()
-    if binary_path.exists() and local_version and not force_check:
+
+    # 默认优先复用本地已存在的 biliup，避免每次执行都去请求 GitHub latest release。
+    if binary_path.exists() and not force_check:
         return binary_path
 
-    release = fetch_latest_release()
+    try:
+        release = fetch_latest_release()
+    except Exception:
+        # 如果本地已经有可执行的 biliup，就在 GitHub 限流/网络失败时直接复用本地版本。
+        if binary_path.exists():
+            return binary_path
+        raise
+
     latest_version = release["tag_name"]
     if binary_path.exists() and local_version == latest_version:
         return binary_path
@@ -167,7 +176,7 @@ def ensure_biliup_binary(force_check: bool = True) -> Path:
 
 
 def run_biliup_command(arguments: list[str], interactive: bool = False) -> subprocess.CompletedProcess[str]:
-    binary_path = ensure_biliup_binary(force_check=True)
+    binary_path = ensure_biliup_binary(force_check=False)
     command = [str(binary_path), *arguments]
     if interactive:
         return subprocess.run(command, check=False)
