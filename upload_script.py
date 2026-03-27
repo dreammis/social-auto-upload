@@ -2,8 +2,19 @@
 # -*- coding: utf-8 -*-
 """
 命令行视频上传脚本
-使用方法:
-python upload_script.py --file "视频文件路径" --account "账号名称" --title "视频标题"
+
+示例:
+# 基础用法（立即发布）
+python upload_script.py --file "test.mp4" --account "我的账号" --title "测试视频"
+
+# 定时发布（指定 daily-times 即可启用）
+python upload_script.py --file "test.mp4" --account "我的账号" --title "测试视频" --daily-times 10:00 14:00
+
+# 抖音带货视频
+python upload_script.py --file "test.mp4" --account "我的账号" --title "测试视频" --platform 3 --product-link "https://..." --product-title "商品名称"
+
+# 视频号保存草稿
+python upload_script.py --file "test.mp4" --account "我的账号" --title "测试视频" --platform 2 --draft
 """
 
 import sys
@@ -43,75 +54,85 @@ def get_account_by_name(user_name):
         return None
 
 
-def publish_video_direct(file_path, account_list, title, platform_type=3, enable_timer=0):
+def publish_video_direct(file_path, account_list, title, platform_type=3, enable_timer=0, 
+                          tags=None, category=None, thumbnail='', product_link='', product_title='',
+                          is_draft=False, declaration_type=None, videos_per_day=1, daily_times=None, start_days=0):
     """直接调用内部函数发布视频"""
+    if tags is None:
+        tags = []
+    if daily_times is None:
+        daily_times = ["10:00"]
+    
     try:
         print(f"📤 正在发布视频...")
         print(f"   平台: {platform_type} (1=小红书, 2=视频号, 3=抖音, 4=快手)")
         print(f"   标题: {title}")
         print(f"   文件: {file_path}")
         print(f"   账号: {account_list}")
+        print(f"   标签: {tags}")
+        print(f"   分类: {category}")
         
-        declaration_info = {
-            "declaration_type": "内容由AI生成",
-            "declaration_location": [],
-            "declaration_date": "",
-            "isDraft": False
-        }
+        declaration_info = None
+        if declaration_type:
+            declaration_info = {
+                "declaration_type": declaration_type,
+                "declaration_location": [],
+                "declaration_date": ""
+            }
         
         match platform_type:
             case 1:
                 post_video_xhs(
                     title=title,
                     files=[file_path],
-                    tags=[],
+                    tags=tags,
                     account_file=account_list,
-                    category=None,
+                    category=category,
                     enableTimer=enable_timer,
-                    videos_per_day=1,
-                    daily_times=["10:00"],
-                    start_days=0
+                    videos_per_day=videos_per_day,
+                    daily_times=daily_times,
+                    start_days=start_days
                 )
             case 2:
                 post_video_tencent(
                     title=title,
                     files=[file_path],
-                    tags=[],
+                    tags=tags,
                     account_file=account_list,
-                    category=None,
+                    category=category,
                     enableTimer=enable_timer,
-                    videos_per_day=1,
-                    daily_times=["10:00"],
-                    start_days=0,
-                    is_draft=False
+                    videos_per_day=videos_per_day,
+                    daily_times=daily_times,
+                    start_days=start_days,
+                    is_draft=is_draft
                 )
             case 3:
                 post_video_DouYin(
                     title=title,
                     files=[file_path],
-                    tags=[],
+                    tags=tags,
                     account_file=account_list,
-                    category=None,
+                    category=category,
                     enableTimer=enable_timer,
-                    videos_per_day=1,
-                    daily_times=["10:00"],
-                    start_days=0,
-                    thumbnail_path='',
-                    productLink='',
-                    productTitle='',
+                    videos_per_day=videos_per_day,
+                    daily_times=daily_times,
+                    start_days=start_days,
+                    thumbnail_path=thumbnail,
+                    productLink=product_link,
+                    productTitle=product_title,
                     declaration_info=declaration_info
                 )
             case 4:
                 post_video_ks(
                     title=title,
                     files=[file_path],
-                    tags=[],
+                    tags=tags,
                     account_file=account_list,
-                    category=None,
+                    category=category,
                     enableTimer=enable_timer,
-                    videos_per_day=1,
-                    daily_times=["10:00"],
-                    start_days=0
+                    videos_per_day=videos_per_day,
+                    daily_times=daily_times,
+                    start_days=start_days
                 )
         
         print("✅ 发布任务已完成！")
@@ -128,10 +149,17 @@ def main():
     parser.add_argument('--file', type=str, required=True, help='视频文件路径')
     parser.add_argument('--account', type=str, required=True, help='账号名称')
     parser.add_argument('--title', type=str, required=True, help='视频标题')
-    parser.add_argument('--platform', type=int, default=3, 
-                        help='发布平台 (1=小红书, 2=视频号, 3=抖音, 4=快手)，默认抖音')
-    parser.add_argument('--timer', action='store_true', help='启用定时发布 (默认立即发布)')
-    
+    parser.add_argument('--platform', type=int, default=3, help='发布平台 (1=小红书, 2=视频号, 3=抖音, 4=快手)，默认抖音')
+    parser.add_argument('--tags', type=str, nargs='*', default=[], help='视频标签列表，如: --tags 标签1 标签2')
+    parser.add_argument('--category', type=int, default=None, help='视频分类ID')
+    parser.add_argument('--thumbnail', type=str, default='', help='缩略图路径（抖音专用）')
+    parser.add_argument('--product-link', type=str, default='', help='商品链接（抖音专用）')
+    parser.add_argument('--product-title', type=str, default='', help='商品标题（抖音专用）')
+    parser.add_argument('--declaration', type=str, default='内容由AI生成', help='声明类型（抖音专用），可选: 内容由AI生成, 内容取材网络, 可能引人不适, 虚构演绎仅供娱乐, 危险行为请勿模仿')
+    parser.add_argument('--draft', action='store_true', help='保存为草稿（视频号专用）')
+    parser.add_argument('--daily-times', type=str, nargs='*', default=None, help='每日发布时间列表（启用定时发布），如: --daily-times 10:00 14:00 18:00')
+    parser.add_argument('--videos-per-day', type=int, default=1, help='每天发布视频数量')
+    parser.add_argument('--start-days', type=int, default=0, help='定时发布开始天数，')
     args = parser.parse_args()
     
     # 检查视频文件是否存在
@@ -149,13 +177,24 @@ def main():
     print(f"✅ 找到账号: {args.account}")
     
     # 发布视频
-    enable_timer = 1 if args.timer else 0
+    enable_timer = 1 if args.daily_times else 0
+    daily_times = args.daily_times if args.daily_times else ["10:00"]
     success = publish_video_direct(
         file_path=args.file,
         account_list=[account_info["filePath"]],
         title=args.title,
         platform_type=args.platform,
-        enable_timer=enable_timer
+        enable_timer=enable_timer,
+        tags=args.tags,
+        category=args.category,
+        thumbnail=args.thumbnail,
+        product_link=args.product_link,
+        product_title=args.product_title,
+        is_draft=args.draft,
+        declaration_type=args.declaration,
+        videos_per_day=args.videos_per_day,
+        daily_times=daily_times,
+        start_days=args.start_days
     )
     
     if success:
