@@ -457,17 +457,22 @@ const activeTab = ref('all')
 const searchKeyword = ref('')
 
 // 获取账号数据（快速，不验证）
-const fetchAccountsQuick = async () => {
+const fetchAccountsQuick = async ({ markAsPending = false } = {}) => {
   try {
     const res = await accountApi.getAccounts()
     if (res.code === 200 && res.data) {
-      // 将所有账号的状态暂时设为"验证中"
-      const accountsWithPendingStatus = res.data.map(account => {
-        const updatedAccount = [...account];
-        updatedAccount[4] = -1; // -1 表示验证中的临时状态
-        return updatedAccount;
-      });
-      accountStore.setAccounts(accountsWithPendingStatus);
+      if (markAsPending) {
+        // 页面首次进入时，先快速展示账号，再由后台统一校验
+        const accountsWithPendingStatus = res.data.map(account => {
+          const updatedAccount = [...account]
+          updatedAccount[4] = -1 // -1 表示验证中的临时状态
+          return updatedAccount
+        })
+        accountStore.setAccounts(accountsWithPendingStatus)
+        return
+      }
+
+      accountStore.setAccounts(res.data)
     }
   } catch (error) {
     console.error('快速获取账号数据失败:', error)
@@ -518,7 +523,7 @@ const validateAllAccountsInBackground = async () => {
 // 页面加载时获取账号数据
 onMounted(() => {
   // 快速获取账号列表（不验证），立即显示
-  fetchAccountsQuick()
+  fetchAccountsQuick({ markAsPending: true })
 
   // 在后台验证所有账号
   setTimeout(() => {
