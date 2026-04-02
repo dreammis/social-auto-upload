@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timedelta
 import os
 import sqlite3
 import threading
@@ -21,6 +22,10 @@ from utils.base_social_media import set_init_script
 
 active_queues = {}
 app = Flask(__name__)
+
+CACHE_TIMEOUT = 24 * 60 * 60
+
+login_cache = {}
 
 UPLOAD_PAGE_CLASS_MAP = {
     1: XiaoHongShuVideo,
@@ -235,6 +240,16 @@ def getAccounts():
 
 @app.route("/getValidAccounts",methods=['GET'])
 async def getValidAccounts():
+    rows_list = await refresh_account_statuses()
+    return jsonify(
+                    {
+                        "code": 200,
+                        "msg": None,
+                        "data": rows_list
+                    }),200
+
+
+async def refresh_account_statuses(force_refresh=False):
     with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
         cursor = conn.cursor()
         cursor.execute('''
@@ -245,24 +260,48 @@ async def getValidAccounts():
         for row in rows:
             print(row)
         for row in rows_list:
+            cache_key = f"{row[1]}_{row[2]}"
+            current_time = time.time()
+            original_status = row[4]
+
+            if not force_refresh and cache_key in login_cache:
+                cached_time, cached_result = login_cache[cache_key]
+                if current_time - cached_time < CACHE_TIMEOUT:
+                    row[4] = 1 if cached_result else 0
+                    continue
+
             flag = await check_cookie(row[1],row[2])
-            if not flag:
-                row[4] = 0
+            login_cache[cache_key] = (current_time, flag)
+            row[4] = 1 if flag else 0
+            if row[4] != original_status:
                 cursor.execute('''
                 UPDATE user_info 
                 SET status = ? 
                 WHERE id = ?
-                ''', (0,row[0]))
-                conn.commit()
-                print("✅ 用户状态已更新")
+                ''', (row[4],row[0]))
+        conn.commit()
+        print("✅ 用户状态已更新")
         for row in rows:
             print(row)
-        return jsonify(
-                        {
-                            "code": 200,
-                            "msg": None,
-                            "data": rows_list
-                        }),200
+        return rows_list
+
+
+def get_seconds_until_next_midnight():
+    now = datetime.now()
+    next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(1, (next_midnight - now).total_seconds())
+
+
+def nightly_account_status_checker():
+    while True:
+        sleep_seconds = get_seconds_until_next_midnight()
+        print(f"⏰ 下次账号状态自动检查将在 {int(sleep_seconds)} 秒后执行")
+        time.sleep(sleep_seconds)
+        try:
+            asyncio.run(refresh_account_statuses(force_refresh=True))
+            print("✅ 半夜账号状态自动检查完成")
+        except Exception as e:
+            print(f"❌ 半夜账号状态自动检查失败: {str(e)}")
 
 @app.route('/deleteFile', methods=['GET'])
 def delete_file():
@@ -903,4 +942,5 @@ def sse_stream(status_queue):
             time.sleep(0.1)
 
 if __name__ == '__main__':
+    threading.Thread(target=nightly_account_status_checker, daemon=True).start()
     app.run(host='0.0.0.0' ,port=5409)
