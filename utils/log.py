@@ -1,8 +1,14 @@
+import sys
 from pathlib import Path
-from sys import stdout
 from loguru import logger
 
 from conf import BASE_DIR
+
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
 def log_formatter(record: dict) -> str:
@@ -41,7 +47,7 @@ def create_logger(log_name: str, file_path: str):
 # Remove all existing handlers
 logger.remove()
 # Add a standard console handler
-logger.add(stdout, colorize=True, format=log_formatter)
+logger.add(sys.stdout, colorize=True, format=log_formatter)
 
 douyin_logger = create_logger('douyin', 'logs/douyin.log')
 tencent_logger = create_logger('tencent', 'logs/tencent.log')

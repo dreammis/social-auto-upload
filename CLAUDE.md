@@ -27,10 +27,11 @@ The project consists of a Python backend and a Vue.js frontend.
 
 **Command-line Interface:**
 
-The project also provides a command-line interface (CLI) for users who prefer to work from the terminal. The CLI supports two main actions:
+The project also provides a command-line interface (CLI) for users who prefer to work from the terminal. For new Douyin CLI work, prefer the `sau douyin ...` entrypoint over legacy example scripts.
 
-*   `login`: To log in to a social media platform.
-*   `upload`: To upload a video to a social media platform, with an option to schedule the upload.
+*   `login`: To log in to the Douyin uploader account.
+*   `check`: To verify whether the saved Douyin cookie is still valid.
+*   `upload`: To upload one video file with explicit metadata flags.
 
 ## Building and Running
 
@@ -82,13 +83,25 @@ To use the CLI, you can run the `cli_main.py` script with the appropriate argume
 **Login:**
 
 ```bash
-python cli_main.py <platform> <account_name> login
+sau douyin login --account <account_name>
+```
+
+**Check:**
+
+```bash
+sau douyin check --account <account_name>
 ```
 
 **Upload:**
 
 ```bash
-python cli_main.py <platform> <account_name> upload <video_file> [-pt {0,1}] [-t YYYY-MM-DD HH:MM]
+sau douyin upload --account <account_name> --file <video_file> --title <title> [--tags tag1,tag2] [--schedule YYYY-MM-DD HH:MM]
+```
+
+**Install bundled skill:**
+
+```bash
+sau skill install
 ```
 
 ## Development Conventions
