@@ -415,6 +415,8 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
 
 
 class XiaoHongShuVideo(XiaoHongShuBaseUploader):
+    upload_page = "https://creator.xiaohongshu.com/publish/publish?from=homepage&target=video"
+
     def __init__(
         self,
         title,

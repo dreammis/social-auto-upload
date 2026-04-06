@@ -10,7 +10,7 @@ The project consists of a Python backend and a Vue.js frontend.
 *   Core Functionality:
     *   Handles file uploads and management.
     *   Interacts with a SQLite database to store information about files and user accounts.
-    *   Uses `playwright` for browser automation to interact with social media platforms.
+    *   Primarily uses `patchright` for browser automation to interact with social media platforms. Some legacy modules still use `playwright`.
     *   Provides a RESTful API for the frontend to consume.
     *   Uses Server-Sent Events (SSE) for real-time communication with the frontend during the login process.
 
@@ -27,10 +27,11 @@ The project consists of a Python backend and a Vue.js frontend.
 
 **Command-line Interface:**
 
-The project also provides a command-line interface (CLI) for users who prefer to work from the terminal. The CLI supports two main actions:
+The project also provides a command-line interface (CLI) for users who prefer to work from the terminal. For new Douyin CLI work, prefer the `sau douyin ...` entrypoint over legacy example scripts.
 
-*   `login`: To log in to a social media platform.
-*   `upload`: To upload a video to a social media platform, with an option to schedule the upload.
+*   `login`: To log in to the Douyin uploader account.
+*   `check`: To verify whether the saved Douyin cookie is still valid.
+*   `upload`: To upload one video file with explicit metadata flags.
 
 ## Building and Running
 
@@ -38,22 +39,27 @@ The project also provides a command-line interface (CLI) for users who prefer to
 
 1.  **Install dependencies:**
     ```bash
-    pip install -r requirements.txt
+    uv sync --extra web
     ```
 
-2.  **Install Playwright browser drivers:**
+2.  **Install browser drivers with Patchright (recommended):**
+    Windows PowerShell:
+    ```powershell
+    $env:PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright"; patchright install chromium
+    ```
+    Linux / macOS:
     ```bash
-    playwright install chromium
+    PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright" patchright install chromium
     ```
 
 3.  **Initialize the database:**
     ```bash
-    python db/createTable.py
+    uv run db/createTable.py
     ```
 
 4.  **Run the backend server:**
     ```bash
-    python sau_backend.py
+    uv run sau_backend.py
     ```
     The backend server will start on `http://localhost:5409`.
 
@@ -82,13 +88,25 @@ To use the CLI, you can run the `cli_main.py` script with the appropriate argume
 **Login:**
 
 ```bash
-python cli_main.py <platform> <account_name> login
+sau douyin login --account <account_name>
+```
+
+**Check:**
+
+```bash
+sau douyin check --account <account_name>
 ```
 
 **Upload:**
 
 ```bash
-python cli_main.py <platform> <account_name> upload <video_file> [-pt {0,1}] [-t YYYY-MM-DD HH:MM]
+sau douyin upload --account <account_name> --file <video_file> --title <title> [--tags tag1,tag2] [--schedule YYYY-MM-DD HH:MM]
+```
+
+**Install bundled skill:**
+
+```bash
+sau skill install
 ```
 
 ## Development Conventions

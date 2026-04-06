@@ -48,7 +48,17 @@ def post_video_DouYin(title,files,tags,account_file,category=TencentZoneTypes.LI
             print(f"Hashtag：{tags}")
             if declaration_info is not None:
                 print(f"自主声明：{declaration_info}")
-            app = DouYinVideo(title, str(file), tags, publish_datetimes[index], cookie, thumbnail_path, productLink, productTitle)
+            app = DouYinVideo(
+                title,
+                str(file),
+                tags,
+                publish_datetimes[index],
+                cookie,
+                thumbnail_path,
+                productLink,
+                productTitle,
+                declaration_info=declaration_info,
+            )
             asyncio.run(app.main(), debug=False)
 
 
