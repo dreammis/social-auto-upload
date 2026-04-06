@@ -88,3 +88,30 @@ dependencies = [
     "ykdl==1.8.2",
     "yt-dlp==2025.5.22",
 ]
+<<<<<<< Updated upstream
+=======
+
+[project.scripts]
+sau = "sau_cli:main"
+
+[project.optional-dependencies]
+web = [
+  "Flask[async]==3.1.1",
+  "flask-cors==6.0.0",
+  "playwright==1.52.0",
+  "xhs==0.2.13",
+]
+
+[tool.uv]
+package = true
+
+[tool.setuptools]
+py-modules = ["cli_main", "conf", "sau_cli"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["uploader*", "utils*", "myUtils*"]
+
+[tool.setuptools.package-data]
+utils = ["stealth.min.js"]
+>>>>>>> Stashed changes
