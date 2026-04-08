@@ -10,16 +10,20 @@ from pathlib import Path
 from conf import BASE_DIR, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 
 # 统一获取浏览器启动配置（防风控+引入本地浏览器）
-def get_browser_options():
+def get_browser_options(douyin=False):
     options = {
         'headless': False,
         'args': [
+            '--lang=en-GB'
+        ]
+    }
+    if douyin:
+        options['args'] = [
             '--disable-blink-features=AutomationControlled',  # 核心防爬屏蔽：去掉 window.navigator.webdriver 标签
             '--lang=zh-CN',
             '--disable-infobars',
             '--start-maximized'
         ]
-    }
     # 如果用户在 conf.py 里配置了本地 Chrome，就用本地的，这样成功率极高
     if LOCAL_CHROME_PATH:
         options['executable_path'] = LOCAL_CHROME_PATH
@@ -68,7 +72,7 @@ async def douyin_cookie_gen(id, status_queue, account_id=None, existing_file_pat
         if page.url != original_url:
             url_changed_event.set()
     async with async_playwright() as playwright:
-        options = get_browser_options()
+        options = get_browser_options(True)
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
         # Setup context however you like.
@@ -123,12 +127,7 @@ async def get_tencent_cookie(id, status_queue, account_id=None, existing_file_pa
             url_changed_event.set()
 
     async with async_playwright() as playwright:
-        options = {
-            'args': [
-                '--lang en-GB'
-            ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
-        }
+        options = get_browser_options() 
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
         # Setup context however you like.
@@ -190,12 +189,7 @@ async def get_ks_cookie(id, status_queue, account_id=None, existing_file_path=No
         if page.url != original_url:
             url_changed_event.set()
     async with async_playwright() as playwright:
-        options = {
-            'args': [
-                '--lang en-GB'
-            ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
-        }
+        options = get_browser_options() 
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
         # Setup context however you like.
@@ -256,12 +250,7 @@ async def xiaohongshu_cookie_gen(id, status_queue, account_id=None, existing_fil
             url_changed_event.set()
 
     async with async_playwright() as playwright:
-        options = {
-            'args': [
-                '--lang en-GB'
-            ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
-        }
+        options = get_browser_options() 
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
         # Setup context however you like.

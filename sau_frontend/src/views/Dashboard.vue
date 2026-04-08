@@ -142,11 +142,11 @@
           <el-table-column label="类型" width="100">
             <template #default="scope">
               <el-tag
-                :type="getFileTypeTag(scope.row.filename)"
+                :type="getFileTypeTag(scope.row)"
                 effect="plain"
                 size="small"
               >
-                {{ getFileType(scope.row.filename) }}
+                {{ getFileType(scope.row) }}
               </el-tag>
             </template>
           </el-table-column>
@@ -203,10 +203,33 @@ const platformStats = computed(() => {
 const videoExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv']
 const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
 
+const getMaterialFileName = (materialOrName) => {
+  if (typeof materialOrName === 'string') {
+    return materialOrName
+  }
+
+  if (!materialOrName) {
+    return ''
+  }
+
+  const displayName = materialOrName.filename || ''
+  if (displayName && displayName !== '未命名') {
+    return displayName
+  }
+
+  return materialOrName.file_path || displayName
+}
+
 const contentStats = computed(() => {
   const materials = appStore.materials
-  const videos = materials.filter(m => videoExtensions.some(ext => m.filename.toLowerCase().endsWith(ext))).length
-  const images = materials.filter(m => imageExtensions.some(ext => m.filename.toLowerCase().endsWith(ext))).length
+  const videos = materials.filter(m => {
+    const filename = getMaterialFileName(m).toLowerCase()
+    return videoExtensions.some(ext => filename.endsWith(ext))
+  }).length
+  const images = materials.filter(m => {
+    const filename = getMaterialFileName(m).toLowerCase()
+    return imageExtensions.some(ext => filename.endsWith(ext))
+  }).length
   return {
     total: materials.length,
     videos,
@@ -223,15 +246,16 @@ const recentMaterials = computed(() => {
 })
 
 // 获取文件类型
-const getFileType = (filename) => {
+const getFileType = (materialOrName) => {
+  const filename = getMaterialFileName(materialOrName).toLowerCase()
   if (videoExtensions.some(ext => filename.toLowerCase().endsWith(ext))) return '视频'
   if (imageExtensions.some(ext => filename.toLowerCase().endsWith(ext))) return '图片'
   return '其他'
 }
 
 // 获取文件类型标签颜色
-const getFileTypeTag = (filename) => {
-  const type = getFileType(filename)
+const getFileTypeTag = (materialOrName) => {
+  const type = getFileType(materialOrName)
   return { '视频': 'success', '图片': 'warning', '其他': 'info' }[type] || 'info'
 }
 

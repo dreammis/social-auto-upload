@@ -105,6 +105,38 @@ def get_file():
     return send_from_directory(file_path,filename)
 
 
+def sync_video_file_records(conn):
+    video_dir = Path(BASE_DIR / "videoFile")
+    video_dir.mkdir(parents=True, exist_ok=True)
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT file_path FROM file_records WHERE file_path IS NOT NULL")
+    existing_paths = {row[0] for row in cursor.fetchall()}
+
+    synced_count = 0
+    for video_path in video_dir.iterdir():
+        if not video_path.is_file():
+            continue
+
+        relative_path = video_path.name
+        if relative_path in existing_paths:
+            continue
+
+        cursor.execute(
+            '''
+            INSERT INTO file_records (filename, filesize, file_path)
+            VALUES (?, ?, ?)
+            ''',
+            ("未命名", round(video_path.stat().st_size / (1024 * 1024), 2), relative_path)
+        )
+        existing_paths.add(relative_path)
+        synced_count += 1
+
+    if synced_count:
+        conn.commit()
+        print(f"✅ 已补录 {synced_count} 个 videoFile 文件到数据库")
+
+
 @app.route('/uploadSave', methods=['POST'])
 def upload_save():
     if 'file' not in request.files:
@@ -173,6 +205,7 @@ def get_all_files():
         # 使用 with 自动管理数据库连接
         with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
             conn.row_factory = sqlite3.Row  # 允许通过列名访问结果
+            sync_video_file_records(conn)
             cursor = conn.cursor()
 
             # 查询所有记录
