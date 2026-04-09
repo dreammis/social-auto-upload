@@ -9,12 +9,12 @@ from uploader.tk_uploader.tk_config import Tk_Locator
 from utils.base_social_media import set_init_script
 from utils.files_times import get_absolute_path
 from utils.log import tiktok_logger
-from conf import LOCAL_CHROME_HEADLESS
+from utils.runtime_config import get_local_chrome_headless
 
 
 async def cookie_auth(account_file):
     async with async_playwright() as playwright:
-        browser = await playwright.firefox.launch(headless=LOCAL_CHROME_HEADLESS)
+        browser = await playwright.firefox.launch(headless=get_local_chrome_headless())
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
         # 创建一个新的页面
@@ -54,7 +54,7 @@ async def get_tiktok_cookie(account_file):
             'args': [
                 '--lang en-GB',
             ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
+            'headless': get_local_chrome_headless(),
         }
         # Make sure to run headed.
         browser = await playwright.firefox.launch(**options)
@@ -76,7 +76,7 @@ class TiktokVideo(object):
         self.tags = tags
         self.publish_date = publish_date
         self.account_file = account_file
-        self.headless = LOCAL_CHROME_HEADLESS
+        self.headless = get_local_chrome_headless()
         self.locator_base = None
 
 

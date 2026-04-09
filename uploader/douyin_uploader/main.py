@@ -6,11 +6,11 @@ import inspect
 import os
 from pathlib import Path
 
-from patchright.async_api import Page
+from patchright.async_api import Locator, Page
 from patchright.async_api import Playwright
 from patchright.async_api import async_playwright
 
-from conf import DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
+from conf import DEBUG_MODE, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
 from utils.login_qrcode import build_login_qrcode_path
@@ -19,6 +19,7 @@ from utils.login_qrcode import print_terminal_qrcode
 from utils.login_qrcode import remove_qrcode_file
 from utils.login_qrcode import save_data_url_image
 from utils.log import douyin_logger
+from utils.runtime_config import get_local_chrome_headless
 
 DOUYIN_PUBLISH_STRATEGY_IMMEDIATE = "immediate"
 DOUYIN_PUBLISH_STRATEGY_SCHEDULED = "scheduled"
@@ -60,7 +61,7 @@ async def _launch_douyin_browser(playwright: Playwright, *, headless: bool, exec
 
 async def cookie_auth(account_file):
     async with async_playwright() as playwright:
-        browser = await _launch_douyin_browser(playwright, headless=True)
+        browser = await _launch_douyin_browser(playwright, headless=get_local_chrome_headless())
         try:
             context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
@@ -79,7 +80,9 @@ async def cookie_auth(account_file):
             await browser.close()
 
 
-async def douyin_setup(account_file, handle=False, return_detail=False, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS):
+async def douyin_setup(account_file, handle=False, return_detail=False, qrcode_callback=None, headless: bool | None = None):
+    if headless is None:
+        headless = get_local_chrome_headless()
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
             result = _build_login_result(False, "cookie_invalid", "cookie文件不存在或已失效", account_file)
@@ -183,8 +186,10 @@ async def douyin_cookie_gen(
     qrcode_callback=None,
     poll_interval: int = 3,
     max_checks: int = 100,
-    headless: bool = LOCAL_CHROME_HEADLESS,
+    headless: bool | None = None,
 ):
+    if headless is None:
+        headless = get_local_chrome_headless()
     async with async_playwright() as playwright:
         browser = await _launch_douyin_browser(playwright, headless=headless)
         context = await browser.new_context()
@@ -236,7 +241,7 @@ class DouYinBaseUploader(BaseVideoUploader):
         account_file,
         publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
-        headless: bool = LOCAL_CHROME_HEADLESS,
+        headless: bool | None = None,
     ):
         self.publish_date = publish_date
         self.account_file = account_file
@@ -244,7 +249,7 @@ class DouYinBaseUploader(BaseVideoUploader):
         self.debug = debug
         self.date_format = "%Y年%m月%d日 %H:%M"
         self.local_executable_path = LOCAL_CHROME_PATH
-        self.headless = headless
+        self.headless = get_local_chrome_headless() if headless is None else headless
 
     async def validate_base_args(self):
         if not os.path.exists(self.account_file):
@@ -396,7 +401,7 @@ class DouYinVideo(DouYinBaseUploader):
         desc: str | None = None,
         publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
-        headless: bool = LOCAL_CHROME_HEADLESS,
+        headless: bool | None = None,
     ):
         super().__init__(
             publish_date=publish_date,
@@ -456,29 +461,133 @@ class DouYinVideo(DouYinBaseUploader):
             return
 
         douyin_logger.info(_msg("🏃", "小人正在设置视频封面"))
-        await page.click('text="选择封面"')
-        cover_locator_str = 'div[id*="creator-content-modal"]'
-        cover_locator = page.locator(cover_locator_str)
-        await page.wait_for_selector(cover_locator_str)
-
-        upload_input = cover_locator.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input")
-
-        if self.thumbnail_landscape_path:
-            await page.wait_for_timeout(1000)
-            await upload_input.set_input_files(self.thumbnail_landscape_path)
-            await page.wait_for_timeout(2000)
-            douyin_logger.info(_msg("🖼️", "横版封面上传完成"))
+        open_cover_tip = "竖封面3:4" if self.thumbnail_portrait_path else "横封面4:3"
+        cover_locator = await self._open_cover_editor(page, open_cover_tip)
 
         if self.thumbnail_portrait_path:
-            await cover_locator.locator("div[class*='steps'] div").nth(1).click()
-            await page.wait_for_timeout(1000)
-            await upload_input.set_input_files(self.thumbnail_portrait_path)
-            await page.wait_for_timeout(2000)
+            await self._switch_cover_step(page, cover_locator, "设置竖封面")
+            await self._upload_cover_image(page, cover_locator, self.thumbnail_portrait_path, "竖版封面")
             douyin_logger.info(_msg("🖼️", "竖版封面上传完成"))
 
-        await cover_locator.locator('button:visible:has-text("完成")').click()
+        if self.thumbnail_landscape_path:
+            await self._switch_cover_step(page, cover_locator, "设置横封面")
+            await self._upload_cover_image(page, cover_locator, self.thumbnail_landscape_path, "横版封面")
+            douyin_logger.info(_msg("🖼️", "横版封面上传完成"))
+
+        await self._finish_cover_editor(cover_locator)
         douyin_logger.info(_msg("🥳", "视频封面设置完成"))
-        await page.wait_for_selector("div.extractFooter", state="detached")
+
+    async def _open_cover_editor(self, page: Page, cover_tip: str) -> Locator:
+        cover_control = page.locator(f"div.coverControl-CjlzqC:has-text('{cover_tip}')").first
+        await cover_control.wait_for(state="visible", timeout=30000)
+        await cover_control.scroll_into_view_if_needed()
+        await cover_control.locator("div.cover-Jg3T4p").first.click()
+
+        cover_locator = page.locator("#dy-creator-content-modal-body").last
+        try:
+            await cover_locator.wait_for(state="visible", timeout=10000)
+            return cover_locator
+        except Exception:
+            return await self._wait_for_cover_modal(page)
+
+    async def _switch_cover_step(self, page: Page, cover_locator: Locator, step_text: str):
+        button_candidates = []
+        if step_text == "设置横封面":
+            button_candidates.append(
+                cover_locator.locator('div.buttons-BoCvr4 button:has-text("设置横封面")').first
+            )
+
+        button_candidates.extend(
+            [
+                cover_locator.get_by_role("button", name=step_text, exact=True).first,
+                cover_locator.locator(f"div.steps-cgzd9T div.step-dXVbPX:has(span:text-is('{step_text}'))").first,
+                cover_locator.get_by_text(step_text, exact=True).first,
+            ]
+        )
+
+        for candidate in button_candidates:
+            try:
+                if not await candidate.count():
+                    continue
+                await candidate.scroll_into_view_if_needed()
+                await candidate.click()
+                await page.wait_for_timeout(500)
+                return
+            except Exception:
+                continue
+
+        if step_text == "设置竖封面":
+            return
+
+        raise RuntimeError(f"未找到封面步骤入口: {step_text}")
+
+    async def _upload_cover_image(self, page: Page, cover_locator: Locator, image_path: str, cover_name: str):
+        upload_container = cover_locator.locator("div.container-XzaV9h.upload-ZOJTUA").first
+        if await upload_container.count():
+            await upload_container.wait_for(state="visible", timeout=10000)
+        else:
+            upload_container = cover_locator.locator('div:has-text("上传封面")').first
+
+        upload_input = upload_container.locator("input[type='file']").first if await upload_container.count() else None
+        upload_drag_area = upload_container.locator("div.semi-upload-drag-area").first if await upload_container.count() else cover_locator.locator("div.semi-upload-drag-area").last
+        if upload_input and await upload_input.count():
+            await upload_input.set_input_files(image_path)
+        elif await upload_drag_area.count():
+            async with page.expect_file_chooser() as file_chooser_info:
+                await upload_drag_area.click()
+            file_chooser = await file_chooser_info.value
+            await file_chooser.set_files(image_path)
+        else:
+            raise RuntimeError(f"未找到{cover_name}上传控件")
+
+        await page.wait_for_timeout(2000)
+
+    async def _finish_cover_editor(self, cover_locator: Locator):
+        await cover_locator.locator('button:visible:has-text("完成")').click()
+        try:
+            await cover_locator.wait_for(state="hidden", timeout=10000)
+        except Exception:
+            await cover_locator.wait_for(state="detached", timeout=10000)
+
+    async def _wait_for_cover_modal(self, page: Page) -> Locator:
+        cover_locator = page.locator("#dy-creator-content-modal-body").last
+        for _ in range(20):
+            try:
+                if await cover_locator.count() and await cover_locator.is_visible():
+                    has_upload_area = await cover_locator.locator("div.container-XzaV9h.upload-ZOJTUA").count()
+                    has_finish_button = await cover_locator.locator('button:has-text("完成")').count()
+                    if has_upload_area or has_finish_button:
+                        return cover_locator
+            except Exception:
+                pass
+            await asyncio.sleep(0.5)
+
+        modal_groups = [
+            page.locator(".semi-modal-content"),
+            page.locator("[role='dialog']"),
+            page.locator(".semi-modal"),
+        ]
+
+        for _ in range(20):
+            for group in modal_groups:
+                count = await group.count()
+                for index in range(count - 1, -1, -1):
+                    modal = group.nth(index)
+                    try:
+                        if not await modal.is_visible():
+                            continue
+                    except Exception:
+                        continue
+
+                    has_upload_drag_area = await modal.locator("div.semi-upload-drag-area").count()
+                    has_upload_input = await modal.locator("input[type='file']").count()
+                    has_finish_button = await modal.locator('button:has-text("完成")').count()
+                    if has_upload_drag_area or has_upload_input or has_finish_button:
+                        return modal
+
+            await asyncio.sleep(0.5)
+
+        raise RuntimeError("未找到封面上传弹窗")
 
     async def set_declaration(self, page: Page, declaration_info: dict):
         """Restore Douyin declaration support from main while keeping the refactored uploader flow."""
@@ -660,7 +769,7 @@ class DouYinVideo(DouYinBaseUploader):
 
         await asyncio.sleep(1)
         douyin_logger.info(_msg("✍️", "小人开始填标题、描述和话题"))
-        await self.fill_title_and_description(page, self.title, self.desc or self.title, self.tags)
+        await self.fill_title_and_description(page, self.title, self.desc, self.tags)
         douyin_logger.info(_msg("🏷️", f"小人一共贴了 {len(self.tags)} 个话题"))
 
         while True:
@@ -680,6 +789,8 @@ class DouYinVideo(DouYinBaseUploader):
 
         if self.productLink and self.productTitle:
             douyin_logger.info(_msg("🛒", "小人正在设置商品链接"))
+            douyin_logger.debug(_msg("🧍", "先等一下页面把商品弹窗相关控件准备好"))
+            await page.wait_for_timeout(3000)
             await self.set_product_link(page, self.productLink, self.productTitle)
             douyin_logger.info(_msg("🥳", "商品链接设置完成"))
 
@@ -740,7 +851,7 @@ class DouYinNote(DouYinBaseUploader):
         title: str | None = None,
         publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
-        headless: bool = LOCAL_CHROME_HEADLESS,
+        headless: bool | None = None,
     ):
         super().__init__(
             publish_date=publish_date,

@@ -7,10 +7,11 @@ import os
 import time
 import asyncio
 
-from conf import LOCAL_CHROME_PATH, LOCAL_CHROME_HEADLESS
+from conf import LOCAL_CHROME_PATH
 from utils.base_social_media import set_init_script
 from utils.log import baijiahao_logger
 from utils.network import async_retry
+from utils.runtime_config import get_local_chrome_headless
 
 
 async def baijiahao_cookie_gen(account_file):
@@ -19,7 +20,7 @@ async def baijiahao_cookie_gen(account_file):
             'args': [
                 '--lang en-GB'
             ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
+            'headless': get_local_chrome_headless(),
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
@@ -37,7 +38,7 @@ async def baijiahao_cookie_gen(account_file):
 
 async def cookie_auth(account_file):
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=LOCAL_CHROME_HEADLESS)
+        browser = await playwright.chromium.launch(headless=get_local_chrome_headless())
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
         # 创建一个新的页面
@@ -71,7 +72,7 @@ class BaiJiaHaoVideo(object):
         self.account_file = account_file
         self.date_format = '%Y年%m月%d日 %H:%M'
         self.local_executable_path = LOCAL_CHROME_PATH
-        self.headless = LOCAL_CHROME_HEADLESS
+        self.headless = get_local_chrome_headless()
         self.proxy_setting = proxy_setting
 
     async def set_schedule_time(self, page, publish_date):
