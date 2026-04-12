@@ -532,8 +532,10 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)
 
+        _video_publish_attempts = 0
         while True:
             try:
+                _video_publish_attempts += 1
                 if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED:
                     await page.locator('button:has-text("定时发布")').click()
                 else:
@@ -544,10 +546,13 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
                 )
                 xiaohongshu_logger.success(_msg("🥳", "视频发布成功，小人开心收工"))
                 break
-            except Exception:
-                xiaohongshu_logger.info(_msg("🏃", "小人正在冲刺发布视频"))
+            except Exception as _e:
+                xiaohongshu_logger.info(_msg("🏃", f"小人正在冲刺发布视频 (attempt {_video_publish_attempts}, err: {type(_e).__name__}, url: {page.url})"))
                 if self.debug:
-                    await page.screenshot(full_page=True)
+                    await page.screenshot(path=f"/tmp/xhs_video_debug_{_video_publish_attempts}.png", full_page=True)
+                if _video_publish_attempts >= 30:
+                    xiaohongshu_logger.error(_msg("😢", f"视频发布超时，放弃重试。最终URL: {page.url}"))
+                    raise RuntimeError(f"video publish stuck after {_video_publish_attempts} attempts")
                 await asyncio.sleep(0.5)
 
     async def upload(self, playwright: Playwright) -> None:
@@ -650,8 +655,10 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
         if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)
 
+        _note_publish_attempts = 0
         while True:
             try:
+                _note_publish_attempts += 1
                 if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED:
                     await page.locator('button:has-text("定时发布")').click()
                 else:
@@ -662,10 +669,13 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
                 )
                 xiaohongshu_logger.success(_msg("🥳", "图文发布成功，小人开心收工"))
                 break
-            except Exception:
-                xiaohongshu_logger.info(_msg("🏃", "小人正在冲刺发布图文"))
+            except Exception as _e:
+                xiaohongshu_logger.info(_msg("🏃", f"小人正在冲刺发布图文 (attempt {_note_publish_attempts}, err: {type(_e).__name__})"))
                 if self.debug:
-                    await page.screenshot(full_page=True)
+                    await page.screenshot(path=f"/tmp/xhs_note_debug_{_note_publish_attempts}.png", full_page=True)
+                if _note_publish_attempts >= 30:
+                    xiaohongshu_logger.error(_msg("😢", f"图文发布超时，放弃重试。最终URL: {page.url}"))
+                    raise RuntimeError(f"note publish stuck after {_note_publish_attempts} attempts")
                 await asyncio.sleep(0.5)
 
     async def upload(self, playwright: Playwright) -> None:
