@@ -490,25 +490,34 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         await page.wait_for_url(XHS_PUBLISH_VIDEO_URL)
         await page.locator("div[class^='upload-content'] input[class='upload-input']").set_input_files(self.file_path)
 
+        # Poll for upload completion. Try multiple indicators to be resilient to XHS UI changes:
+        # - legacy: preview-new > div.stage text contains "上传成功" or "分辨率"
+        # - new (2026-04): page body contains "重新上传" (button that only appears after upload)
+        #   or preview-new > div.stage text contains "检测为高清视频"
         while True:
             try:
-                upload_input = await page.wait_for_selector('input.upload-input', timeout=3000)
-                preview_new = await upload_input.query_selector(
-                    'xpath=following-sibling::div[contains(@class, "preview-new")]')
-                if preview_new:
-                    stage_elements = await preview_new.query_selector_all('div.stage')
-                    upload_success = False
-                    for stage in stage_elements:
-                        text_content = await page.evaluate('(element) => element.textContent', stage)
-                        if '上传成功' in text_content or '分辨率' in text_content:
-                            upload_success = True
-                            break
-                    if upload_success:
-                        xiaohongshu_logger.success(_msg("🥳", "视频已经传完啦"))
-                        break
-                    xiaohongshu_logger.debug(_msg("🧍", "还没看到上传成功标识，小人继续等一会"))
-                else:
-                    xiaohongshu_logger.debug(_msg("🧍", "还没拿到预览区域，小人继续等一会"))
+                upload_success = await page.evaluate("""
+                    () => {
+                        const input = document.querySelector('input.upload-input');
+                        if (!input) return { reason: 'no input' };
+                        const body_text = document.body.innerText || '';
+                        // New-UI signal: "重新上传" button appears only after upload done
+                        if (body_text.includes('重新上传')) return { ok: true, via: 'reupload-button' };
+                        // New-UI signal: "检测为高清视频" / "检测为标清视频" etc.
+                        if (body_text.includes('检测为') && body_text.includes('视频')) return { ok: true, via: 'detection-msg' };
+                        // Legacy: stage text contains "上传成功" or "分辨率"
+                        const stages = document.querySelectorAll('div.stage');
+                        for (const s of stages) {
+                            const t = s.textContent || '';
+                            if (t.includes('上传成功') || t.includes('分辨率')) return { ok: true, via: 'legacy-stage' };
+                        }
+                        return { ok: false, stageCount: stages.length };
+                    }
+                """)
+                if upload_success.get('ok'):
+                    xiaohongshu_logger.success(_msg("🥳", f"视频已经传完啦 (via {upload_success.get('via')})"))
+                    break
+                xiaohongshu_logger.debug(_msg("🧍", f"还没看到上传成功标识，小人继续等一会 {upload_success}"))
             except Exception as e:
                 xiaohongshu_logger.debug(_msg("😵", f"上传状态还没稳定下来，小人继续观察: {e}"))
             await asyncio.sleep(2)
@@ -523,8 +532,10 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)
 
+        _video_publish_attempts = 0
         while True:
             try:
+                _video_publish_attempts += 1
                 if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED:
                     await page.locator('button:has-text("定时发布")').click()
                 else:
@@ -535,10 +546,13 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
                 )
                 xiaohongshu_logger.success(_msg("🥳", "视频发布成功，小人开心收工"))
                 break
-            except Exception:
-                xiaohongshu_logger.info(_msg("🏃", "小人正在冲刺发布视频"))
+            except Exception as _e:
+                xiaohongshu_logger.info(_msg("🏃", f"小人正在冲刺发布视频 (attempt {_video_publish_attempts}, err: {type(_e).__name__}, url: {page.url})"))
                 if self.debug:
-                    await page.screenshot(full_page=True)
+                    await page.screenshot(path=f"/tmp/xhs_video_debug_{_video_publish_attempts}.png", full_page=True)
+                if _video_publish_attempts >= 30:
+                    xiaohongshu_logger.error(_msg("😢", f"视频发布超时，放弃重试。最终URL: {page.url}"))
+                    raise RuntimeError(f"video publish stuck after {_video_publish_attempts} attempts")
                 await asyncio.sleep(0.5)
 
     async def upload(self, playwright: Playwright) -> None:
@@ -641,8 +655,10 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
         if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)
 
+        _note_publish_attempts = 0
         while True:
             try:
+                _note_publish_attempts += 1
                 if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED:
                     await page.locator('button:has-text("定时发布")').click()
                 else:
@@ -653,10 +669,13 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
                 )
                 xiaohongshu_logger.success(_msg("🥳", "图文发布成功，小人开心收工"))
                 break
-            except Exception:
-                xiaohongshu_logger.info(_msg("🏃", "小人正在冲刺发布图文"))
+            except Exception as _e:
+                xiaohongshu_logger.info(_msg("🏃", f"小人正在冲刺发布图文 (attempt {_note_publish_attempts}, err: {type(_e).__name__})"))
                 if self.debug:
-                    await page.screenshot(full_page=True)
+                    await page.screenshot(path=f"/tmp/xhs_note_debug_{_note_publish_attempts}.png", full_page=True)
+                if _note_publish_attempts >= 30:
+                    xiaohongshu_logger.error(_msg("😢", f"图文发布超时，放弃重试。最终URL: {page.url}"))
+                    raise RuntimeError(f"note publish stuck after {_note_publish_attempts} attempts")
                 await asyncio.sleep(0.5)
 
     async def upload(self, playwright: Playwright) -> None:
