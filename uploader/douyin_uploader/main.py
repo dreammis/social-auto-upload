@@ -422,8 +422,8 @@ class DouYinVideo(DouYinBaseUploader):
 
     async def validate_upload_args(self):
         await self.validate_base_args()
-        if not self.title or not str(self.title).strip():
-            raise ValueError("视频模式下，title 是必须的")
+        if (not self.title or not str(self.title).strip()) and (not self.desc or not str(self.desc).strip()):
+            raise ValueError("视频模式下，title或者description是必须的")
 
         self.file_path = str(self.validate_video_file(self.file_path))
         if self.thumbnail_landscape_path:

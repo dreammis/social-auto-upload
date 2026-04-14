@@ -620,7 +620,10 @@ def postVideo():
     if not type:
         return jsonify({"code": 400, "msg": "平台类型不能为空", "data": None}), 400
     if not title:
-        return jsonify({"code": 400, "msg": "标题不能为空", "data": None}), 400
+        if type == 3 and desc:
+            pass
+        else:
+            return jsonify({"code": 400, "msg": "标题不能为空", "data": None}), 400
 
     # 打印获取到的数据（仅作为示例）
     print("File List:", file_list)
@@ -719,8 +722,6 @@ def postVideoBatch():
         productTitle = data.get('productTitle', '')
         desc = data.get('desc', '')
         is_draft = data.get('isDraft', False)
-        thumbnail_landscape = data.get('thumbnailLandscape', data.get('thumbnail', ''))
-        thumbnail_portrait = data.get('thumbnailPortrait', '')
         declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
         
         videos_per_day = data.get('videosPerDay')
@@ -739,6 +740,8 @@ def postVideoBatch():
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                                    start_days, is_draft, thumbnail_path)
             case 3:
+                thumbnail_landscape = data.get('thumbnailLandscape', thumbnail_path)
+                thumbnail_portrait = data.get('thumbnailPortrait', '')
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days, thumbnail_landscape, thumbnail_portrait, productLink, productTitle, declaration_info, desc)
             case 4:
