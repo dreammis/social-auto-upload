@@ -498,18 +498,32 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
                 preview_new = await upload_input.query_selector(
                     'xpath=following-sibling::div[contains(@class, "preview-new")]')
                 if preview_new:
-                    stage_elements = await preview_new.query_selector_all('div.stage')
-                    upload_success = False
-                    for stage in stage_elements:
-                        text_content = await page.evaluate('(element) => element.textContent', stage)
-                        if '上传成功' in text_content or '分辨率' in text_content:
-                            upload_success = True
-                            break
+                    # 获取整个预览区域的文本，更鲁棒地判断上传状态
+                    all_text = await preview_new.inner_text()
+                    upload_success = any(keyword in all_text for keyword in ['上传成功', '分辨率', '重新上传', '编辑封面', '已上传', '已选择', '100%'])
+                    
+                    if not upload_success:
+                        # 检查是否有特定的状态码或百分比
+                        stage_elements = await preview_new.query_selector_all('div.stage')
+                        for stage in stage_elements:
+                            text_content = await page.evaluate('(element) => element.textContent', stage)
+                            if '上传成功' in text_content or '分辨率' in text_content:
+                                upload_success = True
+                                break
+                    
                     if upload_success:
                         xiaohongshu_logger.success(_msg("🥳", "视频已经传完啦"))
                         break
+                    
+                    if self.debug:
+                        xiaohongshu_logger.debug(_msg("🧍", f"预览区域内容: {all_text.strip().replace('\\n', ' ')}"))
                     xiaohongshu_logger.debug(_msg("🧍", "还没看到上传成功标识，小人继续等一会"))
                 else:
+                    # 尝试检查标题输入框是否已经出现，如果是，说明已经进入编辑状态
+                    title_container = page.locator('input[placeholder*="填写标题"]')
+                    if await title_container.count() > 0 and await title_container.is_visible():
+                        xiaohongshu_logger.success(_msg("🥳", "虽然没看到预览区，但标题框出来了，小人继续"))
+                        break
                     xiaohongshu_logger.debug(_msg("🧍", "还没拿到预览区域，小人继续等一会"))
             except Exception as e:
                 xiaohongshu_logger.debug(_msg("😵", f"上传状态还没稳定下来，小人继续观察: {e}"))
