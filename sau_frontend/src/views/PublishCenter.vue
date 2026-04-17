@@ -333,6 +333,38 @@
               maxlength="200"
               class="product-link-input"
             />
+            <h3 style="margin-top: 10px;">请选择声明类型（单选）</h3>
+            <el-radio-group v-model="tab.declaration_type" @change="onDeclarationTypeChange(tab)">
+              <el-radio label="内容自行拍摄" disabled>内容自行拍摄</el-radio> <!-- TODO: 暂时选择不了地区，后续有时间再优化 -->
+              <el-radio label="内容取材网络">内容取材网络</el-radio>
+              <el-radio label="内容由AI生成">内容由AI生成</el-radio>
+              <el-radio label="可能引人不适">可能引人不适</el-radio>
+              <el-radio label="虚构演绎，仅供娱乐">虚构演绎，仅供娱乐</el-radio>
+              <el-radio label="危险行为，请勿模仿">危险行为，请勿模仿</el-radio>
+            </el-radio-group>
+            <div v-if="tab.declaration_type === '内容取材网络'" style="margin-top: 10px;">
+              <el-radio-group v-model="tab.declaration_network_subtype">
+                <el-radio label="取材站外">取材站外</el-radio>
+              </el-radio-group>
+            </div>
+            <div v-if="tab.declaration_type === '内容自行拍摄'" class="shot-extra" style="margin-top: 10px;">
+              <el-cascader
+                v-model="tab.declaration_location"
+                :options="regionsCountryOptions"
+                :props="regionsCascaderProps"
+                placeholder="选择拍摄地点"
+                style="width: 300px;"
+                filterable
+                clearable
+              />
+              <el-date-picker
+                v-model="tab.declaration_date"
+                type="date"
+                placeholder="设置拍摄日期"
+                value-format="YYYY-MM-DD"
+                style="margin-left: 10px;"
+              />
+            </div>
           </div>
 
           <!-- 标题输入 -->
@@ -498,6 +530,7 @@ import { useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
 import { materialApi } from '@/api/material'
 import { http } from '@/utils/request'
+import { countryOptions as regionsCountryOptions, declarationCascaderProps as regionsCascaderProps } from '@/utils/regions.zh'
 
 // API base URL
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
@@ -547,6 +580,10 @@ const defaultTabInit = {
   title: '',
   productLink: '', // 商品链接
   productTitle: '', // 商品名称
+  declaration_type: '', // 自主声明类型（与抖音页面选项文字一致）
+  declaration_location: [], // 拍摄地点
+  declaration_date: '', // 拍摄日期
+  declaration_network_subtype: '', // 内容取材网络的下级默认选项
   selectedTopics: [], // 话题列表（不带#号）
   scheduleEnabled: false, // 定时发布开关
   videosPerDay: 1, // 每天发布视频数量
@@ -603,6 +640,10 @@ const recommendedTopics = [
   '科技', '生活', '娱乐', '体育', '教育', '艺术',
   '健康', '时尚', '美妆', '摄影', '宠物', '汽车'
 ]
+
+ 
+
+ 
 
 // 添加新tab
 const addTab = () => {
@@ -661,6 +702,15 @@ const handleUploadSuccess = (response, file, tab) => {
 // 处理文件上传失败
 const handleUploadError = (error) => {
   ElMessage.error('文件上传失败')
+}
+
+// 声明类型变更时设置子级默认值
+const onDeclarationTypeChange = (tab) => {
+  if (tab.declaration_type === '内容取材网络') {
+    tab.declaration_network_subtype = '取材站外'
+  } else {
+    tab.declaration_network_subtype = ''
+  }
 }
 
 // 删除已上传文件
@@ -806,7 +856,25 @@ const confirmPublish = async (tab) => {
     category: tab.isOriginal ? 1 : 0, // 1表示原创，0表示非原创
     productLink: tab.productLink.trim() || '',
     productTitle: tab.productTitle.trim() || '',
+    declaration_info: tab.declaration_type ? {
+      declaration_type: tab.declaration_type.trim(),
+      declaration_location: Array.isArray(tab.declaration_location) ? tab.declaration_location : [],
+      declaration_date: tab.declaration_date || '',
+      isDraft: tab.isDraft
+    } : null,
     isDraft: tab.isDraft
+  }
+
+  // 校验“内容自行拍摄”时必须选择地点与日期
+  if (tab.declaration_type === '内容自行拍摄') {
+    const hasLocation = Array.isArray(tab.declaration_location) && tab.declaration_location.length > 0
+    const hasDate = !!tab.declaration_date
+    if (!(hasLocation && hasDate)) {
+      ElMessage.error('请选择拍摄位置和拍摄时间')
+      tab.publishing = false
+      reject(new Error('请选择拍摄位置和拍摄时间'))
+      return
+    }
   }
 
   // 调用后端发布API（使用统一的http封装）

@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timedelta
 import os
 import sqlite3
 import threading
@@ -7,14 +8,31 @@ import uuid
 from pathlib import Path
 from queue import Queue
 from flask_cors import CORS
+from playwright.async_api import async_playwright
 from myUtils.auth import check_cookie
 from flask import Flask, request, jsonify, Response, render_template, send_from_directory
-from conf import BASE_DIR
+from conf import BASE_DIR, LOCAL_CHROME_PATH
 from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
 from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs
+from uploader.douyin_uploader.main import DouYinVideo
+from uploader.ks_uploader.main import KSVideo
+from uploader.tencent_uploader.main import TencentVideo
+from uploader.xiaohongshu_uploader.main import XiaoHongShuVideo
+from utils.base_social_media import set_init_script
 
 active_queues = {}
 app = Flask(__name__)
+
+CACHE_TIMEOUT = 24 * 60 * 60
+
+login_cache = {}
+
+UPLOAD_PAGE_CLASS_MAP = {
+    1: XiaoHongShuVideo,
+    2: TencentVideo,
+    3: DouYinVideo,
+    4: KSVideo
+}
 
 #允许所有来源跨域访问
 CORS(app)
@@ -71,7 +89,6 @@ def upload_file():
 
 @app.route('/getFile', methods=['GET'])
 def get_file():
-    # 获取 filename 参数
     filename = request.args.get('filename')
 
     if not filename:
@@ -223,6 +240,16 @@ def getAccounts():
 
 @app.route("/getValidAccounts",methods=['GET'])
 async def getValidAccounts():
+    rows_list = await refresh_account_statuses()
+    return jsonify(
+                    {
+                        "code": 200,
+                        "msg": None,
+                        "data": rows_list
+                    }),200
+
+
+async def refresh_account_statuses(force_refresh=False):
     with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
         cursor = conn.cursor()
         cursor.execute('''
@@ -233,24 +260,48 @@ async def getValidAccounts():
         for row in rows:
             print(row)
         for row in rows_list:
+            cache_key = f"{row[1]}_{row[2]}"
+            current_time = time.time()
+            original_status = row[4]
+
+            if not force_refresh and cache_key in login_cache:
+                cached_time, cached_result = login_cache[cache_key]
+                if current_time - cached_time < CACHE_TIMEOUT:
+                    row[4] = 1 if cached_result else 0
+                    continue
+
             flag = await check_cookie(row[1],row[2])
-            if not flag:
-                row[4] = 0
+            login_cache[cache_key] = (current_time, flag)
+            row[4] = 1 if flag else 0
+            if row[4] != original_status:
                 cursor.execute('''
                 UPDATE user_info 
                 SET status = ? 
                 WHERE id = ?
-                ''', (0,row[0]))
-                conn.commit()
-                print("✅ 用户状态已更新")
+                ''', (row[4],row[0]))
+        conn.commit()
+        print("✅ 用户状态已更新")
         for row in rows:
             print(row)
-        return jsonify(
-                        {
-                            "code": 200,
-                            "msg": None,
-                            "data": rows_list
-                        }),200
+        return rows_list
+
+
+def get_seconds_until_next_midnight():
+    now = datetime.now()
+    next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(1, (next_midnight - now).total_seconds())
+
+
+def nightly_account_status_checker():
+    while True:
+        sleep_seconds = get_seconds_until_next_midnight()
+        print(f"⏰ 下次账号状态自动检查将在 {int(sleep_seconds)} 秒后执行")
+        time.sleep(sleep_seconds)
+        try:
+            asyncio.run(refresh_account_statuses(force_refresh=True))
+            print("✅ 半夜账号状态自动检查完成")
+        except Exception as e:
+            print(f"❌ 半夜账号状态自动检查失败: {str(e)}")
 
 @app.route('/deleteFile', methods=['GET'])
 def delete_file():
@@ -380,17 +431,61 @@ def login():
     # 1 小红书 2 视频号 3 抖音 4 快手
     type = request.args.get('type')
     # 账号名
-    id = request.args.get('id')
+    user_name = request.args.get('id')
+    account_id = request.args.get('accountId')
+    existing_file_path = None
+
+    if account_id:
+        try:
+            account_id = int(account_id)
+        except (TypeError, ValueError):
+            return jsonify({
+                "code": 400,
+                "msg": "账号ID格式错误",
+                "data": None
+            }), 400
+
+        try:
+            with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute(
+                    'SELECT id, type, filePath, userName FROM user_info WHERE id = ?',
+                    (account_id,)
+                )
+                account = cursor.fetchone()
+        except Exception as e:
+            return jsonify({
+                "code": 500,
+                "msg": f"查询账号失败: {str(e)}",
+                "data": None
+            }), 500
+
+        if not account:
+            return jsonify({
+                "code": 404,
+                "msg": "账号不存在",
+                "data": None
+            }), 404
+
+        type = str(account['type'])
+        user_name = account['userName']
+        existing_file_path = account['filePath']
 
     # 模拟一个用于异步通信的队列
     status_queue = Queue()
-    active_queues[id] = status_queue
+    queue_key = str(account_id) if account_id else user_name
+    active_queues[queue_key] = status_queue
 
     def on_close():
-        print(f"清理队列: {id}")
-        del active_queues[id]
+        print(f"清理队列: {queue_key}")
+        del active_queues[queue_key]
     # 启动异步任务线程
-    thread = threading.Thread(target=run_async_function, args=(type,id,status_queue), daemon=True)
+    thread = threading.Thread(
+        target=run_async_function,
+        args=(type, user_name, status_queue, account_id, existing_file_path),
+        daemon=True
+    )
     thread.start()
     response = Response(sse_stream(status_queue,), mimetype='text/event-stream')
     response.headers['Cache-Control'] = 'no-cache'
@@ -421,6 +516,8 @@ def postVideo():
     productTitle = data.get('productTitle', '')
     thumbnail_path = data.get('thumbnail', '')
     is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
+    
+    declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
 
     videos_per_day = data.get('videosPerDay')
     daily_times = data.get('dailyTimes')
@@ -450,7 +547,7 @@ def postVideo():
                                    start_days, is_draft)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_path, productLink, productTitle)
+                          start_days, thumbnail_path, productLink, productTitle, declaration_info)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
@@ -530,7 +627,9 @@ def postVideoBatch():
         productLink = data.get('productLink', '')
         productTitle = data.get('productTitle', '')
         is_draft = data.get('isDraft', False)
-
+        thumbnail_path = data.get('thumbnail', '')
+        declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
+        
         videos_per_day = data.get('videosPerDay')
         daily_times = data.get('dailyTimes')
         start_days = data.get('startDays')
@@ -546,7 +645,7 @@ def postVideoBatch():
                                    start_days, is_draft)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, productLink, productTitle)
+                          start_days, thumbnail_path, productLink, productTitle, declaration_info)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
@@ -679,29 +778,158 @@ def download_cookie():
         }), 500
 
 
+@app.route('/openUploadPage', methods=['POST'])
+def open_upload_page():
+    data = request.get_json() or {}
+    account_id = data.get('id')
+
+    if not account_id:
+        return jsonify({
+            "code": 400,
+            "msg": "缺少账号ID",
+            "data": None
+        }), 400
+
+    try:
+        account_id = int(account_id)
+    except (TypeError, ValueError):
+        return jsonify({
+            "code": 400,
+            "msg": "账号ID格式错误",
+            "data": None
+        }), 400
+
+    try:
+        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, type, filePath, userName FROM user_info WHERE id = ?', (account_id,))
+            account = cursor.fetchone()
+
+        if not account:
+            return jsonify({
+                "code": 404,
+                "msg": "账号不存在",
+                "data": None
+            }), 404
+
+        account_type = int(account['type'])
+        uploader_cls = UPLOAD_PAGE_CLASS_MAP.get(account_type)
+        if not uploader_cls:
+            return jsonify({
+                "code": 400,
+                "msg": "当前账号平台不支持打开上传页",
+                "data": None
+            }), 400
+
+        cookie_file_path = Path(BASE_DIR / "cookiesFile" / account['filePath']).resolve()
+        cookie_base_path = Path(BASE_DIR / "cookiesFile").resolve()
+        if not cookie_file_path.is_relative_to(cookie_base_path):
+            return jsonify({
+                "code": 400,
+                "msg": "Cookie文件路径非法",
+                "data": None
+            }), 400
+
+        if not cookie_file_path.exists():
+            return jsonify({
+                "code": 404,
+                "msg": "Cookie文件不存在，请先重新登录账号",
+                "data": None
+            }), 404
+
+        thread = threading.Thread(
+            target=run_open_upload_page,
+            args=(str(cookie_file_path), uploader_cls.upload_page, account['userName']),
+            daemon=True
+        )
+        thread.start()
+
+        return jsonify({
+            "code": 200,
+            "msg": "上传页已打开",
+            "data": {
+                "id": account_id,
+                "uploadPage": uploader_cls.upload_page
+            }
+        }), 200
+    except Exception as e:
+        print(f"打开上传页失败: {str(e)}")
+        return jsonify({
+            "code": 500,
+            "msg": f"打开上传页失败: {str(e)}",
+            "data": None
+        }), 500
+
+
 # 包装函数：在线程中运行异步函数
-def run_async_function(type,id,status_queue):
+def run_async_function(type, id, status_queue, account_id=None, existing_file_path=None):
     match type:
         case '1':
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(xiaohongshu_cookie_gen(id, status_queue))
+            loop.run_until_complete(xiaohongshu_cookie_gen(id, status_queue, account_id, existing_file_path))
             loop.close()
         case '2':
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(get_tencent_cookie(id,status_queue))
+            loop.run_until_complete(get_tencent_cookie(id, status_queue, account_id, existing_file_path))
             loop.close()
         case '3':
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(douyin_cookie_gen(id,status_queue))
+            loop.run_until_complete(douyin_cookie_gen(id, status_queue, account_id, existing_file_path))
             loop.close()
         case '4':
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(get_ks_cookie(id,status_queue))
+            loop.run_until_complete(get_ks_cookie(id, status_queue, account_id, existing_file_path))
             loop.close()
+
+
+def run_open_upload_page(account_file, upload_page, account_name):
+    try:
+        asyncio.run(open_upload_page_with_cookie(account_file, upload_page, account_name))
+    except Exception as e:
+        print(f"打开上传页线程执行失败: {account_name}, {str(e)}")
+
+
+async def open_upload_page_with_cookie(account_file, upload_page, account_name):
+    print(f"正在打开上传页: {account_name} -> {upload_page}")
+    async with async_playwright() as playwright:
+        launch_options = {
+            "headless": False
+        }
+        if LOCAL_CHROME_PATH:
+            launch_options["executable_path"] = LOCAL_CHROME_PATH
+
+        browser = await playwright.chromium.launch(**launch_options)
+        context = await browser.new_context(storage_state=account_file)
+        context = await set_init_script(context)
+        page = await context.new_page()
+        await page.goto(upload_page)
+
+        try:
+            await page.wait_for_load_state('domcontentloaded', timeout=10000)
+        except Exception:
+            pass
+
+        try:
+            while not page.is_closed():
+                await asyncio.sleep(1)
+        finally:
+            try:
+                await context.storage_state(path=account_file)
+            except Exception as e:
+                print(f"保存Cookie失败: {account_name}, {str(e)}")
+            try:
+                await context.close()
+            except Exception:
+                pass
+            try:
+                await browser.close()
+            except Exception:
+                pass
 
 # SSE 流生成器函数
 def sse_stream(status_queue):
@@ -714,4 +942,5 @@ def sse_stream(status_queue):
             time.sleep(0.1)
 
 if __name__ == '__main__':
+    threading.Thread(target=nightly_account_status_checker, daemon=True).start()
     app.run(host='0.0.0.0' ,port=5409)

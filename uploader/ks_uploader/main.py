@@ -347,6 +347,8 @@ class KSBaseUploader(BaseVideoUploader):
 
 
 class KSVideo(KSBaseUploader):
+    upload_page = "https://cp.kuaishou.com/article/publish/video"
+
     def __init__(
         self,
         title,
