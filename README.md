@@ -6,6 +6,33 @@
 
 <img src="media/show/tkupload.gif" alt="tiktok show" width="800"/>
 
+## 💎 赞助商
+
+<table width="100%">
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="http://t.clawpower.vip/1006">
+        <img src="static/clawpower.png" alt="ClawPower Sponsor" width="180">
+      </a>
+    </td>
+    <td width="75%" align="left" valign="middle">
+      ClawPower 提供稳定高效的 AI 大模型中转服务，覆盖 AI 智能体、AI 编程、AI 写作三大核心场景。无论是 OpenClaw、Hermes 智能体自动化场景，Claude Code、Codex 编程工具接入，还是公众号、小红书内容创作需求；都能获得稳定、顺滑、可长期使用的模型服务体验。低至官方价格的 30%，点击：<a href="http://t.clawpower.vip/1006">链接</a>立即注册。。
+    </td>
+  </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <img src="static/wechat.png" alt="Sponsor Contact" width="150">
+    </td>
+    <td width="75%" align="left" valign="middle">
+      <strong>成为赞助商</strong><br>
+      如果您有意赞助本项目，请扫描左侧微信二维码（添加时请注明来意：<strong>赞助</strong>）。
+    </td>
+  </tr>
+</table>
+
+---
+
+
 ## 目录
 
 - [💡 功能特性](#💡功能特性)
