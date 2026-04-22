@@ -16,7 +16,7 @@
       </a>
     </td>
     <td width="75%" align="left" valign="middle">
-      ClawPower 提供稳定高效的 AI 大模型中转服务，覆盖 AI 智能体、AI 编程、AI 写作三大核心场景。无论是 OpenClaw、Hermes 智能体自动化场景，Claude Code、Codex 编程工具接入，还是公众号、小红书内容创作需求；都能获得稳定、顺滑、可长期使用的模型服务体验。低至官方价格的 30%，点击：<a href="http://t.clawpower.vip/1006">链接</a>立即注册。。
+      ClawPower 提供稳定高效的 AI 大模型中转服务，覆盖 AI 智能体、AI 编程、AI 写作三大核心场景。无论是 OpenClaw、Hermes 智能体自动化场景，Claude Code、Codex 编程工具接入，还是公众号、小红书内容创作需求；都能获得稳定、顺滑、可长期使用的模型服务体验。低至官方价格的 30%，点击：<a href="http://t.clawpower.vip/1006">链接立即注册</a>。。
     </td>
   </tr>
   <tr>
