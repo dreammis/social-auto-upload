@@ -28,6 +28,25 @@ def _msg(emoji: str, text: str) -> str:
     return f"{emoji} {text}"
 
 
+async def douyin_open_browser(account_file, headless: bool = False):
+    """打开浏览器并加载已有 cookie，保持窗口直到用户手动关闭。"""
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=headless, channel="chrome")
+        context = await browser.new_context(storage_state=account_file if os.path.exists(account_file) else None)
+        context = await set_init_script(context)
+        page = await context.new_page()
+        await page.goto("https://creator.douyin.com/creator-micro/home")
+        douyin_logger.info(_msg("🪟", "浏览器已打开，请手动操作，关闭窗口后自动退出"))
+        try:
+            await context.wait_for_event("close")
+        except Exception:
+            pass
+        try:
+            await context.storage_state(path=account_file)
+        except Exception:
+            pass
+
+
 async def _emit_qrcode_callback(qrcode_callback, payload: dict):
     if not qrcode_callback:
         return
@@ -69,14 +88,20 @@ async def cookie_auth(account_file):
             await browser.close()
 
 
-async def douyin_setup(account_file, handle=False, return_detail=False, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS):
+async def douyin_setup(account_file, handle=False, return_detail=False, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS, keep_open: bool = False):
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
             result = _build_login_result(False, "cookie_invalid", "cookie文件不存在或已失效", account_file)
             return result if return_detail else False
         douyin_logger.info(_msg("🥹", "cookie 失效了，准备打开浏览器重新登录"))
-        result = await douyin_cookie_gen(account_file, qrcode_callback=qrcode_callback, headless=headless)
+        result = await douyin_cookie_gen(account_file, qrcode_callback=qrcode_callback, headless=headless, keep_open=keep_open)
         return result if return_detail else result["success"]
+
+    if keep_open:
+        douyin_logger.info(_msg("🪟", "cookie 有效，打开浏览器供手动操作"))
+        await douyin_open_browser(account_file, headless=headless)
+        result = _build_login_result(True, "cookie_valid", "已打开浏览器", account_file)
+        return result if return_detail else True
 
     result = _build_login_result(True, "cookie_valid", "cookie有效", account_file)
     return result if return_detail else True
@@ -174,6 +199,7 @@ async def douyin_cookie_gen(
     poll_interval: int = 3,
     max_checks: int = 100,
     headless: bool = LOCAL_CHROME_HEADLESS,
+    keep_open: bool = False,
 ):
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=headless, channel="chrome")
@@ -207,6 +233,9 @@ async def douyin_cookie_gen(
                         qrcode_info,
                         page.url,
                     )
+                elif keep_open:
+                    douyin_logger.info(_msg("🪟", "登录成功，浏览器保持打开，请手动关闭窗口后继续"))
+                    await context.wait_for_event("close")
         except Exception as exc:
             result = _build_login_result(False, "failed", str(exc), account_file, current_url=page.url if "page" in locals() else "")
         finally:
@@ -416,7 +445,9 @@ class DouYinVideo(DouYinBaseUploader):
         douyin_logger.warning(_msg("😵", "视频上传摔了一跤，小人马上重新上传"))
         await page.locator('div.progress-div [class^="upload-btn-input"]').set_input_files(self.file_path)
 
-    async def handle_auto_video_cover(self, page):
+    async def handle_auto_video_cover(self, page: Page):
+        if not self.thumbnail_landscape_path and not self.thumbnail_portrait_path:
+            return  # 没有手动设置封面，不干预自动选择
         if await page.get_by_text("请设置封面后再发布").first.is_visible():
             douyin_logger.info(_msg("🧍", "发布前还得先把封面弄好"))
             recommend_cover = page.locator('[class^="recommendCover-"]').first
@@ -438,6 +469,7 @@ class DouYinVideo(DouYinBaseUploader):
         return False
 
     async def set_thumbnail(self, page: Page):
+        douyin_logger.info(_msg("🔍", f"封面路径检查: landscape={self.thumbnail_landscape_path}, portrait={self.thumbnail_portrait_path}"))
         if not self.thumbnail_landscape_path and not self.thumbnail_portrait_path:
             return
 
@@ -450,18 +482,19 @@ class DouYinVideo(DouYinBaseUploader):
         upload_input = cover_locator.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input")
 
         if self.thumbnail_landscape_path:
-            await page.wait_for_timeout(1000)
+            await page.wait_for_timeout(1500)
             await upload_input.set_input_files(self.thumbnail_landscape_path)
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(3000)
             douyin_logger.info(_msg("🖼️", "横版封面上传完成"))
 
         if self.thumbnail_portrait_path:
             await cover_locator.locator("div[class*='steps'] div").nth(1).click()
-            await page.wait_for_timeout(1000)
+            await page.wait_for_timeout(1500)
             await upload_input.set_input_files(self.thumbnail_portrait_path)
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(3000)
             douyin_logger.info(_msg("🖼️", "竖版封面上传完成"))
 
+        await page.wait_for_timeout(1500)
         await cover_locator.locator('button:visible:has-text("完成")').click()
         douyin_logger.info(_msg("🥳", "视频封面设置完成"))
         await page.wait_for_selector("div.extractFooter", state="detached")
@@ -479,6 +512,24 @@ class DouYinVideo(DouYinBaseUploader):
         context = await set_init_script(context)
 
         page = await context.new_page()
+
+        # 拦截 create_v2 API 响应，捕获 aweme_id (item_id)
+        captured_aweme_id = None
+
+        async def on_response(response):
+            nonlocal captured_aweme_id
+            if '/aweme/create_v2/' in response.url and captured_aweme_id is None:
+                try:
+                    data = await response.json()
+                    if data.get('item_id'):
+                        captured_aweme_id = data['item_id']
+                        print(f"SAU_AWEME_ID:{captured_aweme_id}")
+                        douyin_logger.info(_msg("🔗", f"从API响应捕获 aweme_id: {captured_aweme_id}"))
+                except Exception:
+                    pass
+
+        page.on('response', on_response)
+
         await page.goto("https://creator.douyin.com/creator-micro/content/upload")
         douyin_logger.info(_msg("🏃", f"小人开始搬运视频: {self.title}.mp4"))
         douyin_logger.info(_msg("🧭", "小人正在赶往上传主页"))
@@ -550,6 +601,27 @@ class DouYinVideo(DouYinBaseUploader):
                     timeout=3000,
                 )
                 douyin_logger.success(_msg("🥳", "视频发布成功，小人开心收工"))
+                # 优先用拦截器捕获的 aweme_id（从 create_v2 API 响应获取）
+                if captured_aweme_id:
+                    print(f"SAU_AWEME_ID:{captured_aweme_id}")
+                    douyin_logger.info(_msg("🔗", f"使用捕获的 aweme_id: {captured_aweme_id}"))
+                else:
+                    # 备选：从 manage 页面的视频列表元素提取
+                    try:
+                        await page.wait_for_selector('[class*="video-item"]', timeout=8000)
+                        aweme_id_from_dom = await page.evaluate("""
+                            () => {
+                                const item = document.querySelector('[class*="video-item"]');
+                                return item?.dataset?.awemeId || item?.dataset?.videoId || '';
+                            }
+                        """)
+                        if aweme_id_from_dom:
+                            print(f"SAU_AWEME_ID:{aweme_id_from_dom}")
+                            douyin_logger.info(_msg("🔗", f"从DOM提取 aweme_id: {aweme_id_from_dom}"))
+                        else:
+                            douyin_logger.warning(_msg("⚠️", f"未能提取 aweme_id"))
+                    except Exception:
+                        douyin_logger.warning(_msg("⚠️", f"未能提取 aweme_id"))
                 break
             except Exception:
                 await self.handle_auto_video_cover(page)
@@ -654,6 +726,19 @@ class DouYinNote(DouYinBaseUploader):
                     timeout=3000,
                 )
                 douyin_logger.success(_msg("🥳", "图文发布成功，小人开心收工"))
+                # 提取并打印 aweme_id（供外部程序解析）
+                url = page.url
+                import re
+                m = re.search(r'[?&]aweme_id=(\d+)', url)
+                if not m:
+                    m = re.search(r'aweme_id[=&?](\d+)', url)
+                if not m:
+                    m = re.search(r'/video/(\d{15,})', url)
+                if m:
+                    print(f"SAU_AWEME_ID:{m.group(1)}")
+                    douyin_logger.info(_msg("🔗", f"提取到 aweme_id: {m.group(1)}"))
+                else:
+                    douyin_logger.warning(_msg("⚠️", f"未能从 URL 提取 aweme_id: {url}"))
                 break
             except Exception:
                 douyin_logger.info(_msg("🏃", "小人正在冲刺发布图文"))

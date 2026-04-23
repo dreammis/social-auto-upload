@@ -170,7 +170,7 @@ def parse_schedule(raw_schedule: str | None) -> datetime | int:
 
 async def login_douyin_account(account_name: str, headless: bool = True) -> dict:
     account_file = resolve_account_file("douyin", account_name)
-    return await douyin_setup(str(account_file), handle=True, return_detail=True, headless=headless)
+    return await douyin_setup(str(account_file), handle=True, return_detail=True, headless=headless, keep_open=True)
 
 
 async def check_douyin_account(account_name: str) -> bool:
@@ -249,6 +249,7 @@ async def upload_video(request: DouyinVideoUploadRequest) -> Path:
         request.publish_date,
         str(account_file),
         desc=request.description,
+        thumbnail_landscape_path=str(request.thumbnail_file) if request.thumbnail_file else None,
         thumbnail_portrait_path=str(request.thumbnail_file) if request.thumbnail_file else None,
         productLink=request.product_link,
         productTitle=request.product_title,
