@@ -11,7 +11,7 @@
 <table width="100%">
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="http://t.clawpower.vip/1006">
+      <a href="http://t.clawpower.vip/1005">
         <img src="static/clawpower.png" alt="ClawPower Sponsor" width="180">
       </a>
     </td>
