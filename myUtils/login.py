@@ -5,36 +5,75 @@ from playwright.async_api import async_playwright
 
 from myUtils.auth import check_cookie
 from utils.base_social_media import set_init_script
+from utils.runtime_config import get_login_browser_headless
 import uuid
 from pathlib import Path
-from conf import BASE_DIR, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
+from conf import BASE_DIR, LOCAL_CHROME_PATH
 
 # 统一获取浏览器启动配置（防风控+引入本地浏览器）
-def get_browser_options():
+def get_browser_options(douyin=False):
     options = {
-        'headless': LOCAL_CHROME_HEADLESS,
+        'headless': get_login_browser_headless(),
         'args': [
+            '--lang=en-GB'
+        ]
+    }
+    if douyin:
+        options['args'] = [
             '--disable-blink-features=AutomationControlled',  # 核心防爬屏蔽：去掉 window.navigator.webdriver 标签
             '--lang=zh-CN',
             '--disable-infobars',
             '--start-maximized'
         ]
-    }
     # 如果用户在 conf.py 里配置了本地 Chrome，就用本地的，这样成功率极高
     if LOCAL_CHROME_PATH:
         options['executable_path'] = LOCAL_CHROME_PATH
 
     return options
 
+
+def resolve_cookie_target(existing_file_path=None):
+    cookies_dir = Path(BASE_DIR / "cookiesFile")
+    cookies_dir.mkdir(exist_ok=True)
+
+    if existing_file_path:
+        return cookies_dir / existing_file_path, existing_file_path
+
+    filename = f"{uuid.uuid1()}.json"
+    return cookies_dir / filename, filename
+
+
+def persist_account_login(account_type, file_name, user_name, account_id=None):
+    with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+        cursor = conn.cursor()
+        if account_id:
+            cursor.execute(
+                '''
+                UPDATE user_info
+                SET type = ?, filePath = ?, userName = ?, status = ?, last_login_time = CURRENT_TIMESTAMP
+                WHERE id = ?
+                ''',
+                (account_type, file_name, user_name, 1, account_id)
+            )
+        else:
+            cursor.execute(
+                '''
+                INSERT INTO user_info (type, filePath, userName, status, last_login_time)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''',
+                (account_type, file_name, user_name, 1)
+            )
+        conn.commit()
+
 # 抖音登录
-async def douyin_cookie_gen(id,status_queue):
+async def douyin_cookie_gen(id, status_queue, account_id=None, existing_file_path=None):
     url_changed_event = asyncio.Event()
     async def on_url_change():
         # 检查是否是主框架的变化
         if page.url != original_url:
             url_changed_event.set()
     async with async_playwright() as playwright:
-        options = get_browser_options()
+        options = get_browser_options(True)
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
         # Setup context however you like.
@@ -63,13 +102,9 @@ async def douyin_cookie_gen(id,status_queue):
             await browser.close()
             status_queue.put("500")
             return None
-        uuid_v1 = uuid.uuid1()
-        print(f"UUID v1: {uuid_v1}")
-        # 确保cookiesFile目录存在
-        cookies_dir = Path(BASE_DIR / "cookiesFile")
-        cookies_dir.mkdir(exist_ok=True)
-        await context.storage_state(path=cookies_dir / f"{uuid_v1}.json")
-        result = await check_cookie(3, f"{uuid_v1}.json")
+        cookie_path, file_name = resolve_cookie_target(existing_file_path)
+        await context.storage_state(path=cookie_path)
+        result = await check_cookie(3, file_name)
         if not result:
             status_queue.put("500")
             await page.close()
@@ -79,19 +114,13 @@ async def douyin_cookie_gen(id,status_queue):
         await page.close()
         await context.close()
         await browser.close()
-        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                                INSERT INTO user_info (type, filePath, userName, status)
-                                VALUES (?, ?, ?, ?)
-                                ''', (3, f"{uuid_v1}.json", id, 1))
-            conn.commit()
-            print("✅ 用户状态已记录")
+        persist_account_login(3, file_name, id, account_id)
+        print("✅ 用户状态已记录")
         status_queue.put("200")
 
 
 # 视频号登录
-async def get_tencent_cookie(id,status_queue):
+async def get_tencent_cookie(id, status_queue, account_id=None, existing_file_path=None):
     url_changed_event = asyncio.Event()
     async def on_url_change():
         # 检查是否是主框架的变化
@@ -99,12 +128,7 @@ async def get_tencent_cookie(id,status_queue):
             url_changed_event.set()
 
     async with async_playwright() as playwright:
-        options = {
-            'args': [
-                '--lang en-GB'
-            ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
-        }
+        options = get_browser_options()
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
         # Setup context however you like.
@@ -141,13 +165,9 @@ async def get_tencent_cookie(id,status_queue):
             await context.close()
             await browser.close()
             return None
-        uuid_v1 = uuid.uuid1()
-        print(f"UUID v1: {uuid_v1}")
-        # 确保cookiesFile目录存在
-        cookies_dir = Path(BASE_DIR / "cookiesFile")
-        cookies_dir.mkdir(exist_ok=True)
-        await context.storage_state(path=cookies_dir / f"{uuid_v1}.json")
-        result = await check_cookie(2,f"{uuid_v1}.json")
+        cookie_path, file_name = resolve_cookie_target(existing_file_path)
+        await context.storage_state(path=cookie_path)
+        result = await check_cookie(2, file_name)
         if not result:
             status_queue.put("500")
             await page.close()
@@ -158,30 +178,19 @@ async def get_tencent_cookie(id,status_queue):
         await context.close()
         await browser.close()
 
-        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                                INSERT INTO user_info (type, filePath, userName, status)
-                                VALUES (?, ?, ?, ?)
-                                ''', (2, f"{uuid_v1}.json", id, 1))
-            conn.commit()
-            print("✅ 用户状态已记录")
+        persist_account_login(2, file_name, id, account_id)
+        print("✅ 用户状态已记录")
         status_queue.put("200")
 
 # 快手登录
-async def get_ks_cookie(id,status_queue):
+async def get_ks_cookie(id, status_queue, account_id=None, existing_file_path=None):
     url_changed_event = asyncio.Event()
     async def on_url_change():
         # 检查是否是主框架的变化
         if page.url != original_url:
             url_changed_event.set()
     async with async_playwright() as playwright:
-        options = {
-            'args': [
-                '--lang en-GB'
-            ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
-        }
+        options = get_browser_options()
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
         # Setup context however you like.
@@ -215,13 +224,9 @@ async def get_ks_cookie(id,status_queue):
             await context.close()
             await browser.close()
             return None
-        uuid_v1 = uuid.uuid1()
-        print(f"UUID v1: {uuid_v1}")
-        # 确保cookiesFile目录存在
-        cookies_dir = Path(BASE_DIR / "cookiesFile")
-        cookies_dir.mkdir(exist_ok=True)
-        await context.storage_state(path=cookies_dir / f"{uuid_v1}.json")
-        result = await check_cookie(4, f"{uuid_v1}.json")
+        cookie_path, file_name = resolve_cookie_target(existing_file_path)
+        await context.storage_state(path=cookie_path)
+        result = await check_cookie(4, file_name)
         if not result:
             status_queue.put("500")
             await page.close()
@@ -232,18 +237,12 @@ async def get_ks_cookie(id,status_queue):
         await context.close()
         await browser.close()
 
-        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                                        INSERT INTO user_info (type, filePath, userName, status)
-                                        VALUES (?, ?, ?, ?)
-                                        ''', (4, f"{uuid_v1}.json", id, 1))
-            conn.commit()
-            print("✅ 用户状态已记录")
+        persist_account_login(4, file_name, id, account_id)
+        print("✅ 用户状态已记录")
         status_queue.put("200")
 
 # 小红书登录
-async def xiaohongshu_cookie_gen(id,status_queue):
+async def xiaohongshu_cookie_gen(id, status_queue, account_id=None, existing_file_path=None):
     url_changed_event = asyncio.Event()
 
     async def on_url_change():
@@ -252,12 +251,7 @@ async def xiaohongshu_cookie_gen(id,status_queue):
             url_changed_event.set()
 
     async with async_playwright() as playwright:
-        options = {
-            'args': [
-                '--lang en-GB'
-            ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
-        }
+        options = get_browser_options()
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
         # Setup context however you like.
@@ -289,13 +283,9 @@ async def xiaohongshu_cookie_gen(id,status_queue):
             await context.close()
             await browser.close()
             return None
-        uuid_v1 = uuid.uuid1()
-        print(f"UUID v1: {uuid_v1}")
-        # 确保cookiesFile目录存在
-        cookies_dir = Path(BASE_DIR / "cookiesFile")
-        cookies_dir.mkdir(exist_ok=True)
-        await context.storage_state(path=cookies_dir / f"{uuid_v1}.json")
-        result = await check_cookie(1, f"{uuid_v1}.json")
+        cookie_path, file_name = resolve_cookie_target(existing_file_path)
+        await context.storage_state(path=cookie_path)
+        result = await check_cookie(1, file_name)
         if not result:
             status_queue.put("500")
             await page.close()
@@ -306,14 +296,8 @@ async def xiaohongshu_cookie_gen(id,status_queue):
         await context.close()
         await browser.close()
 
-        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                           INSERT INTO user_info (type, filePath, userName, status)
-                           VALUES (?, ?, ?, ?)
-                           ''', (1, f"{uuid_v1}.json", id, 1))
-            conn.commit()
-            print("✅ 用户状态已记录")
+        persist_account_login(1, file_name, id, account_id)
+        print("✅ 用户状态已记录")
         status_queue.put("200")
 
 # a = asyncio.run(xiaohongshu_cookie_gen(4,None))

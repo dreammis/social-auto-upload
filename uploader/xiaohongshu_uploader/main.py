@@ -11,7 +11,7 @@ from patchright.async_api import Page
 from patchright.async_api import Playwright
 from patchright.async_api import async_playwright
 
-from conf import DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
+from conf import DEBUG_MODE, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
 from utils.login_qrcode import build_login_qrcode_path
@@ -20,6 +20,7 @@ from utils.login_qrcode import print_terminal_qrcode
 from utils.login_qrcode import remove_qrcode_file
 from utils.login_qrcode import save_data_url_image
 from utils.log import xiaohongshu_logger
+from utils.runtime_config import get_local_chrome_headless
 
 XHS_LOGIN_URL = "https://creator.xiaohongshu.com/login"
 XHS_PUBLISH_VIDEO_URL = "https://creator.xiaohongshu.com/publish/publish?from=homepage&target=video"
@@ -151,9 +152,15 @@ async def cookie_auth(account_file):
 
     async with async_playwright() as playwright:
         if LOCAL_CHROME_PATH:
-            browser = await playwright.chromium.launch(headless=True, executable_path=LOCAL_CHROME_PATH)
+            browser = await playwright.chromium.launch(
+                headless=get_local_chrome_headless(),
+                executable_path=LOCAL_CHROME_PATH,
+            )
         else:
-            browser = await playwright.chromium.launch(headless=True, channel="chrome")
+            browser = await playwright.chromium.launch(
+                headless=get_local_chrome_headless(),
+                channel="chrome",
+            )
         try:
             context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
@@ -188,8 +195,10 @@ async def xiaohongshu_setup(
     handle=False,
     return_detail=False,
     qrcode_callback=None,
-    headless: bool = LOCAL_CHROME_HEADLESS,
+    headless: bool | None = None,
 ):
+    if headless is None:
+        headless = get_local_chrome_headless()
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
             result = _build_login_result(False, "cookie_invalid", "cookie文件不存在或已失效", account_file)
@@ -211,8 +220,10 @@ async def xiaohongshu_cookie_gen(
     qrcode_callback=None,
     poll_interval: int = 3,
     max_checks: int = 100,
-    headless: bool = LOCAL_CHROME_HEADLESS,
+    headless: bool | None = None,
 ):
+    if headless is None:
+        headless = get_local_chrome_headless()
     if headless:
         xiaohongshu_logger.info(_msg("🖼️", "小红书登录将以无头模式运行，小人会输出终端二维码并保存本地二维码图片"))
 
@@ -280,7 +291,7 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
         account_file,
         publish_strategy: str = XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
-        headless: bool = LOCAL_CHROME_HEADLESS,
+        headless: bool | None = None,
     ):
         self.publish_date = publish_date
         self.account_file = str(account_file)
@@ -288,7 +299,7 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
         self.debug = debug
         self.date_format = "%Y年%m月%d日 %H:%M"
         self.local_executable_path = LOCAL_CHROME_PATH
-        self.headless = headless
+        self.headless = get_local_chrome_headless() if headless is None else headless
 
     async def validate_base_args(self):
         if not os.path.exists(self.account_file):
@@ -415,6 +426,8 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
 
 
 class XiaoHongShuVideo(XiaoHongShuBaseUploader):
+    upload_page = "https://creator.xiaohongshu.com/publish/publish?from=homepage&target=video"
+
     def __init__(
         self,
         title,
@@ -426,7 +439,7 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         desc: str | None = None,
         publish_strategy: str = XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
-        headless: bool = LOCAL_CHROME_HEADLESS,
+        headless: bool | None = None,
     ):
         super().__init__(
             publish_date=publish_date,
@@ -595,7 +608,7 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
         desc: str | None = None,
         publish_strategy: str = XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
-        headless: bool = LOCAL_CHROME_HEADLESS,
+        headless: bool | None = None,
     ):
         super().__init__(
             publish_date=publish_date,

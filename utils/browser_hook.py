@@ -1,8 +1,9 @@
-from conf import LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
+from conf import LOCAL_CHROME_PATH
+from utils.runtime_config import get_local_chrome_headless
 
 def get_browser_options():
     options = {
-        'headless': LOCAL_CHROME_HEADLESS,
+        'headless': get_local_chrome_headless(),
         'args': [
             '--disable-blink-features=AutomationControlled',
             '--lang=zh-CN',
