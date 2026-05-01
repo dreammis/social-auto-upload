@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
 
-from playwright.async_api import Playwright, async_playwright
+from playwright.async_api import Locator, Page, Playwright, async_playwright
 import os
 import asyncio
 
-from conf import LOCAL_CHROME_PATH, LOCAL_CHROME_HEADLESS
+from conf import LOCAL_CHROME_PATH
 from utils.base_social_media import set_init_script
 from utils.files_times import get_absolute_path
 from utils.log import tencent_logger
+from utils.runtime_config import get_local_chrome_headless
 
 
 def format_str_for_short_title(origin_title: str) -> str:
@@ -33,7 +34,7 @@ def format_str_for_short_title(origin_title: str) -> str:
 
 async def cookie_auth(account_file):
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=LOCAL_CHROME_HEADLESS)
+        browser = await playwright.chromium.launch(headless=get_local_chrome_headless())
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
         # 创建一个新的页面
@@ -55,7 +56,7 @@ async def get_tencent_cookie(account_file):
             'args': [
                 '--lang en-GB'
             ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
+            'headless': get_local_chrome_headless(),
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
@@ -84,15 +85,16 @@ async def weixin_setup(account_file, handle=False):
 class TencentVideo(object):
     upload_page = "https://channels.weixin.qq.com/platform/post/create"
 
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None, is_draft=False):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None, is_draft=False, thumbnail_path=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
         self.publish_date = publish_date
         self.account_file = account_file
         self.category = category
-        self.headless = LOCAL_CHROME_HEADLESS
+        self.headless = get_local_chrome_headless()
         self.is_draft = is_draft  # 是否保存为草稿
+        self.thumbnail_path = thumbnail_path
         self.local_executable_path = LOCAL_CHROME_PATH or None
 
     async def set_schedule_time_tencent(self, page, publish_date):
@@ -138,6 +140,9 @@ class TencentVideo(object):
         await file_input.set_input_files(self.file_path)
 
     async def upload(self, playwright: Playwright) -> None:
+        if self.thumbnail_path and not os.path.exists(self.thumbnail_path):
+            raise FileNotFoundError(f"封面文件不存在: {self.thumbnail_path}")
+
         # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
         browser = await playwright.chromium.launch(headless=self.headless, executable_path=self.local_executable_path)
         # 创建一个浏览器上下文，使用指定的 cookie 文件
@@ -164,6 +169,8 @@ class TencentVideo(object):
         await self.add_original(page)
         # 检测上传状态
         await self.detect_upload_status(page)
+        await self.set_location(page)
+        await self.set_thumbnail(page)
         if self.publish_date != 0:
             await self.set_schedule_time_tencent(page, self.publish_date)
         # 添加短标题
@@ -177,6 +184,108 @@ class TencentVideo(object):
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
+
+    async def set_thumbnail(self, page: Page):
+        if not self.thumbnail_path:
+            return
+
+        tencent_logger.info("  [-] 开始设置视频号封面")
+        cover_section = await self._wait_for_cover_preview(page)
+
+        dialog = await self._open_cover_editor(page, cover_section)
+        if await self._upload_thumbnail_in_scope(page, dialog):
+            await self._confirm_cover_dialog_if_present(page)
+            tencent_logger.info("  [-] 视频号封面上传完成")
+            return
+
+        raise RuntimeError("未找到视频号封面上传控件")
+
+    async def _wait_for_cover_preview(self, page: Page) -> Locator:
+        cover_section = page.locator("div.form-item").filter(has_text="封面预览").first
+        await cover_section.wait_for(state="visible", timeout=120000)
+        await cover_section.locator("div.cover-preview-wrap").first.wait_for(state="visible", timeout=120000)
+        return cover_section
+
+    async def _open_cover_editor(self, page: Page, cover_section: Locator) -> Locator:
+        edit_button = cover_section.locator("div.edit-btn").first
+        await edit_button.wait_for(state="visible", timeout=60000)
+
+        dialog = page.locator("div.finder-common-dialog.edit-cover-dialog div.weui-desktop-dialog__wrp").first
+        dialog_panel = page.locator("div.finder-common-dialog.edit-cover-dialog div.weui-desktop-dialog").first
+
+        for _ in range(20):
+            try:
+                if await dialog.count() and await dialog.is_visible():
+                    return dialog
+            except Exception:
+                pass
+
+            try:
+                if await dialog_panel.count() and await dialog_panel.is_visible():
+                    return dialog
+            except Exception:
+                pass
+
+            try:
+                await edit_button.scroll_into_view_if_needed()
+                await edit_button.click(timeout=2000)
+            except Exception:
+                try:
+                    await edit_button.evaluate("node => node.click()")
+                except Exception:
+                    pass
+
+            await page.wait_for_timeout(800)
+
+        return await self._wait_for_cover_dialog(page)
+
+    async def _wait_for_cover_dialog(self, page: Page) -> Locator:
+        dialog = page.locator("div.finder-common-dialog.edit-cover-dialog div.weui-desktop-dialog__wrp").first
+        await dialog.wait_for(state="visible", timeout=10000)
+        return dialog
+
+    async def _upload_thumbnail_in_scope(self, page: Page, scope: Locator) -> bool:
+        selectors = [
+            'input[type="file"][accept*="image"]',
+            'input[type="file"][accept*=".jpg"]',
+            'input[type="file"][accept*=".png"]',
+            'input[type="file"]',
+        ]
+
+        for selector in selectors:
+            locator = scope.locator(selector).last
+            if not await locator.count():
+                continue
+            try:
+                await locator.set_input_files(self.thumbnail_path)
+                await page.wait_for_timeout(1500)
+                return True
+            except Exception:
+                continue
+
+        return False
+
+    async def _confirm_cover_dialog_if_present(self, page: Page):
+        dialog = page.locator("div.finder-common-dialog.edit-cover-dialog div.weui-desktop-dialog__wrp").first
+        if not await dialog.count():
+            return
+
+        try:
+            await dialog.wait_for(state="visible", timeout=3000)
+        except Exception:
+            return
+
+        confirm_button = dialog.locator('button.weui-desktop-btn_primary:has-text("确认")').first
+        if not await confirm_button.count():
+            confirm_button = dialog.locator('button.weui-desktop-btn_primary:has-text("确定")').first
+        if not await confirm_button.count():
+            return
+
+        await confirm_button.click()
+        try:
+            await dialog.wait_for(state="hidden", timeout=10000)
+        except Exception:
+            pass
 
     async def add_short_title(self, page):
         short_title_element = page.get_by_text("短标题", exact=True).locator("..").locator(
@@ -281,6 +390,28 @@ class TencentVideo(object):
                 await page.wait_for_timeout(1000)
             if await page.locator('button:has-text("声明原创"):visible').count():
                 await page.locator('button:has-text("声明原创"):visible').click()
+
+    async def set_location(self, page: Page, location_name: str = "不显示位置"):
+        try:
+            location_form = page.locator("div.form-item").filter(has_text="位置").first
+            if not await location_form.count():
+                tencent_logger.info("  [-] 未找到位置设置区域，跳过")
+                return
+
+            trigger = location_form.locator("div.position-display-wrap").first
+            await trigger.wait_for(state="visible", timeout=15000)
+            await trigger.click()
+
+            dropdown = location_form.locator("div.location-filter-wrap").first
+            await dropdown.wait_for(state="visible", timeout=10000)
+
+            option = dropdown.locator("div.option-item").filter(has_text=location_name).first
+            await option.wait_for(state="visible", timeout=10000)
+            await option.click()
+            await page.wait_for_timeout(500)
+            tencent_logger.info(f"  [-] 已设置位置: {location_name}")
+        except Exception as exc:
+            tencent_logger.warning(f"  [-] 设置位置失败，继续发布: {exc}")
 
     async def main(self):
         async with async_playwright() as playwright:

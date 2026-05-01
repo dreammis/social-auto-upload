@@ -19,13 +19,39 @@ from uploader.ks_uploader.main import KSVideo
 from uploader.tencent_uploader.main import TencentVideo
 from uploader.xiaohongshu_uploader.main import XiaoHongShuVideo
 from utils.base_social_media import set_init_script
+from utils.runtime_config import get_runtime_config, update_runtime_config
+
+
+def ensure_user_info_columns():
+    with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user_info'")
+        if not cursor.fetchone():
+            return
+        cursor.execute("PRAGMA table_info(user_info)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+        if "last_login_time" not in existing_columns:
+            cursor.execute("ALTER TABLE user_info ADD COLUMN last_login_time DATETIME")
+            conn.commit()
+            print("✅ user_info 已补充 last_login_time 字段")
+
+
+def parse_db_datetime(value):
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    return None
+
 
 active_queues = {}
 app = Flask(__name__)
+ensure_user_info_columns()
 
 CACHE_TIMEOUT = 24 * 60 * 60
-
-login_cache = {}
 
 UPLOAD_PAGE_CLASS_MAP = {
     1: XiaoHongShuVideo,
@@ -105,6 +131,38 @@ def get_file():
     return send_from_directory(file_path,filename)
 
 
+def sync_video_file_records(conn):
+    video_dir = Path(BASE_DIR / "videoFile")
+    video_dir.mkdir(parents=True, exist_ok=True)
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT file_path FROM file_records WHERE file_path IS NOT NULL")
+    existing_paths = {row[0] for row in cursor.fetchall()}
+
+    synced_count = 0
+    for video_path in video_dir.iterdir():
+        if not video_path.is_file():
+            continue
+
+        relative_path = video_path.name
+        if relative_path in existing_paths:
+            continue
+
+        cursor.execute(
+            '''
+            INSERT INTO file_records (filename, filesize, file_path)
+            VALUES (?, ?, ?)
+            ''',
+            ("未命名", round(video_path.stat().st_size / (1024 * 1024), 2), relative_path)
+        )
+        existing_paths.add(relative_path)
+        synced_count += 1
+
+    if synced_count:
+        conn.commit()
+        print(f"✅ 已补录 {synced_count} 个 videoFile 文件到数据库")
+
+
 @app.route('/uploadSave', methods=['POST'])
 def upload_save():
     if 'file' not in request.files:
@@ -173,6 +231,7 @@ def get_all_files():
         # 使用 with 自动管理数据库连接
         with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
             conn.row_factory = sqlite3.Row  # 允许通过列名访问结果
+            sync_video_file_records(conn)
             cursor = conn.cursor()
 
             # 查询所有记录
@@ -203,6 +262,40 @@ def get_all_files():
         return jsonify({
             "code": 500,
             "msg": str("get file failed!"),
+            "data": None
+        }), 500
+
+
+@app.route("/getConfig", methods=["GET"])
+def get_config():
+    try:
+        return jsonify({
+            "code": 200,
+            "msg": "success",
+            "data": get_runtime_config()
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "code": 500,
+            "msg": str(e),
+            "data": None
+        }), 500
+
+
+@app.route("/updateConfig", methods=["POST"])
+def update_config():
+    try:
+        payload = request.get_json(silent=True) or {}
+        data = update_runtime_config(payload)
+        return jsonify({
+            "code": 200,
+            "msg": "配置更新成功",
+            "data": data
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "code": 500,
+            "msg": str(e),
             "data": None
         }), 500
 
@@ -260,25 +353,19 @@ async def refresh_account_statuses(force_refresh=False):
         for row in rows:
             print(row)
         for row in rows_list:
-            cache_key = f"{row[1]}_{row[2]}"
-            current_time = time.time()
-            original_status = row[4]
+            last_login_time = parse_db_datetime(row[5] if len(row) > 5 else None)
 
-            if not force_refresh and cache_key in login_cache:
-                cached_time, cached_result = login_cache[cache_key]
-                if current_time - cached_time < CACHE_TIMEOUT:
-                    row[4] = 1 if cached_result else 0
+            if not force_refresh and last_login_time:
+                if (datetime.now() - last_login_time).total_seconds() < CACHE_TIMEOUT:
                     continue
 
             flag = await check_cookie(row[1],row[2])
-            login_cache[cache_key] = (current_time, flag)
             row[4] = 1 if flag else 0
-            if row[4] != original_status:
-                cursor.execute('''
-                UPDATE user_info 
-                SET status = ? 
-                WHERE id = ?
-                ''', (row[4],row[0]))
+            cursor.execute('''
+            UPDATE user_info 
+            SET status = ?, last_login_time = CURRENT_TIMESTAMP
+            WHERE id = ?
+            ''', (row[4], row[0]))
         conn.commit()
         print("✅ 用户状态已更新")
         for row in rows:
@@ -514,7 +601,9 @@ def postVideo():
         category = None
     productLink = data.get('productLink', '')
     productTitle = data.get('productTitle', '')
-    thumbnail_path = data.get('thumbnail', '')
+    desc = data.get('desc', '')
+    thumbnail_landscape = data.get('thumbnailLandscape', data.get('thumbnail', ''))
+    thumbnail_portrait = data.get('thumbnailPortrait', '')
     is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
     
     declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
@@ -531,11 +620,16 @@ def postVideo():
     if not type:
         return jsonify({"code": 400, "msg": "平台类型不能为空", "data": None}), 400
     if not title:
-        return jsonify({"code": 400, "msg": "标题不能为空", "data": None}), 400
+        if type == 3 and desc:
+            pass
+        else:
+            return jsonify({"code": 400, "msg": "标题不能为空", "data": None}), 400
 
     # 打印获取到的数据（仅作为示例）
     print("File List:", file_list)
     print("Account List:", account_list)
+
+    thumbnail_path = data.get('thumbnail', '') or thumbnail_landscape or thumbnail_portrait
 
     try:
         match type:
@@ -544,10 +638,10 @@ def postVideo():
                                    start_days)
             case 2:
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                                   start_days, is_draft)
+                                   start_days, is_draft, thumbnail_path)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_path, productLink, productTitle, declaration_info)
+                          start_days, thumbnail_landscape, thumbnail_portrait, productLink, productTitle, declaration_info, desc)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
@@ -626,8 +720,8 @@ def postVideoBatch():
             category = None
         productLink = data.get('productLink', '')
         productTitle = data.get('productTitle', '')
+        desc = data.get('desc', '')
         is_draft = data.get('isDraft', False)
-        thumbnail_path = data.get('thumbnail', '')
         declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
         
         videos_per_day = data.get('videosPerDay')
@@ -636,16 +730,20 @@ def postVideoBatch():
         # 打印获取到的数据（仅作为示例）
         print("File List:", file_list)
         print("Account List:", account_list)
+        thumbnail_path = data.get('thumbnail', '') or thumbnail_landscape or thumbnail_portrait
+
         match type:
             case 1:
                 post_video_xhs(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                                start_days)
             case 2:
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                                   start_days, is_draft)
+                                   start_days, is_draft, thumbnail_path)
             case 3:
+                thumbnail_landscape = data.get('thumbnailLandscape', thumbnail_path)
+                thumbnail_portrait = data.get('thumbnailPortrait', '')
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_path, productLink, productTitle, declaration_info)
+                          start_days, thumbnail_landscape, thumbnail_portrait, productLink, productTitle, declaration_info, desc)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)

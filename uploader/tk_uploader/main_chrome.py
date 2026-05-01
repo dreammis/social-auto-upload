@@ -6,16 +6,17 @@ from playwright.async_api import Playwright, async_playwright
 import os
 import asyncio
 
-from conf import LOCAL_CHROME_PATH, LOCAL_CHROME_HEADLESS
+from conf import LOCAL_CHROME_PATH
 from uploader.tk_uploader.tk_config import Tk_Locator
 from utils.base_social_media import set_init_script
 from utils.files_times import get_absolute_path
 from utils.log import tiktok_logger
+from utils.runtime_config import get_local_chrome_headless
 
 
 async def cookie_auth(account_file):
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=LOCAL_CHROME_HEADLESS)
+        browser = await playwright.chromium.launch(headless=get_local_chrome_headless())
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
         # 创建一个新的页面
@@ -55,7 +56,7 @@ async def get_tiktok_cookie(account_file):
             'args': [
                 '--lang en-GB',
             ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
+            'headless': get_local_chrome_headless(),
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
@@ -79,7 +80,7 @@ class TiktokVideo(object):
         self.thumbnail_path = thumbnail_path
         self.account_file = account_file
         self.local_executable_path = LOCAL_CHROME_PATH
-        self.headless = LOCAL_CHROME_HEADLESS
+        self.headless = get_local_chrome_headless()
         self.locator_base = None
 
     async def set_schedule_time(self, page, publish_date):
