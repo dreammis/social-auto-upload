@@ -527,7 +527,8 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
                         break
                     
                     if self.debug:
-                        xiaohongshu_logger.debug(_msg("🧍", f"预览区域内容: {all_text.strip().replace('\\n', ' ')}"))
+                        preview_text = all_text.strip().replace("\n", " ")
+                        xiaohongshu_logger.debug(_msg("🧍", f"预览区域内容: {preview_text}"))
                     xiaohongshu_logger.debug(_msg("🧍", "还没看到上传成功标识，小人继续等一会"))
                 else:
                     # 尝试检查标题输入框是否已经出现，如果是，说明已经进入编辑状态
