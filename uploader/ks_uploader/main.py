@@ -11,7 +11,7 @@ from patchright.async_api import Page
 from patchright.async_api import Playwright
 from patchright.async_api import async_playwright
 
-from conf import DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
+from conf import DEBUG_MODE, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
 from utils.files_times import get_absolute_path
@@ -21,6 +21,7 @@ from utils.login_qrcode import print_terminal_qrcode
 from utils.login_qrcode import remove_qrcode_file
 from utils.login_qrcode import save_data_url_image
 from utils.log import kuaishou_logger
+from utils.runtime_config import get_local_chrome_headless
 
 KUAISHOU_UPLOAD_URL = "https://cp.kuaishou.com/article/publish/video"
 KUAISHOU_MANAGE_URL = "https://cp.kuaishou.com/article/manage/video?status=2&from=publish"
@@ -153,9 +154,15 @@ async def _is_ks_login_page_gone(page: Page) -> bool:
 async def cookie_auth(account_file):
     async with async_playwright() as playwright:
         if LOCAL_CHROME_PATH:
-            browser = await playwright.chromium.launch(headless=True, executable_path=LOCAL_CHROME_PATH)
+            browser = await playwright.chromium.launch(
+                headless=get_local_chrome_headless(),
+                executable_path=LOCAL_CHROME_PATH,
+            )
         else:
-            browser = await playwright.chromium.launch(headless=True, channel="chrome")
+            browser = await playwright.chromium.launch(
+                headless=get_local_chrome_headless(),
+                channel="chrome",
+            )
         try:
             context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
@@ -174,7 +181,9 @@ async def cookie_auth(account_file):
             await browser.close()
 
 
-async def ks_setup(account_file, handle=False, return_detail=False, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS):
+async def ks_setup(account_file, handle=False, return_detail=False, qrcode_callback=None, headless: bool | None = None):
+    if headless is None:
+        headless = get_local_chrome_headless()
     account_file = get_absolute_path(account_file, "ks_uploader")
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
@@ -191,10 +200,12 @@ async def ks_setup(account_file, handle=False, return_detail=False, qrcode_callb
 async def get_ks_cookie(
     account_file,
     qrcode_callback=None,
-    headless: bool = LOCAL_CHROME_HEADLESS,
+    headless: bool | None = None,
     poll_interval: int = 3,
     max_checks: int = 100,
 ):
+    if headless is None:
+        headless = get_local_chrome_headless()
     if headless:
         kuaishou_logger.info(_msg("🖼️", "快手登录将以无头模式运行，小人会输出终端二维码并保存本地二维码图片"))
 
@@ -278,13 +289,13 @@ class KSBaseUploader(BaseVideoUploader):
         account_file,
         publish_strategy: str | None = None,
         debug: bool = DEBUG_MODE,
-        headless: bool = LOCAL_CHROME_HEADLESS,
+        headless: bool | None = None,
     ):
         self.publish_date = publish_date
         self.account_file = str(account_file)
         self.publish_strategy = publish_strategy
         self.debug = debug
-        self.headless = headless
+        self.headless = get_local_chrome_headless() if headless is None else headless
         self.local_executable_path = LOCAL_CHROME_PATH
         self.date_format = "%Y-%m-%d %H:%M"
 
@@ -347,6 +358,8 @@ class KSBaseUploader(BaseVideoUploader):
 
 
 class KSVideo(KSBaseUploader):
+    upload_page = "https://cp.kuaishou.com/article/publish/video"
+
     def __init__(
         self,
         title,
@@ -356,7 +369,7 @@ class KSVideo(KSBaseUploader):
         account_file,
         publish_strategy: str | None = None,
         debug: bool = DEBUG_MODE,
-        headless: bool = LOCAL_CHROME_HEADLESS,
+        headless: bool | None = None,
         thumbnail_path=None,
         desc: str | None = None,
     ):
@@ -546,7 +559,7 @@ class KSNote(KSBaseUploader):
         title: str | None = None,
         publish_strategy: str | None = None,
         debug: bool = DEBUG_MODE,
-        headless: bool = LOCAL_CHROME_HEADLESS,
+        headless: bool | None = None,
     ):
         super().__init__(
             publish_date=publish_date,

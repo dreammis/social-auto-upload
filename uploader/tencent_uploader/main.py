@@ -11,10 +11,11 @@ from patchright.async_api import Page
 from patchright.async_api import Playwright
 from patchright.async_api import async_playwright
 
-from conf import BASE_DIR, DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
+from conf import BASE_DIR, DEBUG_MODE, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
 from utils.log import tencent_logger
+from utils.runtime_config import get_local_chrome_headless
 
 TENCENT_LOGIN_URL = "https://channels.weixin.qq.com"
 TENCENT_UPLOAD_URL = "https://channels.weixin.qq.com/platform/post/create"
@@ -106,7 +107,7 @@ def format_str_for_short_title(origin_title: str) -> str:
 async def cookie_auth(account_file):
     account_file = _resolve_account_file(account_file)
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=True))
+        browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=get_local_chrome_headless()))
         try:
             context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
@@ -344,10 +345,11 @@ async def tencent_cookie_gen(
     qrcode_callback=None,
     poll_interval: int = 3,
     max_checks: int = 100,
-    headless: bool = LOCAL_CHROME_HEADLESS,
+    headless: bool | None = None,
 ):
     account_file = _resolve_account_file(account_file)
     Path(account_file).parent.mkdir(parents=True, exist_ok=True)
+    headless = get_local_chrome_headless() if headless is None else headless
 
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=headless))
@@ -405,7 +407,7 @@ async def tencent_setup(
     handle=False,
     return_detail=False,
     qrcode_callback=None,
-    headless: bool = LOCAL_CHROME_HEADLESS,
+    headless: bool | None = None,
 ):
     account_file = _resolve_account_file(account_file)
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
@@ -421,7 +423,7 @@ async def tencent_setup(
     return result if return_detail else True
 
 
-async def get_tencent_cookie(account_file, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS):
+async def get_tencent_cookie(account_file, qrcode_callback=None, headless: bool | None = None):
     return await tencent_cookie_gen(account_file, qrcode_callback=qrcode_callback, headless=headless)
 
 
@@ -430,7 +432,7 @@ async def weixin_setup(
     handle=False,
     return_detail=False,
     qrcode_callback=None,
-    headless: bool = LOCAL_CHROME_HEADLESS,
+    headless: bool | None = None,
 ):
     return await tencent_setup(
         account_file,
@@ -448,13 +450,13 @@ class TencentBaseUploader(BaseVideoUploader):
         account_file,
         publish_strategy: str = TENCENT_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
-        headless: bool = LOCAL_CHROME_HEADLESS,
+        headless: bool | None = None,
     ):
         self.publish_date = publish_date
         self.account_file = _resolve_account_file(account_file)
         self.publish_strategy = publish_strategy
         self.debug = debug
-        self.headless = headless
+        self.headless = get_local_chrome_headless() if headless is None else headless
         self.local_executable_path = LOCAL_CHROME_PATH
 
     async def validate_base_args(self):
@@ -573,6 +575,28 @@ class TencentBaseUploader(BaseVideoUploader):
             if await declare_button.count():
                 await declare_button.click()
 
+    async def set_location(self, page: Page, location_name: str = "不显示位置") -> None:
+        try:
+            location_form = page.locator("div.form-item").filter(has_text="位置").first
+            if not await location_form.count():
+                tencent_logger.info(_msg("🧍", "未找到位置设置区域，跳过"))
+                return
+
+            trigger = location_form.locator("div.position-display-wrap").first
+            await trigger.wait_for(state="visible", timeout=15000)
+            await trigger.click()
+
+            dropdown = location_form.locator("div.location-filter-wrap").first
+            await dropdown.wait_for(state="visible", timeout=10000)
+
+            option = dropdown.locator("div.option-item").filter(has_text=location_name).first
+            await option.wait_for(state="visible", timeout=10000)
+            await option.click()
+            await page.wait_for_timeout(500)
+            tencent_logger.info(_msg("🥳", f"已设置位置: {location_name}"))
+        except Exception as exc:
+            tencent_logger.warning(_msg("😵", f"设置位置失败，继续发布: {exc}"))
+
     async def wait_for_upload_complete(self, page: Page) -> None:
         while True:
             try:
@@ -640,7 +664,7 @@ class TencentVideo(TencentBaseUploader):
         short_title: str | None = None,
         publish_strategy: str = TENCENT_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
-        headless: bool = LOCAL_CHROME_HEADLESS,
+        headless: bool | None = None,
     ):
         super().__init__(
             publish_date=publish_date,
@@ -754,6 +778,7 @@ class TencentVideo(TencentBaseUploader):
             await self.upload_video_file(page, self.file_path)
             await self.prepare_video_for_publish(page)
             await self.wait_for_upload_complete(page)
+            await self.set_location(page)
             await self.set_thumbnail(page)
 
             if self.publish_strategy == TENCENT_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
@@ -787,7 +812,7 @@ class TencentNote(TencentBaseUploader):
         title: str | None = None,
         publish_strategy: str = TENCENT_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
-        headless: bool = LOCAL_CHROME_HEADLESS,
+        headless: bool | None = None,
         is_draft: bool = False,
     ):
         super().__init__(

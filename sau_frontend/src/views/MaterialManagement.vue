@@ -120,13 +120,13 @@
       :top="'10vh'"
     >
       <div class="preview-container" v-if="currentMaterial">
-        <div v-if="isVideoFile(currentMaterial.filename)" class="video-preview">
+        <div v-if="isVideoFile(currentMaterial)" class="video-preview">
           <video controls style="max-width: 100%; max-height: 60vh;">
             <source :src="getPreviewUrl(currentMaterial.file_path)" type="video/mp4">
             您的浏览器不支持视频播放
           </video>
         </div>
-        <div v-else-if="isImageFile(currentMaterial.filename)" class="image-preview">
+        <div v-else-if="isImageFile(currentMaterial)" class="image-preview">
           <img :src="getPreviewUrl(currentMaterial.file_path)" style="max-width: 100%; max-height: 60vh;" />
         </div>
         <div v-else class="file-info">
@@ -373,14 +373,33 @@ const downloadFile = (material) => {
 }
 
 // 判断文件类型
-const isVideoFile = (filename) => {
-  const videoExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv']
-  return videoExtensions.some(ext => filename.toLowerCase().endsWith(ext))
+const getMaterialFileName = (materialOrName) => {
+  if (typeof materialOrName === 'string') {
+    return materialOrName
+  }
+
+  if (!materialOrName) {
+    return ''
+  }
+
+  const displayName = materialOrName.filename || ''
+  if (displayName && displayName !== '未命名') {
+    return displayName
+  }
+
+  return materialOrName.file_path || displayName
 }
 
-const isImageFile = (filename) => {
+const isVideoFile = (materialOrName) => {
+  const videoExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv']
+  const filename = getMaterialFileName(materialOrName).toLowerCase()
+  return videoExtensions.some(ext => filename.endsWith(ext))
+}
+
+const isImageFile = (materialOrName) => {
   const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
-  return imageExtensions.some(ext => filename.toLowerCase().endsWith(ext))
+  const filename = getMaterialFileName(materialOrName).toLowerCase()
+  return imageExtensions.some(ext => filename.endsWith(ext))
 }
 
 // 组件挂载时获取素材列表
