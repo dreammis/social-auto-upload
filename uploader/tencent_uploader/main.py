@@ -51,26 +51,61 @@ async def cookie_auth(account_file):
 
 async def get_tencent_cookie(account_file):
     async with async_playwright() as playwright:
+        # 登录必须用 headed 模式，让用户能看到浏览器并扫码
         options = {
-            'args': [
-                '--lang en-GB'
-            ],
-            'headless': LOCAL_CHROME_HEADLESS,  # Set headless option here
+            'args': ['--lang en-GB'],
+            'headless': False,  # 强制 headed，登录需要用户看到浏览器
         }
-        # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
-        # Setup context however you like.
-        context = await browser.new_context()  # Pass any options
-        # Pause the page, and start recording manually.
+        context = await browser.new_context()
         context = await set_init_script(context)
         page = await context.new_page()
+
+        tencent_logger.info('[+] 正在打开视频号登录页面，请扫码登录...')
         await page.goto("https://channels.weixin.qq.com")
-        await page.pause()
-        # 点击调试器的继续，保存cookie
-        await context.storage_state(path=account_file)
+
+        # 等待登录成功，检测以下任一条件：
+        # 1. URL 从 login 页面跳转到主站
+        # 2. 页面出现"视频号"文字（表示已登录进入后台）
+        # 3. 出现头像/用户名元素
+        login_success = False
+        try:
+            # 等待 URL 变化（登录成功后会跳转到主站）
+            await page.wait_for_url(lambda url: 'channels.weixin.qq.com' in url and 'login' not in url.lower(), timeout=120000)
+            tencent_logger.info('[+] 检测到 URL 变化，登录成功')
+            login_success = True
+        except:
+            pass
+
+        if not login_success:
+            try:
+                # 等待"视频号"文字出现（后台界面）
+                await page.wait_for_selector('text=视频号', timeout=3000)
+                tencent_logger.info('[+] 检测到"视频号"元素，登录成功')
+                login_success = True
+            except:
+                pass
+
+        if not login_success:
+            try:
+                # 等待页面显示用户信息（登录成功后的标志）
+                await page.wait_for_selector('.user-info, [class*="avatar"], img[alt*="头像"]', timeout=3000)
+                tencent_logger.info('[+] 检测到用户信息元素，登录成功')
+                login_success = True
+            except:
+                pass
+
+        # 保存 cookie
+        tencent_logger.info('[+] 正在保存 cookie...')
+        try:
+            await context.storage_state(path=account_file)
+            tencent_logger.success(f'[+] cookie 已保存到: {account_file}')
+        except Exception as e:
+            tencent_logger.error(f'[-] 保存 cookie 失败: {e}')
+            raise
 
 
-async def weixin_setup(account_file, handle=False):
+async def weixin_setup(account_file, handle=False, keep_open=False):
     account_file = get_absolute_path(account_file, "tencent_uploader")
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
@@ -78,6 +113,13 @@ async def weixin_setup(account_file, handle=False):
             return False
         tencent_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
         await get_tencent_cookie(account_file)
+        return True
+
+    if keep_open:
+        tencent_logger.info('[+] cookie 有效，打开浏览器供手动切换账号')
+        await get_tencent_cookie(account_file)
+        return True
+
     return True
 
 
