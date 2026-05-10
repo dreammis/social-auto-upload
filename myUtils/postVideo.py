@@ -2,10 +2,25 @@ import asyncio
 from pathlib import Path
 
 from conf import BASE_DIR
-from uploader.douyin_uploader.main import DouYinVideo
-from uploader.ks_uploader.main import KSVideo
+from uploader.douyin_uploader.main import (
+    DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
+    DOUYIN_PUBLISH_STRATEGY_SCHEDULED,
+    DouYinNote,
+    DouYinVideo,
+)
+from uploader.ks_uploader.main import (
+    KUAISHOU_PUBLISH_STRATEGY_IMMEDIATE,
+    KUAISHOU_PUBLISH_STRATEGY_SCHEDULED,
+    KSNote,
+    KSVideo,
+)
 from uploader.tencent_uploader.main import TencentVideo
-from uploader.xiaohongshu_uploader.main import XiaoHongShuVideo
+from uploader.xiaohongshu_uploader.main import (
+    XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE,
+    XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED,
+    XiaoHongShuNote,
+    XiaoHongShuVideo,
+)
 from utils.constant import TencentZoneTypes
 from utils.files_times import generate_schedule_time_next_day
 
@@ -86,6 +101,72 @@ def post_video_xhs(title,files,tags,account_file,category=TencentZoneTypes.LIFES
             app = XiaoHongShuVideo(title, file, tags, publish_datetimes, cookie)
             asyncio.run(app.main(), debug=False)
 
+
+def post_note_douyin(title, files, note, tags, account_file, enableTimer=False, videos_per_day=1, daily_times=None, start_days=0):
+    account_file = [Path(BASE_DIR / "cookiesFile" / file) for file in account_file]
+    files = [Path(BASE_DIR / "videoFile" / file) for file in files]
+    if enableTimer:
+        publish_datetimes = generate_schedule_time_next_day(len(files), videos_per_day, daily_times, start_days)
+        publish_strategy = DOUYIN_PUBLISH_STRATEGY_SCHEDULED
+    else:
+        publish_datetimes = [0 for _ in range(len(files))]
+        publish_strategy = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE
+    for cookie in account_file:
+        app = DouYinNote(
+            image_paths=[str(file) for file in files],
+            title=title,
+            note=note,
+            tags=tags,
+            publish_date=publish_datetimes[0] if publish_datetimes else 0,
+            account_file=str(cookie),
+            publish_strategy=publish_strategy,
+        )
+        asyncio.run(app.douyin_upload_note(), debug=False)
+
+
+def post_note_ks(title, files, note, tags, account_file, enableTimer=False, videos_per_day=1, daily_times=None, start_days=0):
+    account_file = [Path(BASE_DIR / "cookiesFile" / file) for file in account_file]
+    files = [Path(BASE_DIR / "videoFile" / file) for file in files]
+    if enableTimer:
+        publish_datetimes = generate_schedule_time_next_day(len(files), videos_per_day, daily_times, start_days)
+        publish_strategy = KUAISHOU_PUBLISH_STRATEGY_SCHEDULED
+    else:
+        publish_datetimes = [0 for _ in range(len(files))]
+        publish_strategy = KUAISHOU_PUBLISH_STRATEGY_IMMEDIATE
+    for cookie in account_file:
+        app = KSNote(
+            image_paths=[str(file) for file in files],
+            title=title,
+            note=note,
+            tags=tags,
+            publish_date=publish_datetimes[0] if publish_datetimes else 0,
+            account_file=str(cookie),
+            publish_strategy=publish_strategy,
+        )
+        asyncio.run(app.main(), debug=False)
+
+
+def post_note_xhs(title, files, note, tags, account_file, enableTimer=False, videos_per_day=1, daily_times=None, start_days=0):
+    account_file = [Path(BASE_DIR / "cookiesFile" / file) for file in account_file]
+    files = [Path(BASE_DIR / "videoFile" / file) for file in files]
+    if enableTimer:
+        publish_datetimes = generate_schedule_time_next_day(1, videos_per_day, daily_times, start_days)
+        publish_strategy = XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED
+    else:
+        publish_datetimes = [0]
+        publish_strategy = XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE
+    for cookie in account_file:
+        app = XiaoHongShuNote(
+            image_paths=[str(file) for file in files],
+            title=title,
+            desc=note,
+            note=note,
+            tags=tags,
+            publish_date=publish_datetimes[0] if publish_datetimes else 0,
+            account_file=str(cookie),
+            publish_strategy=publish_strategy,
+        )
+        asyncio.run(app.main(), debug=False)
 
 
 # post_video("333",["demo.mp4"],"d","d")

@@ -11,13 +11,23 @@ from myUtils.auth import check_cookie
 from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 from conf import BASE_DIR
 from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
-from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs
+from myUtils.postVideo import (
+    post_note_douyin,
+    post_note_ks,
+    post_note_xhs,
+    post_video_DouYin,
+    post_video_ks,
+    post_video_tencent,
+    post_video_xhs,
+)
 
 active_queues = {}
 app = Flask(__name__)
 
 #允许所有来源跨域访问
 CORS(app)
+Path(BASE_DIR / "videoFile").mkdir(parents=True, exist_ok=True)
+Path(BASE_DIR / "cookiesFile").mkdir(parents=True, exist_ok=True)
 
 # 限制上传文件大小为160MB
 app.config['MAX_CONTENT_LENGTH'] = 160 * 1024 * 1024
@@ -63,6 +73,7 @@ def upload_file():
         # 保存文件到指定位置
         uuid_v1 = uuid.uuid1()
         print(f"UUID v1: {uuid_v1}")
+        Path(BASE_DIR / "videoFile").mkdir(parents=True, exist_ok=True)
         filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{file.filename}")
         file.save(filepath)
         return jsonify({"code":200,"msg": "File uploaded successfully", "data": f"{uuid_v1}_{file.filename}"}), 200
@@ -119,6 +130,7 @@ def upload_save():
 
         # 构造文件名和路径
         final_filename = f"{uuid_v1}_{filename}"
+        Path(BASE_DIR / "videoFile").mkdir(parents=True, exist_ok=True)
         filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{filename}")
 
         # 保存文件
@@ -469,6 +481,63 @@ def postVideo():
         return jsonify({
             "code": 500,
             "msg": f"发布失败: {str(e)}",
+            "data": None
+        }), 500
+
+
+@app.route('/postNote', methods=['POST'])
+def postNote():
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"code": 400, "msg": "请求数据不能为空", "data": None}), 400
+
+    file_list = data.get('fileList', [])
+    account_list = data.get('accountList', [])
+    type = data.get('type')
+    title = data.get('title')
+    note = data.get('note', '')
+    tags = data.get('tags', [])
+    enableTimer = data.get('enableTimer')
+    videos_per_day = data.get('videosPerDay')
+    daily_times = data.get('dailyTimes')
+    start_days = data.get('startDays')
+
+    if not file_list:
+        return jsonify({"code": 400, "msg": "图片列表不能为空", "data": None}), 400
+    if not account_list:
+        return jsonify({"code": 400, "msg": "账号列表不能为空", "data": None}), 400
+    if not type:
+        return jsonify({"code": 400, "msg": "平台类型不能为空", "data": None}), 400
+    if not title:
+        return jsonify({"code": 400, "msg": "标题不能为空", "data": None}), 400
+    if type == 2:
+        return jsonify({"code": 400, "msg": "视频号暂不支持图文发布", "data": None}), 400
+
+    print("Note Image List:", file_list)
+    print("Account List:", account_list)
+
+    try:
+        match type:
+            case 1:
+                post_note_xhs(title, file_list, note, tags, account_list, enableTimer, videos_per_day, daily_times, start_days)
+            case 3:
+                post_note_douyin(title, file_list, note, tags, account_list, enableTimer, videos_per_day, daily_times, start_days)
+            case 4:
+                post_note_ks(title, file_list, note, tags, account_list, enableTimer, videos_per_day, daily_times, start_days)
+            case _:
+                return jsonify({"code": 400, "msg": f"不支持的图文发布平台: {type}", "data": None}), 400
+
+        return jsonify({
+            "code": 200,
+            "msg": "图文发布任务已提交",
+            "data": None
+        }), 200
+    except Exception as e:
+        print(f"发布图文时出错: {str(e)}")
+        return jsonify({
+            "code": 500,
+            "msg": f"发布图文失败: {str(e)}",
             "data": None
         }), 500
 
