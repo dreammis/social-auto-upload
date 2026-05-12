@@ -314,15 +314,41 @@ class KSBaseUploader(BaseVideoUploader):
 
     async def set_schedule_time(self, page: Page, publish_date: datetime):
         kuaishou_logger.info(_msg("🕒", "小人准备设置定时发布时间"))
-        publish_date_hour = publish_date.strftime("%Y-%m-%d %H:%M:%S")
-        await page.locator("label:text('发布时间')").locator("xpath=following-sibling::div").locator(".ant-radio-input").nth(1).click()
+        publish_date_str = publish_date.strftime("%Y-%m-%d %H:%M:%S")
+
+        # 1. 切换到"定时发布"radio (用文本匹配更稳)
+        await page.locator('label.ant-radio-wrapper').filter(has_text="定时发布").click()
+        await asyncio.sleep(2)
+
+        # 2. 点击 picker 打开下拉面板
+        await page.locator('input[placeholder="选择日期时间"]').click()
         await asyncio.sleep(1)
-        await page.locator('div.ant-picker-input input[placeholder="选择日期时间"]').click()
+
+        # 3. 用 React 兼容的方式直接设置 input 的 value
+        #    (ant-design DatePicker 是 controlled component, 必须用 native setter + bubbling event)
+        js_code = """
+        (newValue) => {
+            const input = document.querySelector('input[placeholder="选择日期时间"]');
+            if (!input) return false;
+            const nativeSetter = Object.getOwnPropertyDescriptor(
+                window.HTMLInputElement.prototype, 'value'
+            ).set;
+            nativeSetter.call(input, newValue);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+        }
+        """
+        ok = await page.evaluate(js_code, publish_date_str)
+        if not ok:
+            kuaishou_logger.error("❌ 找不到时间选择器输入框")
+            return
+
         await asyncio.sleep(1)
-        await page.keyboard.press("Control+KeyA")
-        await page.keyboard.type(publish_date_hour)
+        # 4. 按 Enter 确认
         await page.keyboard.press("Enter")
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
+        kuaishou_logger.info(f"✅ 定时发布时间已设置为 {publish_date_str}")
 
     async def close_guide_overlay(self, page: Page) -> bool:
         joyride_tooltip = page.locator('div[id^="react-joyride-step"] div[role="alertdialog"]')
