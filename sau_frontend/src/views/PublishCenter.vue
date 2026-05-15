@@ -349,6 +349,20 @@
             />
           </div>
 
+          <!-- 正文输入 (仅在抖音可见) -->
+          <div v-if="tab.selectedPlatform === 3" class="description-section">
+            <h3>正文</h3>
+            <el-input
+              v-model="tab.description"
+              type="textarea"
+              :rows="6"
+              placeholder="请输入正文内容（话题会自动添加到正文末尾）"
+              maxlength="2000"
+              show-word-limit
+              class="description-input"
+            />
+          </div>
+
           <!-- 话题输入 -->
           <div class="topic-section">
             <h3>话题</h3>
@@ -545,6 +559,7 @@ const defaultTabInit = {
   selectedAccounts: [], // 选中的账号ID列表
   selectedPlatform: 1, // 选中的平台（单选）
   title: '',
+  description: '',
   productLink: '', // 商品链接
   productTitle: '', // 商品名称
   selectedTopics: [], // 话题列表（不带#号）
@@ -794,6 +809,7 @@ const confirmPublish = async (tab) => {
     type: tab.selectedPlatform,
     title: tab.title,
     tags: tab.selectedTopics, // 不带#号的话题列表
+    description: tab.description,
     fileList: tab.fileList.map(file => file.path), // 只发送文件路径
     accountList: tab.selectedAccounts.map(accountId => {
       const account = accountStore.accounts.find(acc => acc.id === accountId)
@@ -1173,6 +1189,7 @@ const batchPublish = async () => {
         .account-section,
         .platform-section,
         .title-section,
+        .description-section,
         .product-section,
         .topic-section,
         .schedule-section {

@@ -20,7 +20,7 @@ app = Flask(__name__)
 CORS(app)
 
 # 限制上传文件大小为160MB
-app.config['MAX_CONTENT_LENGTH'] = 160 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024
 
 # 获取当前目录（假设 index.html 和 assets 在这里）
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -64,6 +64,7 @@ def upload_file():
         uuid_v1 = uuid.uuid1()
         print(f"UUID v1: {uuid_v1}")
         filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{file.filename}")
+        filepath.parent.mkdir(parents=True, exist_ok=True)
         file.save(filepath)
         return jsonify({"code":200,"msg": "File uploaded successfully", "data": f"{uuid_v1}_{file.filename}"}), 200
     except Exception as e:
@@ -412,6 +413,7 @@ def postVideo():
     account_list = data.get('accountList', [])
     type = data.get('type')
     title = data.get('title')
+    description = data.get('description', '')
     tags = data.get('tags')
     category = data.get('category')
     enableTimer = data.get('enableTimer')
@@ -450,7 +452,7 @@ def postVideo():
                                    start_days, is_draft)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_path, productLink, productTitle)
+                          start_days, thumbnail_path, productLink, productTitle, description)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
