@@ -41,17 +41,13 @@
             </div>
             <div class="stat-footer">
               <div class="stat-detail">
-                <el-tooltip content="快手账号" placement="top">
-                  <el-tag size="small" type="success">{{ platformStats.kuaishou }}</el-tag>
-                </el-tooltip>
-                <el-tooltip content="抖音账号" placement="top">
-                  <el-tag size="small" type="danger">{{ platformStats.douyin }}</el-tag>
-                </el-tooltip>
-                <el-tooltip content="视频号账号" placement="top">
-                  <el-tag size="small" type="warning">{{ platformStats.channels }}</el-tag>
-                </el-tooltip>
-                <el-tooltip content="小红书账号" placement="top">
-                  <el-tag size="small" type="info">{{ platformStats.xiaohongshu }}</el-tag>
+                <el-tooltip
+                  v-for="platform in platformStats.platforms"
+                  :key="platform.name"
+                  :content="`${platform.name}账号`"
+                  placement="top"
+                >
+                  <el-tag size="small" :type="platform.tagType">{{ platform.count }}</el-tag>
                 </el-tooltip>
               </div>
             </div>
@@ -175,6 +171,16 @@ const accountStore = useAccountStore()
 const appStore = useAppStore()
 const loading = ref(false)
 
+const supportedPlatforms = [
+  { name: '抖音', tagType: 'danger' },
+  { name: '快手', tagType: 'success' },
+  { name: '视频号', tagType: 'warning' },
+  { name: '小红书', tagType: 'info' },
+  { name: 'Bilibili', tagType: 'primary' },
+  { name: '百家号', tagType: 'info' },
+  { name: 'TikTok', tagType: 'success' }
+]
+
 // 账号统计数据 - 从真实数据计算
 const accountStats = computed(() => {
   const accounts = accountStore.accounts
@@ -190,13 +196,12 @@ const accountStats = computed(() => {
 // 平台统计数据 - 从真实数据计算
 const platformStats = computed(() => {
   const accounts = accountStore.accounts
-  const kuaishou = accounts.filter(a => a.platform === '快手').length
-  const douyin = accounts.filter(a => a.platform === '抖音').length
-  const channels = accounts.filter(a => a.platform === '视频号').length
-  const xiaohongshu = accounts.filter(a => a.platform === '小红书').length
-  // 统计有账号的平台数量
-  const total = [kuaishou, douyin, channels, xiaohongshu].filter(n => n > 0).length
-  return { total, kuaishou, douyin, channels, xiaohongshu }
+  const platforms = supportedPlatforms.map(platform => ({
+    ...platform,
+    count: accounts.filter(account => account.platform === platform.name).length
+  }))
+  const total = platforms.filter(platform => platform.count > 0).length
+  return { total, platforms }
 })
 
 // 素材统计数据 - 从真实数据计算

@@ -6,6 +6,9 @@ from playwright.async_api import async_playwright
 from xhs import XhsClient
 
 from conf import BASE_DIR, LOCAL_CHROME_HEADLESS
+from uploader.baijiahao_uploader.main import baijiahao_setup
+from uploader.bilibili_uploader.runtime import run_biliup_command
+from uploader.tk_uploader.main_chrome import tiktok_setup
 from utils.base_social_media import set_init_script
 from utils.log import tencent_logger, kuaishou_logger, douyin_logger
 from pathlib import Path
@@ -102,6 +105,21 @@ async def cookie_auth_xhs(account_file):
             return True
 
 
+async def cookie_auth_bilibili(account_file):
+    if not Path(account_file).exists():
+        return False
+    result = run_biliup_command(["-u", str(account_file), "renew"])
+    return result.returncode == 0
+
+
+async def cookie_auth_baijiahao(account_file):
+    return await baijiahao_setup(str(account_file), handle=False)
+
+
+async def cookie_auth_tiktok(account_file):
+    return await tiktok_setup(str(account_file), handle=False)
+
+
 async def check_cookie(type, file_path):
     match type:
         # 小红书
@@ -116,6 +134,15 @@ async def check_cookie(type, file_path):
         # 快手
         case 4:
             return await cookie_auth_ks(Path(BASE_DIR / "cookiesFile" / file_path))
+        # Bilibili
+        case 5:
+            return await cookie_auth_bilibili(Path(BASE_DIR / "cookiesFile" / file_path))
+        # 百家号
+        case 6:
+            return await cookie_auth_baijiahao(Path(BASE_DIR / "cookiesFile" / file_path))
+        # TikTok
+        case 7:
+            return await cookie_auth_tiktok(file_path)
         case _:
             return False
 

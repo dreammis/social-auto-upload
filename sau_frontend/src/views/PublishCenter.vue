@@ -90,30 +90,37 @@
 
         <div class="form-section">
           <h3>平台</h3>
-          <el-radio-group v-model="tab.selectedPlatform" class="platform-radios" @change="handlePlatformChange(tab)">
-            <el-radio
+          <el-checkbox-group v-model="tab.selectedPlatforms" class="platform-checkboxes" @change="handlePlatformChange(tab)">
+            <el-checkbox
               v-for="platform in platforms"
               :key="platform.key"
               :label="platform.key"
-              :disabled="tab.contentType === 'note' && !platform.supportsNote"
+              :disabled="isPlatformDisabled(platform, tab)"
             >
               {{ platform.name }}
-              <span v-if="tab.contentType === 'note' && !platform.supportsNote" class="muted">暂不支持图文</span>
-            </el-radio>
-          </el-radio-group>
+              <span v-if="!platform.webBackendReady" class="muted">Web 发布待接入</span>
+              <span v-else-if="tab.contentType === 'note' && !platform.supportsNote" class="muted">暂不支持图文</span>
+            </el-checkbox>
+          </el-checkbox-group>
         </div>
 
         <div class="form-section compact-options">
           <el-checkbox v-model="tab.isOriginal">声明原创</el-checkbox>
-          <el-checkbox v-if="tab.contentType === 'video' && tab.selectedPlatform === 2" v-model="tab.isDraft">
+          <el-checkbox v-if="tab.contentType === 'video' && tab.selectedPlatforms.includes(2)" v-model="tab.isDraft">
             视频号仅保存草稿
           </el-checkbox>
         </div>
 
-        <div v-if="tab.contentType === 'video' && tab.selectedPlatform === 3" class="form-section">
+        <div v-if="tab.contentType === 'video' && tab.selectedPlatforms.includes(3)" class="form-section">
           <h3>商品链接</h3>
           <el-input v-model="tab.productTitle" placeholder="商品名称" maxlength="200" clearable />
           <el-input v-model="tab.productLink" placeholder="商品链接" maxlength="200" clearable class="mt-8" />
+        </div>
+
+        <div v-if="tab.contentType === 'video' && tab.selectedPlatforms.includes(5)" class="form-section">
+          <h3>Bilibili 分区</h3>
+          <el-input-number v-model="tab.bilibiliTid" :min="1" :max="9999" />
+          <span class="muted">默认 21，可按 Bilibili 分区 ID 调整</span>
         </div>
 
         <div class="form-section">
@@ -267,11 +274,11 @@
     </el-dialog>
 
     <el-dialog v-model="accountDialogVisible" title="选择账号" width="600px">
-      <el-empty v-if="availableAccounts.length === 0" description="当前平台暂无账号" />
+      <el-empty v-if="availableAccounts.length === 0" description="已选平台暂无账号" />
       <el-checkbox-group v-else v-model="tempSelectedAccounts">
         <div class="account-list">
           <el-checkbox v-for="account in availableAccounts" :key="account.id" :label="account.id" class="account-item">
-            <span class="account-name">{{ account.name }}</span>
+            <span class="account-name">{{ platformNames[account.type] || account.platform }} / {{ account.name }}</span>
             <el-tag size="small" effect="plain">{{ account.status }}</el-tag>
           </el-checkbox>
         </div>
@@ -361,17 +368,23 @@ const contentTypeOptions = [
 ]
 
 const platforms = [
-  { key: 3, name: '抖音', supportsNote: true },
-  { key: 4, name: '快手', supportsNote: true },
-  { key: 2, name: '视频号', supportsNote: false },
-  { key: 1, name: '小红书', supportsNote: true }
+  { key: 3, name: '抖音', supportsVideo: true, supportsNote: true, webBackendReady: true },
+  { key: 5, name: 'Bilibili', supportsVideo: true, supportsNote: false, webBackendReady: true },
+  { key: 1, name: '小红书', supportsVideo: true, supportsNote: true, webBackendReady: true },
+  { key: 4, name: '快手', supportsVideo: true, supportsNote: true, webBackendReady: true },
+  { key: 2, name: '视频号', supportsVideo: true, supportsNote: false, webBackendReady: true },
+  { key: 6, name: '百家号', supportsVideo: true, supportsNote: false, webBackendReady: true },
+  { key: 7, name: 'TikTok', supportsVideo: true, supportsNote: false, webBackendReady: true }
 ]
 
 const platformNames = {
   1: '小红书',
   2: '视频号',
   3: '抖音',
-  4: '快手'
+  4: '快手',
+  5: 'Bilibili',
+  6: '百家号',
+  7: 'TikTok'
 }
 
 const recommendedTopics = [
@@ -389,11 +402,12 @@ const makeNewTab = () => ({
   contentType: 'video',
   fileList: [],
   selectedAccounts: [],
-  selectedPlatform: 3,
+  selectedPlatforms: [3],
   title: '',
   note: '',
   productLink: '',
   productTitle: '',
+  bilibiliTid: 21,
   selectedTopics: [],
   scheduleEnabled: false,
   videosPerDay: 1,
@@ -447,9 +461,26 @@ const filteredMaterials = computed(() => {
 
 const availableAccounts = computed(() => {
   if (!currentTab.value) return []
-  const type = currentTab.value.selectedPlatform
-  return accountStore.accounts.filter(acc => acc.type === type || acc.platform === platformNames[type])
+  const selectedTypes = currentTab.value.selectedPlatforms
+  return accountStore.accounts.filter(acc => selectedTypes.includes(acc.type))
 })
+
+const isPlatformDisabled = (platform, tab) => (
+  !platform.webBackendReady ||
+  (tab.contentType === 'video' && !platform.supportsVideo) ||
+  (tab.contentType === 'note' && !platform.supportsNote)
+)
+
+const pruneUnavailableSelection = (tab) => {
+  tab.selectedPlatforms = tab.selectedPlatforms.filter(key => {
+    const platform = platforms.find(item => item.key === key)
+    return platform && !isPlatformDisabled(platform, tab)
+  })
+  tab.selectedAccounts = tab.selectedAccounts.filter(accountId => {
+    const account = accountStore.accounts.find(acc => acc.id === accountId)
+    return account && tab.selectedPlatforms.includes(account.type)
+  })
+}
 
 const addTab = () => {
   tabCounter += 1
@@ -476,19 +507,15 @@ const handleContentTypeChange = (tab) => {
     tab.productLink = ''
     tab.productTitle = ''
     tab.isDraft = false
-    if (tab.selectedPlatform === 2) {
-      tab.selectedPlatform = 3
-      tab.selectedAccounts = []
-    }
+  }
+  pruneUnavailableSelection(tab)
+  if (tab.selectedPlatforms.length === 0) {
+    tab.selectedPlatforms = [tab.contentType === 'note' ? 3 : 3]
   }
 }
 
 const handlePlatformChange = (tab) => {
-  tab.selectedAccounts = []
-  if (tab.contentType === 'note' && tab.selectedPlatform === 2) {
-    tab.selectedPlatform = 3
-    ElMessage.warning('视频号暂不支持图文发布，已切换到抖音')
-  }
+  pruneUnavailableSelection(tab)
 }
 
 const showUploadOptions = (tab) => {
@@ -606,8 +633,12 @@ const removeAccount = (tab, index) => {
 
 const getAccountDisplayName = (accountId) => {
   const account = accountStore.accounts.find(acc => acc.id === accountId)
-  return account ? account.name : accountId
+  return account ? `${platformNames[account.type] || account.platform} / ${account.name}` : accountId
 }
+
+const getAccountsBySelectedPlatform = (tab, platformType) => tab.selectedAccounts
+  .map(accountId => accountStore.accounts.find(acc => acc.id === accountId))
+  .filter(account => account && account.type === platformType)
 
 const openTopicDialog = (tab) => {
   currentTab.value = tab
@@ -652,33 +683,51 @@ const cancelPublish = () => {
   ElMessage.info('已取消发布')
 }
 
-const buildPublishData = (tab) => ({
-  type: tab.selectedPlatform,
+const buildPublishData = (tab, platformType, accounts) => ({
+  type: platformType,
   title: tab.title.trim(),
   note: tab.note.trim(),
   tags: tab.selectedTopics,
   fileList: tab.fileList.map(file => file.path),
-  accountList: tab.selectedAccounts.map(accountId => {
-    const account = accountStore.accounts.find(acc => acc.id === accountId)
-    return account ? account.filePath : accountId
-  }),
+  accountList: accounts.map(account => account.filePath),
   enableTimer: tab.scheduleEnabled ? 1 : 0,
   videosPerDay: tab.scheduleEnabled ? tab.videosPerDay || 1 : 1,
   dailyTimes: tab.scheduleEnabled ? tab.dailyTimes || ['10:00'] : ['10:00'],
   startDays: tab.scheduleEnabled ? tab.startDays || 0 : 0,
-  category: tab.isOriginal ? 1 : 0,
+  category: platformType === 5 ? tab.bilibiliTid : (tab.isOriginal ? 1 : 0),
   productLink: tab.productLink.trim(),
   productTitle: tab.productTitle.trim(),
   isDraft: tab.isDraft
 })
 
+const buildPublishJobs = (tab) => tab.selectedPlatforms.map(platformType => (
+  buildPublishData(tab, platformType, getAccountsBySelectedPlatform(tab, platformType))
+))
+
 const validatePublish = (tab) => {
   const label = contentTypeLabel(tab)
   if (tab.fileList.length === 0) throw new Error(`请先上传${label}文件`)
   if (!tab.title.trim()) throw new Error('请输入标题')
-  if (tab.contentType === 'note' && tab.selectedPlatform === 2) throw new Error('视频号暂不支持图文发布')
-  if (!tab.selectedPlatform) throw new Error('请选择发布平台')
+  if (tab.selectedPlatforms.length === 0) throw new Error('请选择发布平台')
+  const unavailablePlatform = tab.selectedPlatforms
+    .map(key => platforms.find(platform => platform.key === key))
+    .find(platform => !platform || isPlatformDisabled(platform, tab))
+  if (unavailablePlatform) throw new Error(`${unavailablePlatform.name}当前不可发布`)
   if (tab.selectedAccounts.length === 0) throw new Error('请选择发布账号')
+  tab.selectedPlatforms.forEach(platformType => {
+    if (getAccountsBySelectedPlatform(tab, platformType).length === 0) {
+      throw new Error(`请为 ${platformNames[platformType]} 选择账号`)
+    }
+  })
+}
+
+const resetPublishedFields = (tab) => {
+  tab.fileList = []
+  tab.title = ''
+  tab.note = ''
+  tab.selectedTopics = []
+  tab.selectedAccounts = []
+  tab.scheduleEnabled = false
 }
 
 const confirmPublish = async (tab) => {
@@ -686,18 +735,17 @@ const confirmPublish = async (tab) => {
   tab.publishing = true
   try {
     validatePublish(tab)
-    const endpoint = tab.contentType === 'note' ? '/postNote' : '/postVideo'
-    await http.post(endpoint, buildPublishData(tab))
+    const jobs = buildPublishJobs(tab)
+    if (tab.contentType === 'note') {
+      await http.post('/postNoteBatch', jobs)
+    } else {
+      await http.post('/postVideoBatch', jobs)
+    }
     tab.publishStatus = {
-      message: `${contentTypeLabel(tab)}发布任务已提交`,
+      message: `已提交 ${jobs.length} 个平台的${contentTypeLabel(tab)}发布任务`,
       type: 'success'
     }
-    tab.fileList = []
-    tab.title = ''
-    tab.note = ''
-    tab.selectedTopics = []
-    tab.selectedAccounts = []
-    tab.scheduleEnabled = false
+    resetPublishedFields(tab)
     ElMessage.success(tab.publishStatus.message)
   } catch (error) {
     const message = error.message || '请检查网络连接'
@@ -897,7 +945,7 @@ const formatFileSize = (size) => {
   gap: 8px;
 }
 
-.platform-radios {
+.platform-checkboxes {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;

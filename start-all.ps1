@@ -165,7 +165,7 @@ Start-Sleep -Seconds 1
 Stop-ProjectProcessOnPort 5409
 Remove-Item -LiteralPath $BackendLog, $BackendErr -ErrorAction SilentlyContinue
 Start-Process -FilePath $PythonExe `
-    -ArgumentList "sau_backend.py" `
+    -ArgumentList @("-u", "sau_backend.py") `
     -WorkingDirectory $Root `
     -WindowStyle Hidden `
     -RedirectStandardOutput $BackendLog `
