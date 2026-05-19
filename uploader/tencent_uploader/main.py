@@ -707,65 +707,68 @@ class TencentVideo(TencentBaseUploader):
 
         tencent_logger.info(_msg("🖼️", "小人准备设置封面"))
 
-        cover_entry_selectors = [
-            'div.vertical-cover-wrap:has-text("个人主页卡片"):has-text("3:4")',
-            'div.vertical-cover-wrap:has-text("3:4")',
-            'div.vertical-cover-wrap:has-text("个人主页卡片")',
-        ]
-        for selector in cover_entry_selectors:
-            cover_entry = page.locator(selector).first
+        # 先关闭可能残留的弹窗（如原创权益弹窗）
+        for _ in range(5):
             try:
-                if not await cover_entry.count():
-                    continue
-                await cover_entry.wait_for(state="visible", timeout=3000)
-                await cover_entry.click()
-                await page.wait_for_timeout(500)
-                break
-            except Exception:
-                continue
-
-        cover_dialog = page.locator("div.weui-desktop-dialog").filter(has_text="编辑个人主页卡片").first
-        if not await cover_dialog.count():
-            tencent_logger.info(_msg("🧍", "当前页面没有出现封面编辑弹窗，小人先跳过自定义封面"))
-            return
-
-        try:
-            await cover_dialog.wait_for(state="visible", timeout=5000)
-        except Exception:
-            tencent_logger.warning(_msg("😵", "封面编辑弹窗暂时不可见，这次先跳过自定义封面"))
-            return
-
-        file_input = cover_dialog.locator('.single-cover-uploader-wrap input[type="file"]').first
-        await file_input.wait_for(state="attached", timeout=10000)
-        await file_input.set_input_files(self.thumbnail_path)
-        await page.wait_for_timeout(1000)
-
-        crop_dialog = page.locator("div.weui-desktop-dialog").filter(has_text="裁剪封面图").first
-        if await crop_dialog.count():
-            try:
-                await crop_dialog.wait_for(state="visible", timeout=10000)
-                crop_confirm_button = crop_dialog.locator(
-                    'div.weui-desktop-dialog__ft button.weui-desktop-btn_primary:has-text("确定")'
-                ).first
-                if await crop_confirm_button.count():
-                    await crop_confirm_button.wait_for(state="visible", timeout=5000)
-                    await crop_confirm_button.click()
+                close_btn = page.locator('.weui-desktop-dialog .weui-desktop-dialog__close-btn')
+                if await close_btn.count() > 0:
+                    await close_btn.click(force=True)
+                    tencent_logger.info("[封面调试] 关闭了残留弹窗")
                     await page.wait_for_timeout(1000)
-            except Exception as exc:
-                tencent_logger.warning(_msg("😵", f"封面裁剪确认时出错，小人继续尝试保存主弹窗: {exc}"))
+            except Exception:
+                pass
+            break
 
-        confirm_button = cover_dialog.locator(
-            'div.weui-desktop-dialog__ft button.weui-desktop-btn_primary:has-text("确认")'
-        ).first
-        await confirm_button.wait_for(state="visible", timeout=10000)
-        await confirm_button.click()
+        # 点击编辑封面按钮（正确的入口）
+        try:
+            edit_btn = page.locator('.edit-btn.edit-btn-zIndex')
+            await edit_btn.wait_for(state="visible", timeout=5000)
+            await edit_btn.click(force=True)
+            tencent_logger.info("[封面调试] 编辑封面按钮已点击")
+        except Exception as exc:
+            tencent_logger.warning(_msg("😵", f"点击编辑封面按钮失败: {exc}，小人跳过自定义封面"))
+            return
+
+        # 等待封面上传弹窗出现
+        await page.wait_for_timeout(3000)
+
+        # 直接在隐藏 input 上设置文件
+        try:
+            cover_input = page.locator('.single-cover-uploader-wrap input[type="file"]')
+            await cover_input.wait_for(state="attached", timeout=10000)
+            await cover_input.set_input_files(self.thumbnail_path)
+            tencent_logger.info(f"[封面调试] 封面文件已设置: {self.thumbnail_path}")
+        except Exception as exc:
+            tencent_logger.warning(_msg("😵", f"设置封面文件失败: {exc}，小人跳过自定义封面"))
+            return
+
+        # 等待封面上传
+        await page.wait_for_timeout(3000)
+
+        # 点确认按钮
+        for _ in range(10):
+            try:
+                confirm = page.locator('.weui-desktop-dialog button:has-text("确认")').first
+                await confirm.click(force=True, timeout=10000)
+                tencent_logger.info("[封面调试] 封面确认按钮已点击")
+                break
+            except Exception as exc:
+                tencent_logger.info(f"[封面调试] 确认按钮点击失败，尝试 JS 点击: {exc}")
+                try:
+                    await page.evaluate(
+                        'document.querySelector(".weui-desktop-dialog button:has-text(\'确认\')").click()'
+                    )
+                    tencent_logger.info("[封面调试] JS 点击确认成功")
+                    break
+                except Exception:
+                    pass
+                await page.wait_for_timeout(2000)
         tencent_logger.success(_msg("🥳", "封面已经设置完成"))
 
     async def prepare_video_for_publish(self, page: Page) -> None:
         await self.fill_title_and_tags(page)
         await self.fill_description(page)
         await self.apply_collection(page)
-        await self.apply_original_statement(page)
 
     async def upload(self, playwright: Playwright) -> None:
         tencent_logger.info(_msg("🧍", "小人先检查 cookie、视频文件和发布时间"))
@@ -783,6 +786,7 @@ class TencentVideo(TencentBaseUploader):
             await self.upload_video_file(page, self.file_path)
             await self.prepare_video_for_publish(page)
             await self.wait_for_upload_complete(page)
+            await self.apply_original_statement(page)
             await self.set_thumbnail(page)
 
             if self.publish_strategy == TENCENT_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
