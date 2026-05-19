@@ -345,6 +345,7 @@ async def tencent_cookie_gen(
     poll_interval: int = 3,
     max_checks: int = 100,
     headless: bool = LOCAL_CHROME_HEADLESS,
+    keep_open: bool = False,
 ):
     account_file = _resolve_account_file(account_file)
     Path(account_file).parent.mkdir(parents=True, exist_ok=True)
@@ -397,7 +398,8 @@ async def tencent_cookie_gen(
             if not result["success"]:
                 tencent_logger.error(_msg("😢", f"登录失败: {result['message']}"))
             await context.close()
-            await browser.close()
+            if not keep_open:
+                await browser.close()
 
 
 async def tencent_setup(
@@ -406,6 +408,7 @@ async def tencent_setup(
     return_detail=False,
     qrcode_callback=None,
     headless: bool = LOCAL_CHROME_HEADLESS,
+    keep_open: bool = False,
 ):
     account_file = _resolve_account_file(account_file)
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
@@ -414,8 +417,14 @@ async def tencent_setup(
             return result if return_detail else False
 
         tencent_logger.info(_msg("🥹", "cookie 失效了，准备打开浏览器重新登录"))
-        result = await tencent_cookie_gen(account_file, qrcode_callback=qrcode_callback, headless=headless)
+        result = await tencent_cookie_gen(account_file, qrcode_callback=qrcode_callback, headless=headless, keep_open=keep_open)
         return result if return_detail else result["success"]
+
+    if keep_open:
+        tencent_logger.info(_msg("🪟", "cookie 有效，打开浏览器供手动操作"))
+        await tencent_open_browser(account_file, headless=headless)
+        result = _build_login_result(True, "cookie_valid", "已打开浏览器", account_file)
+        return result if return_detail else True
 
     result = _build_login_result(True, "cookie_valid", "cookie有效", account_file)
     return result if return_detail else True
@@ -425,12 +434,31 @@ async def get_tencent_cookie(account_file, qrcode_callback=None, headless: bool 
     return await tencent_cookie_gen(account_file, qrcode_callback=qrcode_callback, headless=headless)
 
 
+async def tencent_open_browser(account_file, headless: bool = False):
+    """打开浏览器并加载已有 cookie，保持窗口直到用户手动关闭。"""
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=headless))
+        context = await browser.new_context(storage_state=account_file if os.path.exists(account_file) else None)
+        page = await context.new_page()
+        await page.goto(TENCENT_MANAGE_URL)
+        tencent_logger.info(_msg("🪟", "浏览器已打开，请手动操作，关闭窗口后自动退出"))
+        try:
+            await context.wait_for_event("close")
+        except Exception:
+            pass
+        try:
+            await context.storage_state(path=account_file)
+        except Exception:
+            pass
+
+
 async def weixin_setup(
     account_file,
     handle=False,
     return_detail=False,
     qrcode_callback=None,
     headless: bool = LOCAL_CHROME_HEADLESS,
+    keep_open: bool = False,
 ):
     return await tencent_setup(
         account_file,
@@ -438,6 +466,7 @@ async def weixin_setup(
         return_detail=return_detail,
         qrcode_callback=qrcode_callback,
         headless=headless,
+        keep_open=keep_open,
     )
 
 
