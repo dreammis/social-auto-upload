@@ -199,6 +199,7 @@ async def douyin_cookie_gen(
     poll_interval: int = 3,
     max_checks: int = 100,
     headless: bool = LOCAL_CHROME_HEADLESS,
+    keep_open: bool = False,
 ):
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=headless, channel="chrome")
@@ -240,7 +241,8 @@ async def douyin_cookie_gen(
             if not result["success"]:
                 douyin_logger.error(_msg("😢", f"登录失败: {result['message']}"))
             await context.close()
-            await browser.close()
+            if not keep_open:
+                await browser.close()
         return result
 
 
