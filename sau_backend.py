@@ -1039,6 +1039,46 @@ def sse_stream(status_queue):
             # 避免 CPU 占满
             time.sleep(0.1)
 
+# 验证码提交API
+@app.route('/submitVerification', methods=['POST'])
+def submit_verification():
+    data = request.get_json()
+    code = data.get('code')
+    if not code:
+        return jsonify({
+            "code": 400,
+            "msg": "验证码不能为空",
+            "data": None
+        }), 400
+    
+    try:
+        from myUtils.login import submit_verification_code
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        success = loop.run_until_complete(submit_verification_code(code))
+        loop.close()
+        
+        if success:
+            return jsonify({
+                "code": 200,
+                "msg": "验证码已提交",
+                "data": None
+            }), 200
+        else:
+            return jsonify({
+                "code": 500,
+                "msg": "当前没有待验证的登录",
+                "data": None
+            }), 500
+    except Exception as e:
+        print(f"提交验证码时出错: {str(e)}")
+        return jsonify({
+            "code": 500,
+            "msg": f"提交验证码失败: {str(e)}",
+            "data": None
+        }), 500
+
 if __name__ == '__main__':
     threading.Thread(target=nightly_account_status_checker, daemon=True).start()
     app.run(host='0.0.0.0' ,port=5409)

@@ -68,33 +68,186 @@ def persist_account_login(account_type, file_name, user_name, account_id=None):
 # 抖音登录
 async def douyin_cookie_gen(id, status_queue, account_id=None, existing_file_path=None):
     url_changed_event = asyncio.Event()
+    verification_code_received = False
+
     async def on_url_change():
-        # 检查是否是主框架的变化
-        if page.url != original_url:
+        if page.url != original_url: 
             url_changed_event.set()
+    
+    async def check_verification_page():
+        """检查是否出现身份验证页面，如果出现则自动点击发送短信验证码"""
+        global pending_verification_code
+        nonlocal verification_code_received
+        try:
+            # 检查页面是否已关闭或跳转
+            try:
+                if page.is_closed():
+                    print("🔍 页面已关闭，停止检查")
+                    return False
+            except:
+                print("🔍 页面检查失败，可能已关闭")
+                return False
+                
+            print("🔍 正在检查身份验证页面...")
+
+            # 先检查是否出现身份验证相关的文本
+            verification_page_found = False
+            try:
+                text_element = page.get_by_text("为保障账号安全")
+                if await text_element.is_visible(timeout=60):
+                    print(f"✅ 检测到身份验证页面")
+                    verification_page_found = True
+            except:
+                pass
+            
+            if not verification_page_found:
+                return False
+            
+            # 点击"接收短信验证码"
+            sms_button = page.get_by_text("接收短信验证码")
+            if await sms_button.is_visible(timeout=60):
+                print("🔍 正在点击接收短信验证码按钮...")
+                await sms_button.click()
+                print("✅ 已点击接收短信验证码按钮")
+                status_queue.put("NEED_VERIFICATION")
+            
+            # 开始循环处理验证码输入和验证
+            max_retry = 5  # 最多重试5次
+            for retry in range(max_retry):
+                # 等待用户输入验证码
+                print(f"⏳ 等待用户输入验证码 (第{retry+1}次)...")
+                
+                # 清除之前的验证码
+                pending_verification_code = None
+                
+                # 轮询检查 pending_verification_code
+                verification_code_received = False
+                for _ in range(60):  # 最多等待1分钟
+                    if pending_verification_code:
+                        print(f"✅ 收到验证码: {pending_verification_code}")
+                        verification_code_received = True
+                        break
+                    await asyncio.sleep(1)
+                
+                if not verification_code_received:
+                    print("❌ 等待验证码超时")
+                    break
+                
+                if pending_verification_code:
+                    print(f"✅ 正在输入验证码: {pending_verification_code}")
+                    try:
+                        verify_panel = page.locator('#uc-second-verify')
+                        if await verify_panel.count() > 0:
+                            input_box = verify_panel.locator('#button-input').first
+                            await input_box.fill(pending_verification_code)
+                            print("✅ 在弹窗中输入验证码成功")
+                    except Exception as e:
+                        print(f"❌ 输入验证码失败: {e}")
+
+                    # 等待一下，然后点击验证按钮
+                    await asyncio.sleep(0.5)
+                    
+                    # 在uc-second-verify弹窗内找“验证”按钮
+                    try:
+                        verify_panel = page.locator('#uc-second-verify')
+                        if await verify_panel.count() > 0:
+                            verify_button = verify_panel.get_by_text("验证", exact=True)
+                            if await verify_button.count() > 0:
+                                btn = verify_button.first
+                                if await btn.is_visible(timeout=60):
+                                    print(f"✅ 在弹窗内找到验证按钮")
+                                    await btn.click()
+                                    print(f"✅ 成功点击验证按钮")
+                    except Exception as e:
+                        print(f"⚠️ 点击验证按钮失败: {e}")
+
+                    # 等待2秒，看是否出现验证码错误提示
+                    await asyncio.sleep(2)
+
+                    code_error = False
+                    try:
+                        # 检查两种可能的错误提示
+                        error_texts = ["验证码错误，请重新输入", "错误次数过多或验证码过期，请稍后重试"]
+                        for error_text in error_texts:
+                            error_element = page.get_by_text(error_text)
+                            if await error_element.is_visible(timeout=60):
+                                print(f"❌ 检测到错误: {error_text}")
+                                code_error = True
+                                status_queue.put("VERIFICATION_ERROR")
+                                break
+                    except:
+                        pass
+                    
+                    if not code_error:
+                        # 没有错误，可能验证成功了，退出循环
+                        print("✅ 没有检测到验证码错误，继续等待页面跳转")
+                        break
+                    else:
+                        # 验证码错误，清除验证码，等待重新输入
+                        pending_verification_code = None
+                        print("🔄 准备等待用户重新输入验证码...")
+                        continue
+        
+            return True
+        except Exception as e:
+            print(f"❌ 检查验证码页面出错: {e}")
+            return False
+    
     async with async_playwright() as playwright:
         options = get_browser_options(True)
-        # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
-        # Setup context however you like.
-        context = await browser.new_context()  # Pass any options
+        context = await browser.new_context()
         context = await set_init_script(context)
-        # Pause the page, and start recording manually.
         page = await context.new_page()
         await page.goto("https://creator.douyin.com/")
         original_url = page.url
+        
+        # 保存page对象到全局变量，清除旧的验证码
+        global active_login_page
+        global pending_verification_code
+        active_login_page = page
+        pending_verification_code = None
+        
         img_locator = page.get_by_role("img", name="二维码")
-        # 获取 src 属性值
         src = await img_locator.get_attribute("src")
         print("✅ 图片地址:", src)
         status_queue.put(src)
-        # 监听页面的 'framenavigated' 事件，只关注主框架的变化
+        
         page.on('framenavigated',
                 lambda frame: asyncio.create_task(on_url_change()) if frame == page.main_frame else None)
+        
+        # 标记二维码是否消失（表示用户已经扫描）
+        qr_disappeared = False
+        
         try:
-            # 等待 URL 变化或超时
-            await asyncio.wait_for(url_changed_event.wait(), timeout=200)  # 最多等待 200 秒
-            print("监听页面跳转成功")
+            start_time = asyncio.get_event_loop().time()
+            while True:
+                elapsed = asyncio.get_event_loop().time() - start_time
+                if elapsed > 200:
+                    raise asyncio.TimeoutError()
+                
+                if url_changed_event.is_set():
+                    print("✅ 监听页面跳转成功")
+                    break
+                
+                # 检查二维码是否还存在
+                if not qr_disappeared:
+                    try:
+                        qr_exists = await img_locator.is_visible(timeout=500)
+                        if not qr_exists:
+                            print("✅ 二维码已消失，用户可能已扫描")
+                            qr_disappeared = True
+                    except:
+                        # 如果检查二维码出错，可能是二维码已经消失
+                        print("🔍 二维码检查出错，可能已消失")
+                        qr_disappeared = True
+                
+                # 只有二维码消失后且还没跳转才检查身份验证页面
+                if qr_disappeared and not url_changed_event.is_set():
+                    await check_verification_page()
+                
+                await asyncio.sleep(0.5)  # 减少sleep时间，提高响应速度
+                
         except asyncio.TimeoutError:
             print("监听页面跳转超时")
             await page.close()
@@ -102,6 +255,10 @@ async def douyin_cookie_gen(id, status_queue, account_id=None, existing_file_pat
             await browser.close()
             status_queue.put("500")
             return None
+        finally:
+            active_login_page = None
+            pending_verification_code = None
+        
         cookie_path, file_name = resolve_cookie_target(existing_file_path)
         await context.storage_state(path=cookie_path)
         result = await check_cookie(3, file_name)
@@ -117,6 +274,35 @@ async def douyin_cookie_gen(id, status_queue, account_id=None, existing_file_pat
         persist_account_login(3, file_name, id, account_id)
         print("✅ 用户状态已记录")
         status_queue.put("200")
+
+# 全局变量
+active_login_page = None
+pending_verification_code = None
+
+async def submit_verification_code(code):
+    """提交验证码"""
+    global pending_verification_code
+    global active_login_page
+    print(f"📨 收到验证码提交请求: {code}")
+    print(f"   active_login_page: {active_login_page}")
+    print(f"   当前pending_verification_code: {pending_verification_code}")
+    
+    if active_login_page:
+        # 检查页面是否已关闭
+        try:
+            if active_login_page.is_closed():
+                print(f"❌ 页面已关闭，不处理验证码")
+                return False
+        except:
+            print(f"❌ 页面检查失败，不处理验证码")
+            return False
+            
+        pending_verification_code = code
+        print(f"✅ 设置验证码: {pending_verification_code}")
+        return True
+    else:
+        print(f"❌ 当前没有待验证的登录流程")
+    return False
 
 
 # 视频号登录
