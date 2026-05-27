@@ -1,4 +1,4 @@
 {
   "localChromeHeadless": true,
-  "loginBrowserHeadless": true
+  "loginBrowserHeadless": false
 }

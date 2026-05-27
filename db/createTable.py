@@ -1,9 +1,10 @@
 import sqlite3
 import json
 import os
+from pathlib import Path
 
 # 数据库文件路径（如果不存在会自动创建）
-db_file = './database.db'
+db_file = Path(__file__).parent / "database.db"
 
 # 如果数据库已存在，则删除旧的表（可选）
 # if os.path.exists(db_file):
