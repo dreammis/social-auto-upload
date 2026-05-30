@@ -23,6 +23,9 @@
           <el-tag type="success">快手</el-tag>
           <el-tag type="warning">视频号</el-tag>
           <el-tag type="info">小红书</el-tag>
+          <el-tag type="primary">Bilibili</el-tag>
+          <el-tag type="info">百家号</el-tag>
+          <el-tag type="success">TikTok</el-tag>
         </div>
       </div>
 

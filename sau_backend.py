@@ -10,14 +10,35 @@ from flask_cors import CORS
 from myUtils.auth import check_cookie
 from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 from conf import BASE_DIR
-from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
-from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs
+from myUtils.login import (
+    baijiahao_cookie_gen_for_frontend,
+    bilibili_cookie_gen,
+    douyin_cookie_gen,
+    get_ks_cookie,
+    get_tencent_cookie,
+    tiktok_cookie_gen_for_frontend,
+    xiaohongshu_cookie_gen,
+)
+from myUtils.postVideo import (
+    post_note_douyin,
+    post_note_ks,
+    post_note_xhs,
+    post_video_DouYin,
+    post_video_baijiahao,
+    post_video_bilibili,
+    post_video_ks,
+    post_video_tencent,
+    post_video_tiktok,
+    post_video_xhs,
+)
 
 active_queues = {}
 app = Flask(__name__)
 
 #允许所有来源跨域访问
 CORS(app)
+Path(BASE_DIR / "videoFile").mkdir(parents=True, exist_ok=True)
+Path(BASE_DIR / "cookiesFile").mkdir(parents=True, exist_ok=True)
 
 # 限制上传文件大小为160MB
 app.config['MAX_CONTENT_LENGTH'] = 160 * 1024 * 1024
@@ -63,6 +84,7 @@ def upload_file():
         # 保存文件到指定位置
         uuid_v1 = uuid.uuid1()
         print(f"UUID v1: {uuid_v1}")
+        Path(BASE_DIR / "videoFile").mkdir(parents=True, exist_ok=True)
         filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{file.filename}")
         file.save(filepath)
         return jsonify({"code":200,"msg": "File uploaded successfully", "data": f"{uuid_v1}_{file.filename}"}), 200
@@ -119,6 +141,7 @@ def upload_save():
 
         # 构造文件名和路径
         final_filename = f"{uuid_v1}_{filename}"
+        Path(BASE_DIR / "videoFile").mkdir(parents=True, exist_ok=True)
         filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{filename}")
 
         # 保存文件
@@ -374,6 +397,49 @@ def delete_account():
         }), 500
 
 
+@app.route('/account', methods=['POST'])
+def create_account():
+    data = request.get_json()
+    if not data:
+        return jsonify({"code": 400, "msg": "请求数据不能为空", "data": None}), 400
+
+    type = data.get('type')
+    user_name = data.get('userName') or data.get('name')
+    file_path = data.get('filePath')
+
+    if not type:
+        return jsonify({"code": 400, "msg": "平台类型不能为空", "data": None}), 400
+    if not user_name:
+        return jsonify({"code": 400, "msg": "账号名称不能为空", "data": None}), 400
+
+    if not file_path:
+        file_path = f"manual_{uuid.uuid1()}.json"
+
+    try:
+        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                           INSERT INTO user_info (type, filePath, userName, status)
+                           VALUES (?, ?, ?, ?)
+                           ''', (int(type), file_path, user_name, 0))
+            conn.commit()
+            account_id = cursor.lastrowid
+
+        return jsonify({
+            "code": 200,
+            "msg": "account created successfully",
+            "data": {
+                "id": account_id,
+                "type": int(type),
+                "filePath": file_path,
+                "userName": user_name,
+                "status": 0
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({"code": 500, "msg": f"create account failed: {str(e)}", "data": None}), 500
+
+
 # SSE 登录接口
 @app.route('/login')
 def login():
@@ -454,6 +520,15 @@ def postVideo():
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
+            case 5:
+                post_video_bilibili(title, file_list, tags, account_list, category, enableTimer, videos_per_day,
+                                    daily_times, start_days, data.get('description', ''))
+            case 6:
+                post_video_baijiahao(title, file_list, tags, account_list, category, enableTimer, videos_per_day,
+                                     daily_times, start_days)
+            case 7:
+                post_video_tiktok(title, file_list, tags, account_list, category, enableTimer, videos_per_day,
+                                  daily_times, start_days, thumbnail_path)
             case _:
                 return jsonify({"code": 400, "msg": f"不支持的平台类型: {type}", "data": None}), 400
 
@@ -471,6 +546,125 @@ def postVideo():
             "msg": f"发布失败: {str(e)}",
             "data": None
         }), 500
+
+
+@app.route('/postNote', methods=['POST'])
+def postNote():
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"code": 400, "msg": "请求数据不能为空", "data": None}), 400
+
+    file_list = data.get('fileList', [])
+    account_list = data.get('accountList', [])
+    type = data.get('type')
+    title = data.get('title')
+    note = data.get('note', '')
+    tags = data.get('tags', [])
+    enableTimer = data.get('enableTimer')
+    videos_per_day = data.get('videosPerDay')
+    daily_times = data.get('dailyTimes')
+    start_days = data.get('startDays')
+
+    if not file_list:
+        return jsonify({"code": 400, "msg": "图片列表不能为空", "data": None}), 400
+    if not account_list:
+        return jsonify({"code": 400, "msg": "账号列表不能为空", "data": None}), 400
+    if not type:
+        return jsonify({"code": 400, "msg": "平台类型不能为空", "data": None}), 400
+    if not title:
+        return jsonify({"code": 400, "msg": "标题不能为空", "data": None}), 400
+    if type == 2:
+        return jsonify({"code": 400, "msg": "视频号暂不支持图文发布", "data": None}), 400
+
+    print("Note Image List:", file_list)
+    print("Account List:", account_list)
+
+    try:
+        match type:
+            case 1:
+                post_note_xhs(title, file_list, note, tags, account_list, enableTimer, videos_per_day, daily_times, start_days)
+            case 3:
+                post_note_douyin(title, file_list, note, tags, account_list, enableTimer, videos_per_day, daily_times, start_days)
+            case 4:
+                post_note_ks(title, file_list, note, tags, account_list, enableTimer, videos_per_day, daily_times, start_days)
+            case _:
+                return jsonify({"code": 400, "msg": f"不支持的图文发布平台: {type}", "data": None}), 400
+
+        return jsonify({
+            "code": 200,
+            "msg": "图文发布任务已提交",
+            "data": None
+        }), 200
+    except Exception as e:
+        print(f"发布图文时出错: {str(e)}")
+        return jsonify({
+            "code": 500,
+            "msg": f"发布图文失败: {str(e)}",
+            "data": None
+        }), 500
+
+
+@app.route('/postNoteBatch', methods=['POST'])
+def postNoteBatch():
+    data_list = request.get_json()
+
+    if not isinstance(data_list, list):
+        return jsonify({"code": 400, "msg": "Expected a JSON array", "data": None}), 400
+    if not data_list:
+        return jsonify({"code": 400, "msg": "发布任务不能为空", "data": None}), 400
+
+    results = []
+    for index, data in enumerate(data_list):
+        file_list = data.get('fileList', [])
+        account_list = data.get('accountList', [])
+        type = data.get('type')
+        title = data.get('title')
+        note = data.get('note', '')
+        tags = data.get('tags', [])
+        enableTimer = data.get('enableTimer')
+        videos_per_day = data.get('videosPerDay')
+        daily_times = data.get('dailyTimes')
+        start_days = data.get('startDays')
+
+        if not file_list:
+            return jsonify({"code": 400, "msg": f"第 {index + 1} 个任务图片列表不能为空", "data": results}), 400
+        if not account_list:
+            return jsonify({"code": 400, "msg": f"第 {index + 1} 个任务账号列表不能为空", "data": results}), 400
+        if not type:
+            return jsonify({"code": 400, "msg": f"第 {index + 1} 个任务平台类型不能为空", "data": results}), 400
+        if not title:
+            return jsonify({"code": 400, "msg": f"第 {index + 1} 个任务标题不能为空", "data": results}), 400
+        if type == 2:
+            return jsonify({"code": 400, "msg": "视频号暂不支持图文发布", "data": results}), 400
+
+        print("Note Image List:", file_list)
+        print("Account List:", account_list)
+
+        try:
+            match type:
+                case 1:
+                    post_note_xhs(title, file_list, note, tags, account_list, enableTimer, videos_per_day, daily_times, start_days)
+                case 3:
+                    post_note_douyin(title, file_list, note, tags, account_list, enableTimer, videos_per_day, daily_times, start_days)
+                case 4:
+                    post_note_ks(title, file_list, note, tags, account_list, enableTimer, videos_per_day, daily_times, start_days)
+                case _:
+                    return jsonify({"code": 400, "msg": f"不支持的图文发布平台: {type}", "data": results}), 400
+            results.append({"type": type, "code": 200, "msg": "图文发布任务已提交"})
+        except Exception as e:
+            print(f"批量发布图文时出错: {str(e)}")
+            return jsonify({
+                "code": 500,
+                "msg": f"第 {index + 1} 个任务发布失败: {str(e)}",
+                "data": results
+            }), 500
+
+    return jsonify({
+        "code": 200,
+        "msg": "批量图文发布任务已提交",
+        "data": results
+    }), 200
 
 
 @app.route('/updateUserinfo', methods=['POST'])
@@ -516,8 +710,11 @@ def postVideoBatch():
 
     if not isinstance(data_list, list):
         return jsonify({"code": 400, "msg": "Expected a JSON array", "data": None}), 400
-    for data in data_list:
-        # 从JSON数据中提取fileList和accountList
+    if not data_list:
+        return jsonify({"code": 400, "msg": "发布任务不能为空", "data": None}), 400
+
+    results = []
+    for index, data in enumerate(data_list):
         file_list = data.get('fileList', [])
         account_list = data.get('accountList', [])
         type = data.get('type')
@@ -529,34 +726,63 @@ def postVideoBatch():
             category = None
         productLink = data.get('productLink', '')
         productTitle = data.get('productTitle', '')
+        thumbnail_path = data.get('thumbnail', '')
         is_draft = data.get('isDraft', False)
 
         videos_per_day = data.get('videosPerDay')
         daily_times = data.get('dailyTimes')
         start_days = data.get('startDays')
-        # 打印获取到的数据（仅作为示例）
+
+        if not file_list:
+            return jsonify({"code": 400, "msg": f"第 {index + 1} 个任务文件列表不能为空", "data": results}), 400
+        if not account_list:
+            return jsonify({"code": 400, "msg": f"第 {index + 1} 个任务账号列表不能为空", "data": results}), 400
+        if not type:
+            return jsonify({"code": 400, "msg": f"第 {index + 1} 个任务平台类型不能为空", "data": results}), 400
+        if not title:
+            return jsonify({"code": 400, "msg": f"第 {index + 1} 个任务标题不能为空", "data": results}), 400
+
         print("File List:", file_list)
         print("Account List:", account_list)
-        match type:
-            case 1:
-                post_video_xhs(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                               start_days)
-            case 2:
-                post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                                   start_days, is_draft)
-            case 3:
-                post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, productLink, productTitle)
-            case 4:
-                post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days)
-    # 返回响应给客户端
-    return jsonify(
-        {
-            "code": 200,
-            "msg": None,
-            "data": None
-        }), 200
+        try:
+            match type:
+                case 1:
+                    post_video_xhs(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                                   start_days)
+                case 2:
+                    post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                                       start_days, is_draft)
+                case 3:
+                    post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                                      start_days, thumbnail_path, productLink, productTitle)
+                case 4:
+                    post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                                  start_days)
+                case 5:
+                    post_video_bilibili(title, file_list, tags, account_list, category, enableTimer, videos_per_day,
+                                        daily_times, start_days, data.get('description', ''))
+                case 6:
+                    post_video_baijiahao(title, file_list, tags, account_list, category, enableTimer, videos_per_day,
+                                         daily_times, start_days)
+                case 7:
+                    post_video_tiktok(title, file_list, tags, account_list, category, enableTimer, videos_per_day,
+                                      daily_times, start_days, thumbnail_path)
+                case _:
+                    return jsonify({"code": 400, "msg": f"不支持的平台类型: {type}", "data": results}), 400
+            results.append({"type": type, "code": 200, "msg": "发布任务已提交"})
+        except Exception as e:
+            print(f"批量发布视频时出错: {str(e)}")
+            return jsonify({
+                "code": 500,
+                "msg": f"第 {index + 1} 个任务发布失败: {str(e)}",
+                "data": results
+            }), 500
+
+    return jsonify({
+        "code": 200,
+        "msg": "批量发布任务已提交",
+        "data": results
+    }), 200
 
 # Cookie文件上传API
 @app.route('/uploadCookie', methods=['POST'])
@@ -701,6 +927,21 @@ def run_async_function(type,id,status_queue):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(get_ks_cookie(id,status_queue))
+            loop.close()
+        case '5':
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(bilibili_cookie_gen(id,status_queue))
+            loop.close()
+        case '6':
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(baijiahao_cookie_gen_for_frontend(id,status_queue))
+            loop.close()
+        case '7':
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(tiktok_cookie_gen_for_frontend(id,status_queue))
             loop.close()
 
 # SSE 流生成器函数

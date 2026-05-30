@@ -1,27 +1,25 @@
 @echo off
-TITLE One-Click Starter for social-auto-upload
+setlocal
+title social-auto-upload starter
 
-ECHO ==================================================
-ECHO  Starting social-auto-upload Servers...
-ECHO ==================================================
-ECHO.
+cd /d "%~dp0"
 
-ECHO [1/2] Starting Python Backend Server in a new window...
-REM The START command launches a new process.
-REM The first quoted string "SAU Backend" is the title of the new window.
-REM cmd /k runs the command and keeps the window open to show logs.
-START "SAU Backend" cmd /k "python sau_backend.py"
+echo Starting social-auto-upload...
+echo.
 
-ECHO [2/2] Starting Vue.js Frontend Server in another new window...
-START "SAU Frontend" cmd /k "cd sau_frontend && npm run dev -- --host 0.0.0.0"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-all.ps1"
 
-ECHO.
-ECHO ==================================================
-ECHO  Done.
-ECHO  Two new windows have been opened for the backend
-ECHO  and frontend servers. You can monitor logs there.
-ECHO ==================================================
-ECHO.
-
-ECHO This window will close in 10 seconds...
-timeout /t 10 /nobreak > nul
+echo.
+echo If the browser did not open, visit:
+echo   http://127.0.0.1:5173/
+echo.
+echo Logs are written to:
+echo   backend.out.log
+echo   backend.err.log
+echo   frontend.out.log
+echo   frontend.err.log
+echo.
+echo To watch backend logs live, run:
+echo   watch-logs.bat
+echo.
+pause
