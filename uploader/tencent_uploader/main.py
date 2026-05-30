@@ -627,12 +627,13 @@ class TencentBaseUploader(BaseVideoUploader):
             try:
                 diagnostic_path = Path(BASE_DIR) / "debug_tencent_original_missing.png"
                 await page.screenshot(path=str(diagnostic_path), full_page=True)
-                visible_text = (await page.locator("body").inner_text())[-4000:]
+                visible_text = (await page.locator("body").first.inner_text())[-4000:]
                 tencent_logger.warning(_msg("😵", f"未确认声明原创，诊断截图: {diagnostic_path}"))
                 tencent_logger.warning(_msg("🧾", f"页面末尾文本: {visible_text}"))
             except Exception as exc:
                 tencent_logger.warning(_msg("😵", f"生成原创声明诊断信息失败: {exc}"))
-            raise RuntimeError("未能在视频号发布页找到并设置“声明原创”，已停止发布")
+            # 视频号「声明原创」为可选项：页面无对应入口时跳过并继续发布，而非中止。
+            tencent_logger.warning(_msg("📭", "本视频未声明原创（页面无入口或为可选项），跳过并继续发布"))
 
     async def wait_for_upload_complete(self, page: Page) -> None:
         while True:
