@@ -537,8 +537,10 @@ class TencentBaseUploader(BaseVideoUploader):
             await collection_elements.first.click()
 
     async def apply_original_statement(self, page: Page) -> None:
+        original_set = False
         if await page.get_by_label("视频为原创").count():
             await page.get_by_label("视频为原创").check()
+            original_set = True
 
         try:
             label_locator = await page.locator('label:has-text("我已阅读并同意 《视频号原创声明使用条款》")').is_visible()
@@ -548,30 +550,89 @@ class TencentBaseUploader(BaseVideoUploader):
         if label_locator:
             await page.get_by_label("我已阅读并同意 《视频号原创声明使用条款》").check()
             await page.get_by_role("button", name="声明原创").click()
+            original_set = True
 
-        if await page.locator('div.label span:has-text("声明原创")').count() and getattr(self, "category", None):
-            if not await page.locator("div.declare-original-checkbox input.ant-checkbox-input").is_disabled():
-                await page.locator("div.declare-original-checkbox input.ant-checkbox-input").click()
+        declaration_entry = page.locator(
+            'div.label span:has-text("声明原创"), '
+            'div:has-text("声明原创"):has(input.ant-checkbox-input), '
+            'div:has-text("原创声明"):has(input.ant-checkbox-input)'
+        ).first
+        if await declaration_entry.count():
+            original_checkbox = page.locator("div.declare-original-checkbox input.ant-checkbox-input").first
+            if await original_checkbox.count() and not await original_checkbox.is_disabled():
+                await original_checkbox.click()
+                await page.wait_for_timeout(500)
                 checked_locator = page.locator(
                     "div.declare-original-dialog "
                     "label.ant-checkbox-wrapper.ant-checkbox-wrapper-checked:visible"
                 )
                 if not await checked_locator.count():
-                    await page.locator("div.declare-original-dialog input.ant-checkbox-input:visible").click()
+                    await page.locator("div.declare-original-dialog input.ant-checkbox-input:visible").first.click()
 
             original_type_form = page.locator('div.original-type-form > div.form-label:has-text("原创类型"):visible')
             if await original_type_form.count():
+                category = getattr(self, "category", None)
                 await page.locator("div.form-content:visible").click()
-                await page.locator(
-                    "div.form-content:visible "
-                    "ul.weui-desktop-dropdown__list "
-                    f'li.weui-desktop-dropdown__list-ele:has-text("{self.category}")'
-                ).first.click()
+                option = None
+                if category:
+                    option = page.locator(
+                        "ul.weui-desktop-dropdown__list "
+                        f'li.weui-desktop-dropdown__list-ele:has-text("{category}")'
+                    ).first
+                    if not await option.count():
+                        option = None
+                if option is None:
+                    option = page.locator(
+                        "ul.weui-desktop-dropdown__list "
+                        "li.weui-desktop-dropdown__list-ele:visible"
+                    ).first
+                if await option.count():
+                    await option.click()
                 await page.wait_for_timeout(1000)
 
             declare_button = page.locator('button:has-text("声明原创"):visible')
             if await declare_button.count():
-                await declare_button.click()
+                await declare_button.first.click()
+                original_set = True
+                await page.wait_for_timeout(1000)
+
+        if not original_set:
+            for original_text in ("声明原创", "原创声明", "视频为原创"):
+                try:
+                    modern_original = page.locator(f'text="{original_text}"').first
+                    if await modern_original.count() and await modern_original.is_visible():
+                        await modern_original.click()
+                        original_set = True
+                        await page.wait_for_timeout(1000)
+                        break
+                except Exception:
+                    continue
+
+        content_declaration = page.locator('text="内容声明"').first
+        try:
+            if await content_declaration.count() and await content_declaration.is_visible():
+                await content_declaration.click()
+                for option_text in ("无需声明", "不声明", "无"):
+                    option = page.locator(f'text="{option_text}"').first
+                    if await option.count() and await option.is_visible():
+                        await option.click()
+                        tencent_logger.info(_msg("🧾", f"内容声明已选择: {option_text}"))
+                        break
+            else:
+                tencent_logger.info(_msg("🧾", "当前页面未发现内容声明字段"))
+        except Exception as exc:
+            tencent_logger.warning(_msg("😵", f"内容声明设置失败，继续前先人工确认页面: {exc}"))
+
+        if not original_set:
+            try:
+                diagnostic_path = Path(BASE_DIR) / "debug_tencent_original_missing.png"
+                await page.screenshot(path=str(diagnostic_path), full_page=True)
+                visible_text = (await page.locator("body").inner_text())[-4000:]
+                tencent_logger.warning(_msg("😵", f"未确认声明原创，诊断截图: {diagnostic_path}"))
+                tencent_logger.warning(_msg("🧾", f"页面末尾文本: {visible_text}"))
+            except Exception as exc:
+                tencent_logger.warning(_msg("😵", f"生成原创声明诊断信息失败: {exc}"))
+            raise RuntimeError("未能在视频号发布页找到并设置“声明原创”，已停止发布")
 
     async def wait_for_upload_complete(self, page: Page) -> None:
         while True:
@@ -736,7 +797,6 @@ class TencentVideo(TencentBaseUploader):
         await self.fill_title_and_tags(page)
         await self.fill_description(page)
         await self.apply_collection(page)
-        await self.apply_original_statement(page)
 
     async def upload(self, playwright: Playwright) -> None:
         tencent_logger.info(_msg("🧍", "小人先检查 cookie、视频文件和发布时间"))
@@ -754,6 +814,7 @@ class TencentVideo(TencentBaseUploader):
             await self.upload_video_file(page, self.file_path)
             await self.prepare_video_for_publish(page)
             await self.wait_for_upload_complete(page)
+            await self.apply_original_statement(page)
             await self.set_thumbnail(page)
 
             if self.publish_strategy == TENCENT_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
