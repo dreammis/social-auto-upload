@@ -400,14 +400,25 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
             await desc.click()
 
         for tag in self.tags:  # 循环处理所有 tags
-            await page.keyboard.type("#" + tag, delay=30)
-            await page.locator('#creator-editor-topic-container').wait_for(
-                state="visible",
-                timeout=3000
-            )
-            first_item = page.locator('#creator-editor-topic-container .item').first
-            await first_item.wait_for(state="visible", timeout=2000)
-            await first_item.click()
+            # 话题候选下拉框依赖小红书联想接口实时返回，网络抖动/无匹配时会等不到。
+            # 标签是可选增强项：等不到候选框就跳过该标签继续，不让整条发布因此失败。
+            try:
+                await page.keyboard.type("#" + tag, delay=30)
+                await page.locator('#creator-editor-topic-container').wait_for(
+                    state="visible",
+                    timeout=6000
+                )
+                first_item = page.locator('#creator-editor-topic-container .item').first
+                await first_item.wait_for(state="visible", timeout=4000)
+                await first_item.click()
+            except Exception as exc:
+                xiaohongshu_logger.warning(
+                    _msg("🏷️", f"话题『{tag}』未出现候选，跳过该标签继续发布: {exc}")
+                )
+                # 清掉已键入但未成词的 "#tag" 文本，避免它残留进正文
+                for _ in range(len("#" + tag)):
+                    await page.keyboard.press("Backspace")
+                continue
 
     async def fill_meta(self, page: Page) -> None:
         await self.fill_title(page)
