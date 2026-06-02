@@ -698,6 +698,8 @@ class TencentVideo(TencentBaseUploader):
         is_draft=False,
         desc: str | None = None,
         thumbnail_path: str | None = None,
+        thumbnail_landscape_path: str | None = None,
+        thumbnail_portrait_path: str | None = None,
         short_title: str | None = None,
         publish_strategy: str = TENCENT_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
@@ -717,6 +719,8 @@ class TencentVideo(TencentBaseUploader):
         self.is_draft = is_draft
         self.desc = desc or ""
         self.thumbnail_path = thumbnail_path
+        self.thumbnail_landscape_path = thumbnail_landscape_path
+        self.thumbnail_portrait_path = thumbnail_portrait_path or thumbnail_path
         self.short_title = short_title
 
     async def validate_upload_args(self):
@@ -724,8 +728,10 @@ class TencentVideo(TencentBaseUploader):
         if not self.title or not str(self.title).strip():
             raise ValueError("视频模式下，title 是必须的")
         self.file_path = str(self.validate_video_file(self.file_path))
-        if self.thumbnail_path:
-            self.thumbnail_path = str(self.validate_image_file(self.thumbnail_path))
+        if self.thumbnail_landscape_path:
+            self.thumbnail_landscape_path = str(self.validate_image_file(self.thumbnail_landscape_path))
+        if self.thumbnail_portrait_path:
+            self.thumbnail_portrait_path = str(self.validate_image_file(self.thumbnail_portrait_path))
 
     async def handle_upload_error(self, page: Page) -> None:
         tencent_logger.info(_msg("😵", "视频出错了，重新上传中"))
@@ -733,18 +739,8 @@ class TencentVideo(TencentBaseUploader):
         await page.get_by_role("button", name="删除", exact=True).click()
         await self.upload_video_file(page, self.file_path)
 
-    async def set_thumbnail(self, page: Page) -> None:
-        if not self.thumbnail_path:
-            return
-
-        tencent_logger.info(_msg("🖼️", "小人准备设置封面"))
-
-        cover_entry_selectors = [
-            'div.vertical-cover-wrap:has-text("个人主页卡片"):has-text("3:4")',
-            'div.vertical-cover-wrap:has-text("3:4")',
-            'div.vertical-cover-wrap:has-text("个人主页卡片")',
-        ]
-        for selector in cover_entry_selectors:
+    async def open_thumbnail_dialog(self, page: Page, selectors: list[str], dialog_titles: list[str]):
+        for selector in selectors:
             cover_entry = page.locator(selector).first
             try:
                 if not await cover_entry.count():
@@ -756,42 +752,96 @@ class TencentVideo(TencentBaseUploader):
             except Exception:
                 continue
 
-        cover_dialog = page.locator("div.weui-desktop-dialog").filter(has_text="编辑个人主页卡片").first
-        if not await cover_dialog.count():
-            tencent_logger.info(_msg("🧍", "当前页面没有出现封面编辑弹窗，小人先跳过自定义封面"))
+        for title in dialog_titles:
+            cover_dialog = page.locator("div.weui-desktop-dialog").filter(has_text=title).first
+            if await cover_dialog.count():
+                return cover_dialog
+        return None
+
+    async def confirm_thumbnail_crop(self, page: Page) -> None:
+        crop_dialog = page.locator("div.weui-desktop-dialog").filter(has_text="裁剪封面图").first
+        if not await crop_dialog.count():
             return
 
         try:
-            await cover_dialog.wait_for(state="visible", timeout=5000)
-        except Exception:
-            tencent_logger.warning(_msg("😵", "封面编辑弹窗暂时不可见，这次先跳过自定义封面"))
-            return
+            await crop_dialog.wait_for(state="visible", timeout=10000)
+            crop_confirm_button = crop_dialog.locator(
+                'div.weui-desktop-dialog__ft button.weui-desktop-btn_primary:has-text("确定")'
+            ).first
+            if await crop_confirm_button.count():
+                await crop_confirm_button.wait_for(state="visible", timeout=5000)
+                await crop_confirm_button.click()
+                await page.wait_for_timeout(1000)
+        except Exception as exc:
+            tencent_logger.warning(_msg("😵", f"封面裁剪确认时出错，小人继续尝试保存主弹窗: {exc}"))
 
+    async def upload_thumbnail_in_dialog(self, page: Page, cover_dialog, thumbnail_path: str) -> None:
+        await cover_dialog.wait_for(state="visible", timeout=5000)
         file_input = cover_dialog.locator('.single-cover-uploader-wrap input[type="file"]').first
         await file_input.wait_for(state="attached", timeout=10000)
-        await file_input.set_input_files(self.thumbnail_path)
+        await file_input.set_input_files(thumbnail_path)
         await page.wait_for_timeout(1000)
-
-        crop_dialog = page.locator("div.weui-desktop-dialog").filter(has_text="裁剪封面图").first
-        if await crop_dialog.count():
-            try:
-                await crop_dialog.wait_for(state="visible", timeout=10000)
-                crop_confirm_button = crop_dialog.locator(
-                    'div.weui-desktop-dialog__ft button.weui-desktop-btn_primary:has-text("确定")'
-                ).first
-                if await crop_confirm_button.count():
-                    await crop_confirm_button.wait_for(state="visible", timeout=5000)
-                    await crop_confirm_button.click()
-                    await page.wait_for_timeout(1000)
-            except Exception as exc:
-                tencent_logger.warning(_msg("😵", f"封面裁剪确认时出错，小人继续尝试保存主弹窗: {exc}"))
+        await self.confirm_thumbnail_crop(page)
 
         confirm_button = cover_dialog.locator(
             'div.weui-desktop-dialog__ft button.weui-desktop-btn_primary:has-text("确认")'
         ).first
         await confirm_button.wait_for(state="visible", timeout=10000)
         await confirm_button.click()
-        tencent_logger.success(_msg("🥳", "封面已经设置完成"))
+
+    async def set_single_thumbnail(
+        self,
+        page: Page,
+        thumbnail_path: str,
+        selectors: list[str],
+        dialog_titles: list[str],
+        label: str,
+    ) -> None:
+        cover_dialog = await self.open_thumbnail_dialog(page, selectors, dialog_titles)
+        if not cover_dialog:
+            tencent_logger.info(_msg("🧍", f"当前页面没有出现{label}封面编辑弹窗，小人先跳过"))
+            return
+
+        try:
+            await self.upload_thumbnail_in_dialog(page, cover_dialog, thumbnail_path)
+            tencent_logger.success(_msg("🥳", f"{label}封面已经设置完成"))
+        except Exception as exc:
+            tencent_logger.warning(_msg("😵", f"{label}封面设置失败，这次先跳过: {exc}"))
+
+    async def set_thumbnail(self, page: Page) -> None:
+        if not self.thumbnail_landscape_path and not self.thumbnail_portrait_path:
+            return
+
+        tencent_logger.info(_msg("🖼️", "小人准备设置封面"))
+
+        landscape_selectors = [
+            'div.horizontal-cover-wrap:has-text("4:3")',
+            'div[class*="cover-wrap"]:has-text("4:3"):has-text("动态")',
+            'div:has-text("视频号动态"):has-text("4:3")',
+            'div:has-text("横版封面"):has-text("4:3")',
+        ]
+        portrait_selectors = [
+            'div.vertical-cover-wrap:has-text("个人主页卡片"):has-text("3:4")',
+            'div.vertical-cover-wrap:has-text("3:4")',
+            'div.vertical-cover-wrap:has-text("个人主页卡片")',
+        ]
+
+        if self.thumbnail_landscape_path:
+            await self.set_single_thumbnail(
+                page,
+                self.thumbnail_landscape_path,
+                landscape_selectors,
+                ["编辑视频号动态封面", "编辑动态封面", "编辑封面"],
+                "4:3 横版",
+            )
+        if self.thumbnail_portrait_path:
+            await self.set_single_thumbnail(
+                page,
+                self.thumbnail_portrait_path,
+                portrait_selectors,
+                ["编辑个人主页卡片", "编辑封面"],
+                "3:4 竖版",
+            )
 
     async def prepare_video_for_publish(self, page: Page) -> None:
         await self.fill_title_and_tags(page)
