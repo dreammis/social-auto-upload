@@ -103,8 +103,15 @@ sau bilibili --help
 sau douyin login --account <account_name>
 sau douyin check --account <account_name>
 sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介"
-sau douyin upload-note --account <account_name> --images videos/1.png videos/2.png --title "图文标题" --note "图文正文"
-```
+sau douyin upload-note --account <account_name> --images videos/demo1.png videos/demo2.png --title "图文标题" --note "图文正文"
+``` 
+
+抖音卡login手动获取cookie:
+
+- 目标服务器使用vnc
+- 浏览器登录抖音创作者中心https://creator.douyin.com/
+- 执行`bash export_douyin_cookie.sh --account <account_name>`
+- 检查cookie可用性,执行`sau douyin check --account <account_name>`
 
 ### 8. 快手主线示例
 
@@ -112,7 +119,7 @@ sau douyin upload-note --account <account_name> --images videos/1.png videos/2.p
 sau kuaishou login --account <account_name>
 sau kuaishou check --account <account_name>
 sau kuaishou upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介"
-sau kuaishou upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文正文"
+sau kuaishou upload-note --account <account_name> --images videos/demo1.png videos/demo2.png videos/demo.png --title "图文标题" --note "图文正文"
 ```
 
 ### 9. 小红书主线示例
@@ -121,7 +128,7 @@ sau kuaishou upload-note --account <account_name> --images videos/1.png videos/2
 sau xiaohongshu login --account <account_name>
 sau xiaohongshu check --account <account_name>
 sau xiaohongshu upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介"
-sau xiaohongshu upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文正文"
+sau xiaohongshu upload-note --account <account_name> --images videos/demo1.png videos/demo2.png videos/demo.png --title "图文标题" --note "图文正文"
 ```
 
 ### 10. Bilibili 主线示例
