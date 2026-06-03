@@ -141,7 +141,15 @@ CLI 将 `debug` 和 `headless` 拆成了两个独立维度：
 --desc "示例简介"
 --tags 运动,训练
 --thumbnail videos/demo.png
+--thumbnail-landscape videos/cover-4x3.png
+--thumbnail-portrait videos/cover-3x4.png
 ```
+
+抖音和视频号支持同时设置两种比例的封面图：
+
+- `--thumbnail-landscape`: 4:3 横版封面
+- `--thumbnail-portrait`: 3:4 竖版封面
+- `--thumbnail`: 兼容旧参数，等同于 3:4 竖版封面
 
 抖音额外支持：
 
