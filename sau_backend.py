@@ -9,6 +9,7 @@ from queue import Queue
 from flask_cors import CORS
 from myUtils.auth import check_cookie
 from flask import Flask, request, jsonify, Response, render_template, send_from_directory
+from werkzeug.utils import secure_filename
 from conf import BASE_DIR
 from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
 from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs
@@ -63,9 +64,12 @@ def upload_file():
         # 保存文件到指定位置
         uuid_v1 = uuid.uuid1()
         print(f"UUID v1: {uuid_v1}")
-        filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{file.filename}")
+        safe_name = secure_filename(file.filename)
+        if not safe_name:
+            return jsonify({"code": 400, "data": None, "msg": "Invalid filename"}), 400
+        filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{safe_name}")
         file.save(filepath)
-        return jsonify({"code":200,"msg": "File uploaded successfully", "data": f"{uuid_v1}_{file.filename}"}), 200
+        return jsonify({"code":200,"msg": "File uploaded successfully", "data": f"{uuid_v1}_{safe_name}"}), 200
     except Exception as e:
         return jsonify({"code":500,"msg": str(e),"data":None}), 500
 
@@ -108,9 +112,11 @@ def upload_save():
     # 获取表单中的自定义文件名（可选）
     custom_filename = request.form.get('filename', None)
     if custom_filename:
-        filename = custom_filename + "." + file.filename.split('.')[-1]
+        filename = secure_filename(custom_filename + "." + file.filename.split('.')[-1])
     else:
-        filename = file.filename
+        filename = secure_filename(file.filename)
+    if not filename:
+        return jsonify({"code": 400, "data": None, "msg": "Invalid filename"}), 400
 
     try:
         # 生成 UUID v1
