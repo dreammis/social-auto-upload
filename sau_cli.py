@@ -772,12 +772,16 @@ async def dispatch(args: argparse.Namespace) -> int:
         )
 
         if args.action == "upload-video":
+            parsed_tags = parse_tags(args.tags)
+            if len(parsed_tags) > 10:
+                print(f"错误：小红书标签最多 10 个，当前提供了 {len(parsed_tags)} 个: {parsed_tags}", file=sys.stderr)
+                return 1
             request = XiaohongshuVideoUploadRequest(
                 account_name=args.account,
                 video_file=args.file,
                 title=args.title,
                 description=args.desc,
-                tags=parse_tags(args.tags),
+                tags=parsed_tags,
                 publish_date=args.schedule or 0,
                 thumbnail_file=args.thumbnail,
                 publish_strategy=publish_strategy,
@@ -789,12 +793,16 @@ async def dispatch(args: argparse.Namespace) -> int:
             return 0
 
         if args.action == "upload-note":
+            parsed_tags = parse_tags(args.tags)
+            if len(parsed_tags) > 10:
+                print(f"错误：小红书标签最多 10 个，当前提供了 {len(parsed_tags)} 个: {parsed_tags}", file=sys.stderr)
+                return 1
             request = XiaohongshuNoteUploadRequest(
                 account_name=args.account,
                 image_files=parse_image_files(args.images),
                 title=args.title,
                 note=args.note,
-                tags=parse_tags(args.tags),
+                tags=parsed_tags,
                 publish_date=args.schedule or 0,
                 publish_strategy=publish_strategy,
                 debug=args.debug,
