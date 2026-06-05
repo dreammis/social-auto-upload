@@ -395,6 +395,14 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
         if not getattr(self, "tags", None):
             return
 
+        # 小红书标签上限为 10 个，超过会导致死循环卡住发布
+        max_tags = 10
+        if len(self.tags) > max_tags:
+            xiaohongshu_logger.warning(
+                _msg("🏷️", f"标签数量 {len(self.tags)} 超过小红书上限 {max_tags}，只取前 {max_tags} 个: {self.tags[:max_tags]}")
+            )
+            self.tags = self.tags[:max_tags]
+
         if not getattr(self, "desc", ""):
             desc = page.locator('p[data-placeholder*="输入正文描述"]')
             await desc.click()
@@ -424,6 +432,27 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
         await self.fill_title(page)
         await self.fill_desc(page)
         await self.fill_tags(page)
+
+    async def check_original_declaration(self, page: Page) -> None:
+        """勾选原创声明（如果页面上有的话）"""
+        try:
+            # 小红书的原创声明通常是 checkbox 或 switch 组件
+            original_checkbox = page.locator('div.original-declaration checkbox, div.original-declaration input[type="checkbox"], label:has-text("原创") input[type="checkbox"]').first
+            if await original_checkbox.count() and not await original_checkbox.is_checked():
+                await original_checkbox.check()
+                xiaohongshu_logger.success(_msg("✅", "原创声明已勾选"))
+                return
+
+            # 尝试通过文本匹配找到原创声明区域并点击
+            original_text = page.locator('div:has-text("原创声明"), span:has-text("原创声明"), div:has-text("原创"), label:has-text("原创")').first
+            if await original_text.count():
+                await original_text.click()
+                xiaohongshu_logger.success(_msg("✅", "原创声明已勾选"))
+                return
+
+            xiaohongshu_logger.info(_msg("🧾", "未发现原创声明选项，跳过"))
+        except Exception as exc:
+            xiaohongshu_logger.warning(_msg("⚠️", f"勾选原创声明时出错，跳过: {exc}"))
 
 
 class XiaoHongShuVideo(XiaoHongShuBaseUploader):
@@ -547,6 +576,8 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
 
         # await self.set_location(page, "青岛市")
 
+        await self.check_original_declaration(page)
+
         if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)
 
@@ -664,6 +695,8 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
 
         xiaohongshu_logger.info(_msg("✍️", "小人开始填标题、描述和话题"))
         await self.fill_meta(page)
+
+        await self.check_original_declaration(page)
 
         if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)
