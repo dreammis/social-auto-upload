@@ -254,6 +254,8 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 </table>
 
 
+
+
 ## 🤝贡献指南
 
 欢迎各种形式的贡献，包括但不限于：
@@ -270,6 +272,13 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 4.  Push到您的分支 (`git push origin feature/YourFeature`)。
 5.  创建一个 Pull Request。
 
+## 主要贡献者
+
+<a href="https://github.com/dreammis/social-auto-upload/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=dreammis/social-auto-upload" />
+</a>
+
+
 ## 🙏致谢
 
 本项目的 Bilibili 上传能力基于开源项目 `biliup` 的能力进行接入与封装。
@@ -285,7 +294,7 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 
 > 如果这个项目对您有帮助，请给一个 ⭐ Star 以表示支持！
 
-[![Star History Chart](https://api.star-history.com/svg?repos=dreammis/social-auto-upload&type=Date)](https://star-history.com/#dreammis/social-auto-upload&Date)
 
-## Community
-LINUX DO - The New Ideal Community
+
+
+[![Star History Chart](https://api.star-history.com/svg?repos=dreammis/social-auto-upload&type=Date)](https://star-history.com/#dreammis/social-auto-upload&Date)
