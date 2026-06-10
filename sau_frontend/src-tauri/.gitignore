@@ -2,3 +2,6 @@
 # will have compiled files and executables
 /target/
 /gen/schemas
+
+# PyInstaller 打包出的后端 sidecar 二进制（119MB+，由 scripts/build_sidecar.py 生成，不入库）
+/binaries/

@@ -756,4 +756,7 @@ def sse_stream(status_queue):
             time.sleep(0.1)
 
 if __name__ == '__main__':
+    # 确保数据库与表存在（打包后首次在 %APPDATA% 下运行时尤其必要）
+    from db.createTable import create_tables
+    create_tables(Path(BASE_DIR / "db" / "database.db"))
     app.run(host='0.0.0.0' ,port=5409)

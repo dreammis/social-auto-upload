@@ -1,42 +1,49 @@
 import sqlite3
-import json
-import os
-
-# 数据库文件路径（如果不存在会自动创建）
-db_file = './database.db'
-
-# 如果数据库已存在，则删除旧的表（可选）
-# if os.path.exists(db_file):
-#     os.remove(db_file)
-
-# 连接到SQLite数据库（如果文件不存在则会自动创建）
-conn = sqlite3.connect(db_file)
-cursor = conn.cursor()
-
-# 创建账号记录表
-cursor.execute('''
-CREATE TABLE IF NOT EXISTS user_info (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    type INTEGER NOT NULL,
-    filePath TEXT NOT NULL,  -- 存储文件路径
-    userName TEXT NOT NULL,
-    status INTEGER DEFAULT 0
-)
-''')
-
-# 创建文件记录表
-cursor.execute('''CREATE TABLE IF NOT EXISTS file_records (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一标识每条记录
-    filename TEXT NOT NULL,               -- 文件名
-    filesize REAL,                     -- 文件大小（单位：MB）
-    upload_time DATETIME DEFAULT CURRENT_TIMESTAMP, -- 上传时间，默认当前时间
-    file_path TEXT                        -- 文件路径
-)
-''')
+from pathlib import Path
 
 
-# 提交更改
-conn.commit()
-print("✅ 表创建成功")
-# 关闭连接
-conn.close()
+def create_tables(db_path="./database.db"):
+    """在指定路径建好所有表（IF NOT EXISTS，幂等）。
+
+    打包后后端启动时调用，确保 %APPDATA% 下的库文件存在且表结构就绪。
+    """
+    db_path = str(db_path)
+    # 确保父目录存在（%APPDATA%/social-auto-upload/db 首次运行时可能不存在）
+    parent = Path(db_path).parent
+    if str(parent) not in ("", "."):
+        parent.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cursor = conn.cursor()
+
+        # 创建账号记录表
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_info (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type INTEGER NOT NULL,
+            filePath TEXT NOT NULL,  -- 存储文件路径
+            userName TEXT NOT NULL,
+            status INTEGER DEFAULT 0
+        )
+        ''')
+
+        # 创建文件记录表
+        cursor.execute('''CREATE TABLE IF NOT EXISTS file_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一标识每条记录
+            filename TEXT NOT NULL,               -- 文件名
+            filesize REAL,                     -- 文件大小（单位：MB）
+            upload_time DATETIME DEFAULT CURRENT_TIMESTAMP, -- 上传时间，默认当前时间
+            file_path TEXT                        -- 文件路径
+        )
+        ''')
+
+        conn.commit()
+        print("[db] tables ready")
+    finally:
+        conn.close()
+
+
+if __name__ == '__main__':
+    # 直接运行时在当前目录建库（保持原脚本行为）
+    create_tables('./database.db')
