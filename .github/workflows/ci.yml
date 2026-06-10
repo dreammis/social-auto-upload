@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# 同一分支重复推送时，取消上一次未完成的运行
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[web]"
+
+      - name: Byte-compile sources
+        # 全量编译，任何语法错误都会让 CI 失败
+        run: python -m compileall -q sau_backend.py sau_cli.py conf.example.py myUtils uploader utils
+
+      - name: Import smoke test
+        # 确认核心入口可导入（依赖、相对导入是否正确）
+        run: python -c "import sau_cli; import myUtils.auth"
+
+  frontend:
+    name: Frontend (Vite build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sau_frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: sau_frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
