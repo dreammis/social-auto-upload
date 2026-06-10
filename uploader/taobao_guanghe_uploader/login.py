@@ -40,21 +40,17 @@ def _build_login_result(
     }
 
 
-async def cookie_auth(
+async def _cookie_auth_impl(
     account_file: str | Path,
     use_system_chrome: bool = True,
     enable_stealth: bool = False,
-) -> bool:
-    """
-    验证 Cookie 是否有效
+) -> tuple[bool, str]:
+    """cookie_auth 的内部实现，返回 (是否有效, 当前 URL)。
 
-    Args:
-        account_file: storageState 文件路径
-        use_system_chrome: 是否使用系统 Chrome
-        enable_stealth: 是否启用 stealth 反检测脚本
-
-    Returns:
-        bool: Cookie 是否有效
+    URL 一并返回，调用方据此区分：
+    - creator.guanghe.taobao.com → 有效
+    - login.taobao.com / passport.taobao.com → 失效但可尝试让用户在自己浏览器里完成验证
+    - 其它 → 失效
     """
     async with async_playwright() as playwright:
         # 查找系统 Chrome
@@ -103,7 +99,7 @@ async def cookie_auth(
             except Exception as e:
                 from utils.log import taobao_guanghe_logger
                 taobao_guanghe_logger.warning(f"⚠️ 访问创作者中心失败: {str(e)}")
-                return False
+                return False, ""
 
             await asyncio.sleep(3)
 
@@ -115,14 +111,34 @@ async def cookie_auth(
             # 有效：停留在 creator.guanghe.taobao.com 域
             if "creator.guanghe.taobao.com" in current_url:
                 taobao_guanghe_logger.info("✅ Cookie 有效")
-                return True
+                return True, current_url
 
             # 其它情况一律判失效（含 login.taobao.com SSO 跳板 / passport.taobao.com 风控页 / 任何重定向）
             taobao_guanghe_logger.warning(f"❌ Cookie 已失效（未落在 creator 域: {current_url[:80]}）")
-            return False
+            return False, current_url
 
         finally:
             await browser.close()
+
+
+async def cookie_auth(
+    account_file: str | Path,
+    use_system_chrome: bool = True,
+    enable_stealth: bool = False,
+) -> bool:
+    """
+    验证 Cookie 是否有效（公开 API，保持 bool 返回以兼容现有调用方）。
+
+    Args:
+        account_file: storageState 文件路径
+        use_system_chrome: 是否使用系统 Chrome
+        enable_stealth: 是否启用 stealth 反检测脚本
+
+    Returns:
+        bool: Cookie 是否有效
+    """
+    ok, _ = await _cookie_auth_impl(account_file, use_system_chrome, enable_stealth)
+    return ok
 
 
 async def taobao_guanghe_setup(
@@ -500,11 +516,49 @@ async def get_taobao_guanghe_cookie(id, status_queue):
 
         # 用 legacy 路径下的相对文件名做 cookie 验证
         rel_path = target_file.name
-        verified = await _check_cookie(5, rel_path)
+        verified, current_url = await _cookie_auth_impl(target_file)
         if not verified:
-            taobao_guanghe_logger.error("❌ cookie 验证失败")
-            status_queue.put("500")
-            return None
+            # 看是否是被风控/SSO 跳板 — 这种情况下用户可以在自己浏览器里完成验证
+            captcha_url = _extract_captcha_url(current_url)
+            if captcha_url is not None:
+                taobao_guanghe_logger.warning(
+                    f"🛡️ cookie 被风控/SSO 跳板: {current_url}，等待用户在自己浏览器里完成验证"
+                )
+                # 推 SSE 信号：captcha_required||URL
+                try:
+                    status_queue.put(f"{CAPTCHA_REQUIRED_SIGNAL}||{captcha_url}")
+                except Exception as e:
+                    taobao_guanghe_logger.warning(f"⚠️ 验证码信号推送失败: {e}")
+
+                # 等待用户在自己浏览器里完成验证（前端 POST /taobaoCaptchaDone 唤醒）
+                done = await _wait_for_captcha_done(id, timeout=600)
+                if not done:
+                    taobao_guanghe_logger.error("⏱️ 等待用户完成验证超时（600s）")
+                    status_queue.put("500")
+                    return None
+
+                # 用户说完成了——重试 cookie_auth，10 分钟内每 5s 一次
+                verified = False
+                for attempt in range(120):
+                    await asyncio.sleep(5)
+                    verified, current_url = await _cookie_auth_impl(target_file)
+                    if verified:
+                        taobao_guanghe_logger.success(
+                            f"✅ 用户完成验证，cookie 有效（第 {attempt + 1} 次重试）"
+                        )
+                        break
+                if not verified:
+                    taobao_guanghe_logger.error(
+                        f"❌ 用户完成验证后 cookie 仍无效: {current_url}"
+                    )
+                    status_queue.put("500")
+                    return None
+            else:
+                taobao_guanghe_logger.error(
+                    f"❌ cookie 验证失败（非风控 URL）: {current_url}"
+                )
+                status_queue.put("500")
+                return None
 
         # 写入 user_info(type=5)
         db_path = Path(_BASE_DIR / "db" / "database.db")
@@ -524,3 +578,73 @@ async def get_taobao_guanghe_cookie(id, status_queue):
         taobao_guanghe_logger.error(f"❌ 淘宝登录异常: {exc}", exc_info=True)
         status_queue.put("500")
         return None
+
+
+# ============================================================
+# 风控验证等待机制
+# ============================================================
+# 后端推送 captcha_required 信号给前端 → 前端展示 URL 给用户 → 用户在自己
+# 浏览器里完成验证 → 前端 POST /taobaoCaptchaDone → 后端 signal_captcha_done
+# 唤醒对应账号的等待。后端是 asyncio 协程，但前端 POST 走的是 Flask 同步线
+# 程，所以用 threading.Event 在两边桥接。
+
+import threading
+import asyncio as _asyncio  # noqa: E402  # 用于在协程里 wait 事件
+
+
+_captcha_wait_events: dict[str, threading.Event] = {}
+_captcha_wait_lock = threading.Lock()
+
+
+def _extract_captcha_url(current_url: str) -> str | None:
+    """从 cookie_auth 返回的 URL 里判断是否需要用户介入验证。
+
+    只匹配两类：passport.taobao.com（扫码风控/滑块/短信）和 login.taobao.com
+    （SSO 重定向跳板）。其它 URL 一律判 False，由调用方走"真失效"分支。
+    """
+    url_lower = current_url.lower()
+    if PASSPORT_URL_KEY in url_lower or "login.taobao.com" in url_lower:
+        return current_url
+    return None
+
+
+async def _wait_for_captcha_done(account_id: str, timeout: float = 600) -> bool:
+    """等待前端 POST /taobaoCaptchaDone 唤醒。
+
+    Returns:
+        True  用户在 timeout 内点了"我已完成"
+        False 超时未响应
+    """
+    ev = threading.Event()
+    with _captcha_wait_lock:
+        _captcha_wait_events[account_id] = ev
+
+    loop = _asyncio.get_event_loop()
+
+    def _wait():
+        return ev.wait(timeout=timeout)
+
+    try:
+        taobao_guanghe_logger.info(
+            f"⏳ 等待用户在前端确认完成验证（最多 {timeout:.0f}s）..."
+        )
+        done = await loop.run_in_executor(None, _wait)
+        return done
+    finally:
+        with _captcha_wait_lock:
+            _captcha_wait_events.pop(account_id, None)
+
+
+def signal_captcha_done(account_id: str) -> bool:
+    """前端 POST /taobaoCaptchaDone 时调用，唤醒对应账号的等待协程。
+
+    Returns:
+        True  唤醒成功
+        False 当前没有等待中的账号（可能超时了或重复点击）
+    """
+    with _captcha_wait_lock:
+        ev = _captcha_wait_events.get(account_id)
+        if ev is None:
+            return False
+        ev.set()
+        return True

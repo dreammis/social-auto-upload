@@ -380,6 +380,25 @@ def delete_account():
         }), 500
 
 
+# 淘宝风控验证完成回调
+# 前端用户在浏览器里完成淘宝滑块/短信验证后，点击"我已完成"按钮触发
+# 此接口。后端 get_taobao_guanghe_cookie 在等待用户响应时会醒过来重试
+# cookie_auth 验证。
+@app.route('/taobaoCaptchaDone', methods=['POST'])
+def taobao_captcha_done():
+    data = request.get_json() or {}
+    account_id = data.get('id')
+    if not account_id:
+        return jsonify({"code": 400, "msg": "missing id", "data": None}), 400
+    from uploader.taobao_guanghe_uploader.login import signal_captcha_done
+    awakened = signal_captcha_done(account_id)
+    if not awakened:
+        # 没有等待中的账号（可能超时了 / 重复点击 / 输错账号名）
+        # 仍然返回 200，避免前端报错；前端无感即可
+        return jsonify({"code": 200, "msg": "no waiter", "data": None}), 200
+    return jsonify({"code": 200, "msg": "ok", "data": None}), 200
+
+
 # SSE 登录接口
 @app.route('/login')
 def login():

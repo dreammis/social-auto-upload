@@ -480,7 +480,13 @@
           </div>
           <div v-else-if="loginStatus === 'captcha_required'" class="captcha-wrapper">
             <el-icon color="#E6A23C"><WarningFilled /></el-icon>
-            <span>请在已打开的浏览器窗口中完成验证</span>
+            <p>请在自己浏览器中打开下方链接完成验证：</p>
+            <a :href="captchaUrl" target="_blank" rel="noopener" class="captcha-link">
+              {{ captchaUrl }}
+            </a>
+            <el-button type="primary" :loading="captchaSubmitting" @click="handleCaptchaDone">
+              我已完成验证
+            </el-button>
           </div>
         </div>
       </el-form>
@@ -684,6 +690,8 @@ const rules = {
 const sseConnecting = ref(false)
 const qrCodeData = ref('')
 const loginStatus = ref('')
+const captchaUrl = ref('')
+const captchaSubmitting = ref(false)
 
 // 添加账号
 const handleAddAccount = () => {
@@ -698,6 +706,7 @@ const handleAddAccount = () => {
   sseConnecting.value = false
   qrCodeData.value = ''
   loginStatus.value = ''
+  captchaUrl.value = ''
   dialogVisible.value = true
 }
 
@@ -809,6 +818,25 @@ const handleUploadCookie = (row) => {
   input.click()
 }
 
+// 用户在自己浏览器里完成淘宝风控验证后，通知后端继续
+const handleCaptchaDone = async () => {
+  if (captchaSubmitting.value) return
+  captchaSubmitting.value = true
+  try {
+    const accountId = accountForm.name
+    const res = await http.post('/taobaoCaptchaDone', { id: accountId })
+    if (res.code === 200) {
+      ElMessage.success('已通知后端，正在重新验证...')
+      // 后端会继续重试 cookie_auth；200/500 终态由 SSE onmessage 接管
+    }
+  } catch (error) {
+    console.error('通知后端失败:', error)
+    ElMessage.error('通知失败，请稍后重试')
+  } finally {
+    captchaSubmitting.value = false
+  }
+}
+
 // 重新登录账号
 const handleReLogin = (row) => {
   // 设置表单信息
@@ -894,11 +922,13 @@ const connectSSE = (platform, name) => {
         // 处理二维码数据出错
       }
     }
-    // 收到"需要人工验证"信号（淘宝被风控，跳到 passport.taobao.com）
-    else if (data === 'captcha_required') {
+    // 收到"需要人工验证"信号（淘宝被风控，跳到 passport/login.taobao.com）
+    else if (data.startsWith('captcha_required||')) {
       // 中间态：保留 SSE 连接，继续监听 200/500 终态
+      const url = data.substring('captcha_required||'.length)
       loginStatus.value = 'captcha_required'
-      ElMessage.warning('淘宝需在浏览器中完成验证，请在该窗口操作')
+      captchaUrl.value = url
+      ElMessage.warning('淘宝需验证，请在自己浏览器中打开下方链接，完成后回到此处点击"我已完成验证"')
     }
     // 如果收到状态码
     else if (data === '200' || data === '500') {
@@ -942,6 +972,7 @@ const connectSSE = (platform, name) => {
           sseConnecting.value = false
           qrCodeData.value = ''
           loginStatus.value = ''
+          captchaUrl.value = ''
         }, 2000)
       }
     }
@@ -1137,6 +1168,28 @@ onBeforeUnmount(() => {
     
     .error-wrapper .el-icon {
       color: #f56c6c;
+    }
+
+    .captcha-wrapper {
+      text-align: center;
+      gap: 12px;
+
+      p {
+        margin: 0;
+        color: #606266;
+      }
+
+      .captcha-link {
+        word-break: break-all;
+        color: #409eff;
+        text-decoration: none;
+        font-size: 13px;
+        max-width: 380px;
+
+        &:hover {
+          text-decoration: underline;
+        }
+      }
     }
   }
 }
