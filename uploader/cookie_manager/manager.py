@@ -29,6 +29,7 @@ class CookieManager:
         cookie_file: Path,
         platform: str = "taobao_guanghe",
         use_system_chrome: bool = True,
+        enable_stealth: bool = False,
         skip_online_check: bool = False,
     ) -> tuple[bool, str]:
         """验证 Cookie 有效性"""
@@ -52,7 +53,11 @@ class CookieManager:
             if platform == "taobao_guanghe":
                 try:
                     from uploader.taobao_guanghe_uploader.login import cookie_auth
-                    is_valid = await cookie_auth(cookie_file, use_system_chrome=use_system_chrome)
+                    is_valid = await cookie_auth(
+                        cookie_file,
+                        use_system_chrome=use_system_chrome,
+                        enable_stealth=enable_stealth,
+                    )
                     return is_valid, "有效" if is_valid else "已失效"
                 except Exception as e:
                     taobao_guanghe_logger.warning(f"⚠️ 在线验证失败: {str(e)[:80]}")
