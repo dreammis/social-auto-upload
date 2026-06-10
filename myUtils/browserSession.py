@@ -38,8 +38,15 @@ def open_taobao_browser(file_path: str):
         return False, "cookie文件不存在"
 
     with _lock:
-        if file_path in _active_browsers:
-            return False, "该账号已打开"
+        existing = _active_browsers.get(file_path)
+        if existing is not None:
+            # 仅当登记的线程仍存活才算「已打开」。线程已死说明窗口早已关闭
+            # （或后端重启过），属于残留登记，清掉后放行重新打开。
+            thread = existing.get("thread")
+            if thread is not None and thread.is_alive():
+                return False, "该账号已打开"
+            _active_browsers.pop(file_path, None)
+
         thread = threading.Thread(
             target=_browser_thread, args=(file_path,), daemon=True
         )
@@ -77,13 +84,6 @@ async def _run_browser(file_path: str):
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(**options)
 
-        closed_event = asyncio.Event()
-        loop = asyncio.get_running_loop()
-        browser.on(
-            "disconnected",
-            lambda _b: loop.call_soon_threadsafe(closed_event.set),
-        )
-
         context = await browser.new_context(storage_state=str(cookie_file))
         page = await context.new_page()
         try:
@@ -92,5 +92,9 @@ async def _run_browser(file_path: str):
         except Exception as e:
             taobao_guanghe_logger.warning(f"⚠️ 打开光合平台页面失败 [{file_path}]: {e}")
 
-        # 保持存活，直到用户关闭浏览器窗口
-        await closed_event.wait()
+        # 轮询浏览器连接状态保持存活，直到用户关闭窗口（进程退出）。
+        # 不依赖 browser.on("disconnected") 事件——用系统 Chrome 启动时该事件
+        # 常常不触发，会导致线程永久卡住、_active_browsers 永不清理，
+        # 后续再点「进入」就会误报「该账号已打开」。
+        while browser.is_connected():
+            await asyncio.sleep(1)
