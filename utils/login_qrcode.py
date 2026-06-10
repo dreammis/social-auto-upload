@@ -4,7 +4,6 @@ import base64
 from pathlib import Path
 import sys
 
-import cv2
 import segno
 
 
@@ -35,6 +34,13 @@ def remove_qrcode_file(qrcode_path: Path | None) -> bool:
 
 
 def decode_qrcode_from_path(qrcode_path: Path) -> str | None:
+    # cv2 懒加载：打包时被排除（省 ~150M），此处降级返回 None。
+    # 二维码内容解码仅用于后端终端打印 ASCII 码（开发调试）；
+    # 前端扫码用的是二维码图片，不依赖此函数。
+    try:
+        import cv2
+    except ImportError:
+        return None
     image = cv2.imread(str(qrcode_path))
     if image is None:
         return None

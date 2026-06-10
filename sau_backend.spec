@@ -25,8 +25,9 @@ for _drv in ('playwright', 'patchright'):
     binaries += b
     hiddenimports += h
 
-# xhs 第三方库（小红书）+ numpy（被 xhs/cv2 间接依赖，C 扩展需全量收）
-for _pkg in ('xhs', 'numpy'):
+# xhs 第三方库（小红书）。numpy 不收：项目无直接 import，仅 cv2 传递依赖，
+# 已随 cv2 一起在 excludes 排除（省 ~150M）。
+for _pkg in ('xhs',):
     d, b, h = collect_all(_pkg)
     datas += d
     binaries += b
@@ -54,7 +55,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['cv2', 'numpy'],
     noarchive=False,
 )
 
