@@ -25,9 +25,17 @@ jobs:
           cache: pip
 
       - name: Install dependencies
+        # requirements.txt 与 pyproject 各有缺漏、互补：
+        # requirements 有 playwright/xhs 但缺 patchright；pyproject[web] 反之。
+        # 两者并集才能 import 全部 uploader + myUtils。
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install -e ".[web]"
+
+      - name: Prepare conf.py
+        # conf.py 被 gitignore，CI 检出没有它；按项目约定从示例复制一份
+        run: cp conf.example.py conf.py
 
       - name: Byte-compile sources
         # 全量编译，任何语法错误都会让 CI 失败
@@ -50,8 +58,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
-          cache-dependency-path: sau_frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci

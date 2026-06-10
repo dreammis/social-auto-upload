@@ -180,7 +180,8 @@ cookies
 .vite/
 dist/
 node_modules/
-package-lock.json
+# package-lock.json 需入库以保证 CI 可复现构建（npm ci 依赖它）
+!sau_frontend/package-lock.json
 
 # database
 db/database.db
