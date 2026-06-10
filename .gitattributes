@@ -1,0 +1,2 @@
+# Shell 脚本强制 LF，避免 Windows 检出成 CRLF 后在 Linux 上 shebang 失效
+*.sh text eol=lf
