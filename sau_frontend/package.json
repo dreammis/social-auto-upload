@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
@@ -19,6 +20,7 @@
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
     "@vitejs/plugin-vue": "^5.2.3",
     "vite": "^6.3.5"
   }
