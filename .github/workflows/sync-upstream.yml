@@ -31,7 +31,10 @@ jobs:
         run: git remote add upstream https://github.com/dreammis/social-auto-upload.git
 
       - name: Fetch upstream main
-        run: git fetch --depth=1 upstream main
+        # No --depth: a shallow commit cannot be pushed to a full repo
+        # (remote fails with "did not receive expected object" during
+        # index-pack). The mirror is small, full history is cheap.
+        run: git fetch upstream main
 
       - name: Create or reset local upstream branch to upstream/main
         run: |
