@@ -599,11 +599,11 @@ _captcha_wait_lock = threading.Lock()
 def _extract_captcha_url(current_url: str) -> str | None:
     """从 cookie_auth 返回的 URL 里判断是否需要用户介入验证。
 
-    只匹配两类：passport.taobao.com（扫码风控/滑块/短信）和 login.taobao.com
-    （SSO 重定向跳板）。其它 URL 一律判 False，由调用方走"真失效"分支。
+    只匹配 passport.taobao.com（真风控页：滑块/短信验证）。
+    注意：login.taobao.com 是淘宝 SSO 跳板，所有未登录 cookie 都会跳过去，
+    它**不是**风控页、用户无法在上面"完成验证"，所以不应当成风控 URL。
     """
-    url_lower = current_url.lower()
-    if PASSPORT_URL_KEY in url_lower or "login.taobao.com" in url_lower:
+    if PASSPORT_URL_KEY in current_url.lower():
         return current_url
     return None
 
