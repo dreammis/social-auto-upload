@@ -16,23 +16,29 @@ jobs:
     name: Sync origin/upstream with dreammis/social-auto-upload@main
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout upstream branch only
+      - name: Checkout main as a base (shallow)
+        # Use `ref: main` rather than `ref: upstream` to avoid the
+        # `+refs/heads/upstream*:...` refspec that actions/checkout emits,
+        # which fails (exit 1) when origin/upstream does not yet exist.
+        # The local `upstream` branch is created/reset in a later step.
         uses: actions/checkout@v4
         with:
-          ref: upstream          # only this branch is materialized locally
-          fetch-depth: 1         # do not pull history of other branches
+          ref: main
+          fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Add upstream remote
         run: git remote add upstream https://github.com/dreammis/social-auto-upload.git
 
       - name: Fetch upstream main
-        run: git fetch upstream main
+        run: git fetch --depth=1 upstream main
 
-      - name: Reset upstream branch to upstream/main
-        run: git reset --hard upstream/main
+      - name: Create or reset local upstream branch to upstream/main
+        run: |
+          git branch -f upstream FETCH_HEAD
+          git checkout upstream
 
       - name: Force-push to origin/upstream only
         # --force-with-lease is safer than --force: refuses to clobber
         # origin/upstream if someone else has updated it since our last fetch.
-        run: git push origin HEAD:upstream --force-with-lease
+        run: git push origin upstream --force-with-lease
