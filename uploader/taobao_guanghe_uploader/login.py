@@ -112,18 +112,13 @@ async def cookie_auth(
             from utils.log import taobao_guanghe_logger
             taobao_guanghe_logger.info(f"📍 当前 URL: {current_url}")
 
-            # 如果跳转到登录页（任何包含 login 的 URL），Cookie 无效
-            if "login" in current_url.lower() or "passport" in current_url.lower():
-                taobao_guanghe_logger.warning(f"❌ Cookie 已失效（跳转到: {current_url[:80]}）")
-                return False
-
-            # 如果停留在 creator.guanghe.taobao.com 域，说明 Cookie 有效
+            # 有效：停留在 creator.guanghe.taobao.com 域
             if "creator.guanghe.taobao.com" in current_url:
                 taobao_guanghe_logger.info("✅ Cookie 有效")
                 return True
 
-            # 其他情况
-            taobao_guanghe_logger.warning(f"⚠️ 未预期的 URL: {current_url}")
+            # 其它情况一律判失效（含 login.taobao.com SSO 跳板 / passport.taobao.com 风控页 / 任何重定向）
+            taobao_guanghe_logger.warning(f"❌ Cookie 已失效（未落在 creator 域: {current_url[:80]}）")
             return False
 
         finally:
