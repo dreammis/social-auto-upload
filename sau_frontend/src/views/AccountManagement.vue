@@ -411,6 +411,7 @@
                 </el-table-column>
                 <el-table-column label="操作">
                   <template #default="scope">
+                    <el-button size="small" type="success" @click="handleEnterTaobao(scope.row)">进入</el-button>
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
@@ -834,6 +835,23 @@ const handleCaptchaDone = async () => {
     ElMessage.error('通知失败，请稍后重试')
   } finally {
     captchaSubmitting.value = false
+  }
+}
+
+// 进入光合平台：用该账号 cookie 打开浏览器窗口（多账号独立）
+const handleEnterTaobao = async (row) => {
+  try {
+    const res = await accountApi.openTaobao(row.filePath)
+    if (res.code === 200) {
+      if (res.data && res.data.opened === false) {
+        ElMessage.warning(res.msg || '该账号窗口已打开')
+      } else {
+        ElMessage.success('正在打开光合平台...')
+      }
+    }
+  } catch (error) {
+    // 真正失败（如 cookie 文件不存在）由拦截器统一提示，这里兜底日志
+    console.error('打开光合平台失败:', error)
   }
 }
 

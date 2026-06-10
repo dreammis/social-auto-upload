@@ -399,6 +399,24 @@ def taobao_captcha_done():
     return jsonify({"code": 200, "msg": "ok", "data": None}), 200
 
 
+# 用指定账号 cookie 打开淘宝光合平台浏览器窗口（多账号独立、可同时打开）
+@app.route('/openTaobao', methods=['GET'])
+def open_taobao():
+    file_path = request.args.get('filePath')
+    if not file_path:
+        return jsonify({"code": 400, "msg": "缺少 filePath", "data": None}), 400
+    from myUtils.browserSession import open_taobao_browser
+    ok, msg = open_taobao_browser(file_path)
+    # 统一返回 HTTP 200，由 data.opened 区分「新打开」还是「已打开」，
+    # 避免前端 axios 拦截器把 4xx 当网络错误重复弹窗。
+    # cookie 文件不存在等真正失败仍返回业务错误码。
+    if not ok and msg == "该账号已打开":
+        return jsonify({"code": 200, "msg": msg, "data": {"opened": False}}), 200
+    if not ok:
+        return jsonify({"code": 400, "msg": msg, "data": None}), 400
+    return jsonify({"code": 200, "msg": msg, "data": {"opened": True}}), 200
+
+
 # SSE 登录接口
 @app.route('/login')
 def login():
