@@ -789,7 +789,10 @@ def sse_stream(status_queue):
             time.sleep(0.1)
 
 if __name__ == '__main__':
-    # 确保数据库与表存在（打包后首次在 %APPDATA% 下运行时尤其必要）
-    from db.createTable import create_tables
-    create_tables(Path(BASE_DIR / "db" / "database.db"))
+    # 直跑 python sau_backend.py 时由 app.run() 启动监听
     app.run(host='0.0.0.0' ,port=5409)
+
+# 模块导入时即建库/迁移：无论 python sau_backend.py 还是 flask --app 都生效。
+# 兼容打包后首次在 %APPDATA% 下运行、旧库列缺失等场景。幂等，重复跑无害。
+from db.createTable import create_tables
+create_tables(Path(BASE_DIR / "db" / "database.db"))
