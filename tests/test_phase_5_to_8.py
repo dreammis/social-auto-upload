@@ -70,8 +70,8 @@ async def test_phase_6_cookie_manager():
         print(f"  Cookie 数量: {info.get('cookie_count', 0)}")
 
         # 验证 Cookie
-        print(f"\n🔍 验证 Cookie（仅格式检查）...")
-        is_valid, message = await cookie_mgr.validate_cookie(cookie_file, skip_online_check=True)
+        print(f"\n🔍 验证 Cookie...")
+        is_valid, message = await cookie_mgr.validate_cookie(cookie_file)
         print(f"  结果: {message}")
 
         # 备份 Cookie

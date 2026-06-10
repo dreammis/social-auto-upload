@@ -37,12 +37,18 @@ def _build_login_result(
     }
 
 
-async def cookie_auth(account_file: str | Path, use_system_chrome: bool = True) -> bool:
+async def cookie_auth(
+    account_file: str | Path,
+    use_system_chrome: bool = True,
+    enable_stealth: bool = False,
+) -> bool:
     """
     验证 Cookie 是否有效
 
     Args:
         account_file: storageState 文件路径
+        use_system_chrome: 是否使用系统 Chrome
+        enable_stealth: 是否启用 stealth 反检测脚本
 
     Returns:
         bool: Cookie 是否有效
@@ -63,13 +69,12 @@ async def cookie_auth(account_file: str | Path, use_system_chrome: bool = True) 
                     taobao_guanghe_logger.info(f"📍 使用系统 Chrome: {chrome_path}")
                     break
 
-        # 启动浏览器
+                # 启动浏览器
         launch_options = {
             "headless": True,
             "args": [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
-                '--disable-web-security',
             ]
         }
 
@@ -83,9 +88,9 @@ async def cookie_auth(account_file: str | Path, use_system_chrome: bool = True) 
             # 不使用代理，避免连接问题
             context = await browser.new_context(
                 storage_state=str(account_file),
-                ignore_https_errors=True,
             )
-            context = await set_init_script(context)
+            if enable_stealth:
+                context = await set_init_script(context)
             page = await context.new_page()
 
             # 访问创作者中心
