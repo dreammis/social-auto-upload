@@ -1,0 +1,38 @@
+name: Sync upstream
+
+# Mirror https://github.com/dreammis/social-auto-upload (main) into this repo's
+# `upstream` branch. MUST NOT touch `main` or any other branch.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # every 6 hours
+  workflow_dispatch:        # manual trigger for backfill / debugging
+
+permissions:
+  contents: write           # required to push back to origin/upstream
+
+jobs:
+  sync:
+    name: Sync origin/upstream with dreammis/social-auto-upload@main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout upstream branch only
+        uses: actions/checkout@v4
+        with:
+          ref: upstream          # only this branch is materialized locally
+          fetch-depth: 1         # do not pull history of other branches
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add upstream remote
+        run: git remote add upstream https://github.com/dreammis/social-auto-upload.git
+
+      - name: Fetch upstream main
+        run: git fetch upstream main
+
+      - name: Reset upstream branch to upstream/main
+        run: git reset --hard upstream/main
+
+      - name: Force-push to origin/upstream only
+        # --force-with-lease is safer than --force: refuses to clobber
+        # origin/upstream if someone else has updated it since our last fetch.
+        run: git push origin HEAD:upstream --force-with-lease
