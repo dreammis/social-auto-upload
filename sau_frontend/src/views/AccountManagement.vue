@@ -478,6 +478,10 @@
             <el-icon><CircleCloseFilled /></el-icon>
             <span>添加失败，请稍后再试</span>
           </div>
+          <div v-else-if="loginStatus === 'captcha_required'" class="captcha-wrapper">
+            <el-icon color="#E6A23C"><WarningFilled /></el-icon>
+            <span>请在已打开的浏览器窗口中完成验证</span>
+          </div>
         </div>
       </el-form>
       <template #footer>
@@ -499,7 +503,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
-import { Refresh, CircleCheckFilled, CircleCloseFilled, Download, Upload, Loading } from '@element-plus/icons-vue'
+import { Refresh, CircleCheckFilled, CircleCloseFilled, Download, Upload, Loading, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { accountApi } from '@/api/account'
 import { useAccountStore } from '@/stores/account'
@@ -890,6 +894,12 @@ const connectSSE = (platform, name) => {
         // 处理二维码数据出错
       }
     }
+    // 收到"需要人工验证"信号（淘宝被风控，跳到 passport.taobao.com）
+    else if (data === 'captcha_required') {
+      // 中间态：保留 SSE 连接，继续监听 200/500 终态
+      loginStatus.value = 'captcha_required'
+      ElMessage.warning('淘宝需在浏览器中完成验证，请在该窗口操作')
+    }
     // 如果收到状态码
     else if (data === '200' || data === '500') {
       loginStatus.value = data
@@ -1101,7 +1111,7 @@ onBeforeUnmount(() => {
       }
     }
     
-    .loading-wrapper, .success-wrapper, .error-wrapper {
+    .loading-wrapper, .success-wrapper, .error-wrapper, .captcha-wrapper {
       display: flex;
       flex-direction: column;
       align-items: center;

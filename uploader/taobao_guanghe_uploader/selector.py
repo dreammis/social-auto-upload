@@ -160,3 +160,12 @@ QRCODE_CONTAINER = "#qrcode-img"
 QRCODE_CANVAS = "#qrcode-img canvas"
 GUANGHE_HOME_URL = "https://guanghe.taobao.com/"
 CREATOR_CENTER_URL = "https://creator.guanghe.taobao.com/page?layout=%2Fvelocity%2Flayout%2Findex.vm"
+
+# 风控页域名：扫码后被风控会跳到这里，要求滑块或短信验证
+PASSPORT_URL_KEY = "passport.taobao.com"
+
+# 通过 SSE 推给前端的"需要人工验证"信号（与二维码/200/500 并列）
+CAPTCHA_REQUIRED_SIGNAL = "captcha_required"
+
+# 触发风控后给用户手动操作的时间（秒）
+CAPTCHA_WAIT_TIMEOUT = 600

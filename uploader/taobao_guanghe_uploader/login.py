@@ -15,6 +15,9 @@ from uploader.taobao_guanghe_uploader.selector import (
     CREATOR_CENTER_URL,
     QRCODE_CANVAS,
     QRCODE_CONTAINER,
+    PASSPORT_URL_KEY,
+    CAPTCHA_REQUIRED_SIGNAL,
+    CAPTCHA_WAIT_TIMEOUT,
 )
 
 
@@ -191,6 +194,8 @@ async def taobao_guanghe_cookie_gen(
     """
     account_file = Path(account_file)
     url_changed_event = asyncio.Event()
+    # 出验证码时 set；主流程超时会读这个标志决定下一步是"超时"还是"继续等"
+    captcha_event = asyncio.Event()
     original_url = GUANGHE_HOME_URL
 
     async def on_frame_navigated(frame):
@@ -202,6 +207,12 @@ async def taobao_guanghe_cookie_gen(
             if "creator.guanghe.taobao.com" in current_url:
                 taobao_guanghe_logger.info(f"🎉 检测到页面跳转: {current_url}")
                 url_changed_event.set()
+            # 风控：跳到 passport，需要人工验证
+            elif PASSPORT_URL_KEY in current_url:
+                taobao_guanghe_logger.warning(
+                    f"🛡️ 检测到风控页: {current_url}，需要用户在已打开的浏览器中完成验证"
+                )
+                captcha_event.set()
 
     async with async_playwright() as playwright:
         # 查找系统 Chrome
@@ -316,14 +327,42 @@ async def taobao_guanghe_cookie_gen(
             # 7. 监听页面跳转
             page.on("framenavigated", on_frame_navigated)
 
+            # 7.1 等创作者中心跳转（200s 内）
             try:
                 await asyncio.wait_for(url_changed_event.wait(), timeout=200)
                 taobao_guanghe_logger.info("✅ 登录成功！")
             except asyncio.TimeoutError:
-                taobao_guanghe_logger.error("⏱️ 登录超时")
-                return _build_login_result(
-                    False, "timeout", "登录超时（200秒）", account_file
-                )
+                # 检查是否触发了风控
+                if captcha_event.is_set():
+                    # 通过回调通知前端（仅在旧后端包装里实际推送 SSE）
+                    if qrcode_callback:
+                        try:
+                            cb_result = qrcode_callback({"status": CAPTCHA_REQUIRED_SIGNAL})
+                            if asyncio.iscoroutine(cb_result):
+                                await cb_result
+                        except Exception as e:
+                            taobao_guanghe_logger.warning(f"⚠️ 验证码回调失败: {e}")
+
+                    # 继续等跳回创作者中心，给用户手动操作的时间
+                    taobao_guanghe_logger.info(
+                        f"⏳ 等待用户在浏览器中完成验证（最多 {CAPTCHA_WAIT_TIMEOUT}s）..."
+                    )
+                    try:
+                        await asyncio.wait_for(
+                            url_changed_event.wait(), timeout=CAPTCHA_WAIT_TIMEOUT
+                        )
+                        taobao_guanghe_logger.info("✅ 用户完成验证，登录成功！")
+                    except asyncio.TimeoutError:
+                        taobao_guanghe_logger.error("⏱️ 验证码等待超时")
+                        return _build_login_result(
+                            False, "captcha_timeout",
+                            f"验证码等待超时（{CAPTCHA_WAIT_TIMEOUT}s）", account_file,
+                        )
+                else:
+                    taobao_guanghe_logger.error("⏱️ 登录超时")
+                    return _build_login_result(
+                        False, "timeout", "登录超时（200s）", account_file
+                    )
 
             # 8. 等待页面稳定
             await asyncio.sleep(2)
@@ -436,13 +475,16 @@ async def get_taobao_guanghe_cookie(id, status_queue):
         qrcode_callback_done = {"ok": False}
 
         def _cb(info):
-            # 把二维码图片读为 base64，丢给前端 <img src="data:image/png;base64,..."> 显示
+            # info 可能包含 "qrcode_path"（二维码 base64）或 "status"（验证码信号）
             try:
-                b64 = _read_qrcode_as_base64(Path(info["qrcode_path"]))
-                status_queue.put(b64)
-                qrcode_callback_done["ok"] = True
+                if "qrcode_path" in info:
+                    b64 = _read_qrcode_as_base64(Path(info["qrcode_path"]))
+                    status_queue.put(b64)
+                    qrcode_callback_done["ok"] = True
+                if info.get("status") == CAPTCHA_REQUIRED_SIGNAL:
+                    status_queue.put(CAPTCHA_REQUIRED_SIGNAL)
             except Exception as e:
-                taobao_guanghe_logger.warning(f"⚠️ 二维码读取失败: {e}")
+                taobao_guanghe_logger.warning(f"⚠️ 二维码/验证码回调失败: {e}")
 
         result = await taobao_guanghe_cookie_gen(
             target_file,
