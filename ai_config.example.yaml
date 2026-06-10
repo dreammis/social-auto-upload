@@ -1,0 +1,73 @@
+# AI 配置文件示例
+
+default_provider: "qwen"
+
+providers:
+  qwen:
+    api_key: "sk-your-api-key"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model: "qwen-max"
+    temperature: 0.7
+    max_tokens: 500
+
+  openai:
+    api_key: "sk-your-api-key"
+    base_url: "https://api.openai.com/v1"
+    model: "gpt-4"
+    temperature: 0.7
+    max_tokens: 500
+
+  deepseek:
+    api_key: "sk-your-api-key"
+    base_url: "https://api.deepseek.com/v1"
+    model: "deepseek-chat"
+    temperature: 0.7
+    max_tokens: 500
+
+prompts:
+  title:
+    system: "你是一个专业的短视频标题生成助手。"
+    template: |
+      请根据以下信息生成一个吸引人的短视频标题：
+
+      视频文件名: {filename}
+      视频描述: {description}
+      关键词: {keywords}
+
+      要求：
+      1. 标题长度不超过 30 字
+      2. 吸引眼球，引发好奇
+      3. 符合淘宝光合平台的风格
+
+      只返回标题文本，不要有其他说明。
+
+  description:
+    system: "你是一个专业的视频描述撰写助手。"
+    template: |
+      请根据以下信息生成一个详细的视频描述：
+
+      视频标题: {title}
+      视频文件名: {filename}
+      关键词: {keywords}
+
+      要求：
+      1. 描述长度 50-200 字
+      2. 详细介绍视频内容和亮点
+      3. 自然流畅，不要堆砌关键词
+
+      只返回描述文本，不要有其他说明。
+
+  tags:
+    system: "你是一个专业的标签提取助手。"
+    template: |
+      请根据以下信息提取 5-10 个相关标签：
+
+      视频标题: {title}
+      视频描述: {description}
+
+      要求：
+      1. 标签要精准相关
+      2. 每个标签 2-5 个字
+      3. 用逗号分隔
+
+      只返回标签列表，格式如：标签1,标签2,标签3

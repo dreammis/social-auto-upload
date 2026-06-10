@@ -1,0 +1,24 @@
+# 账号配置文件示例
+
+accounts:
+  - name: "account_001"
+    display_name: "主账号"
+    platform: "taobao_guanghe"
+    cookie_file: "cookies/taobao_guanghe_uploader/account_001.json"
+    enabled: true
+    group: "main"
+    priority: 10
+    max_daily_uploads: 50
+    proxy: null
+    remark: "主要账号，用于重要内容"
+
+  - name: "account_002"
+    display_name: "备用账号"
+    platform: "taobao_guanghe"
+    cookie_file: "cookies/taobao_guanghe_uploader/account_002.json"
+    enabled: true
+    group: "backup"
+    priority: 5
+    max_daily_uploads: 30
+    proxy: null
+    remark: "备用账号"

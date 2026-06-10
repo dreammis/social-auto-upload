@@ -1,0 +1,11 @@
+accounts:
+- cookie_file: cookies\taobao_guanghe_uploader\test_account.json
+  display_name: 测试账号
+  enabled: true
+  group: test
+  max_daily_uploads: 100
+  name: test_account
+  platform: taobao_guanghe
+  priority: 5
+  proxy: null
+  remark: ''

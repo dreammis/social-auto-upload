@@ -191,3 +191,6 @@ videoFile
 /uploader/bilibili_uploader/qrcode.png
 
 database.db
+.vibeskills/
+docs/
+outputs/
