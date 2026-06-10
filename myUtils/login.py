@@ -22,9 +22,15 @@ def get_browser_options():
             '--start-maximized'
         ]
     }
-    # 如果用户在 conf.py 里配置了本地 Chrome，就用本地的，这样成功率极高
+    # 浏览器选择优先级：
+    # 1. conf.py 配了 LOCAL_CHROME_PATH → 用指定路径
+    # 2. 否则用系统安装的 Chrome（channel=chrome）
+    # 关键：打包后（PyInstaller）不带 playwright 自带的 chromium，
+    # 必须走系统 Chrome，否则 launch 会报 "Executable doesn't exist ... .local-browsers"。
     if LOCAL_CHROME_PATH:
         options['executable_path'] = LOCAL_CHROME_PATH
+    else:
+        options['channel'] = 'chrome'
 
     return options
 

@@ -16,11 +16,14 @@ datas = []
 binaries = []
 hiddenimports = []
 
-# patchright 全量（含 driver/node.exe）
-_pr_datas, _pr_binaries, _pr_hidden = collect_all('patchright')
-datas += _pr_datas
-binaries += _pr_binaries
-hiddenimports += _pr_hidden
+# playwright + patchright 全量（含各自 driver/node.exe）。
+# 两个都要：myUtils/login.py 的 SSE 扫码用 playwright，
+# uploader/taobao_guanghe_uploader 用 patchright。
+for _drv in ('playwright', 'patchright'):
+    d, b, h = collect_all(_drv)
+    datas += d
+    binaries += b
+    hiddenimports += h
 
 # xhs 第三方库（小红书）+ numpy（被 xhs/cv2 间接依赖，C 扩展需全量收）
 for _pkg in ('xhs', 'numpy'):
