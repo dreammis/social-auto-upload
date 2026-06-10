@@ -34,6 +34,9 @@
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
+                <el-table-column prop="platformUserName" label="平台用户名" width="160">
+                  <template #default="scope">{{ scope.row.platformUserName || '-' }}</template>
+                </el-table-column>
                 <el-table-column prop="platform" label="平台">
                   <template #default="scope">
                     <el-tag
@@ -106,6 +109,9 @@
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
+                <el-table-column prop="platformUserName" label="平台用户名" width="160">
+                  <template #default="scope">{{ scope.row.platformUserName || '-' }}</template>
+                </el-table-column>
                 <el-table-column prop="platform" label="平台">
                   <template #default="scope">
                     <el-tag
@@ -177,6 +183,9 @@
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
+                <el-table-column prop="platformUserName" label="平台用户名" width="160">
+                  <template #default="scope">{{ scope.row.platformUserName || '-' }}</template>
+                </el-table-column>
                 <el-table-column prop="platform" label="平台">
                   <template #default="scope">
                     <el-tag
@@ -248,6 +257,9 @@
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
+                <el-table-column prop="platformUserName" label="平台用户名" width="160">
+                  <template #default="scope">{{ scope.row.platformUserName || '-' }}</template>
+                </el-table-column>
                 <el-table-column prop="platform" label="平台">
                   <template #default="scope">
                     <el-tag
@@ -319,6 +331,9 @@
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
+                <el-table-column prop="platformUserName" label="平台用户名" width="160">
+                  <template #default="scope">{{ scope.row.platformUserName || '-' }}</template>
+                </el-table-column>
                 <el-table-column prop="platform" label="平台">
                   <template #default="scope">
                     <el-tag
@@ -390,6 +405,9 @@
                   </template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" width="180" />
+                <el-table-column prop="platformUserName" label="平台用户名" width="160">
+                  <template #default="scope">{{ scope.row.platformUserName || '-' }}</template>
+                </el-table-column>
                 <el-table-column prop="platform" label="平台">
                   <template #default="scope">
                     <el-tag

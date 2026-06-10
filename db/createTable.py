@@ -24,9 +24,16 @@ def create_tables(db_path="./database.db"):
             type INTEGER NOT NULL,
             filePath TEXT NOT NULL,  -- 存储文件路径
             userName TEXT NOT NULL,
-            status INTEGER DEFAULT 0
+            status INTEGER DEFAULT 0,
+            platformUserName TEXT    -- 登录后抓取的平台真实昵称（可空）
         )
         ''')
+
+        # 迁移：旧库可能缺 platformUserName 列，缺则补加（幂等，不影响旧数据）
+        cursor.execute("PRAGMA table_info(user_info)")
+        cols = [r[1] for r in cursor.fetchall()]
+        if "platformUserName" not in cols:
+            cursor.execute("ALTER TABLE user_info ADD COLUMN platformUserName TEXT")
 
         # 创建文件记录表
         cursor.execute('''CREATE TABLE IF NOT EXISTS file_records (

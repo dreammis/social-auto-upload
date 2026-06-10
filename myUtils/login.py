@@ -47,11 +47,14 @@ async def _safe_close(*closeables):
             pass
 
 
-def _save_account(account_type, file_name, user_name):
+def _save_account(account_type, file_name, user_name, platform_user_name=None):
     """登录成功后保存账号 cookie 记录（UPSERT）。
 
     同一 (type, userName) 已存在时更新其 filePath/status 并删除旧 cookie 文件，
     否则新增。避免「重登」时因无条件 INSERT 产生重复账号。
+
+    platform_user_name 为登录后抓取的平台真实昵称，可为 None（抓取失败）。
+    更新时用 COALESCE 保留原值，避免重登抓取失败把已有昵称清空。
     """
     db_path = Path(BASE_DIR / "db" / "database.db")
     with sqlite3.connect(db_path) as conn:
@@ -64,8 +67,9 @@ def _save_account(account_type, file_name, user_name):
         if row:
             old_id, old_file = row
             cursor.execute(
-                "UPDATE user_info SET filePath = ?, status = 1 WHERE id = ?",
-                (file_name, old_id),
+                "UPDATE user_info SET filePath = ?, status = 1, "
+                "platformUserName = COALESCE(?, platformUserName) WHERE id = ?",
+                (file_name, platform_user_name, old_id),
             )
             conn.commit()
             # 删除被替换的旧 cookie 文件（与新文件不同名时）
@@ -79,11 +83,42 @@ def _save_account(account_type, file_name, user_name):
             print("✅ 用户状态已更新（重登覆盖）")
         else:
             cursor.execute(
-                "INSERT INTO user_info (type, filePath, userName, status) VALUES (?, ?, ?, ?)",
-                (account_type, file_name, user_name, 1),
+                "INSERT INTO user_info (type, filePath, userName, status, platformUserName) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (account_type, file_name, user_name, 1, platform_user_name),
             )
             conn.commit()
             print("✅ 用户状态已记录")
+
+
+# 各平台登录成功后，创作者中心页面显示昵称的候选选择器。
+# 选择器未必精确（平台 DOM 可能变化），逐个尝试，抓不到返回 None、留空即可。
+_USERNAME_SELECTORS = {
+    4: ["div.names div.container div.name"],          # 快手
+    3: ["span[class*='name']", "div[class*='nickname']"],  # 抖音
+    5: ["div[class*='userName']", "div[class*='nick']", "span[class*='name']"],  # 淘宝光合
+    # 2 视频号 / 1 小红书：暂未提供选择器，留空待补
+}
+
+
+async def _grab_platform_username(page, account_type):
+    """登录成功后从创作者中心页面抓取平台真实昵称。
+
+    全程容错：任何异常或抓不到都返回 None，绝不影响登录流程。
+    """
+    selectors = _USERNAME_SELECTORS.get(account_type)
+    if not selectors:
+        return None
+    for sel in selectors:
+        try:
+            loc = page.locator(sel).first
+            text = await loc.inner_text(timeout=3000)
+            text = (text or "").strip()
+            if text:
+                return text
+        except Exception:
+            continue
+    return None
 
 # 抖音登录
 async def douyin_cookie_gen(id,status_queue):
@@ -135,10 +170,11 @@ async def douyin_cookie_gen(id,status_queue):
             await context.close()
             await browser.close()
             return None
+        platform_name = await _grab_platform_username(page, 3)
         await page.close()
         await context.close()
         await browser.close()
-        _save_account(3, f"{uuid_v1}.json", id)
+        _save_account(3, f"{uuid_v1}.json", id, platform_name)
         status_queue.put("200")
 
 
@@ -206,11 +242,12 @@ async def get_tencent_cookie(id,status_queue):
             await context.close()
             await browser.close()
             return None
+        platform_name = await _grab_platform_username(page, 2)
         await page.close()
         await context.close()
         await browser.close()
 
-        _save_account(2, f"{uuid_v1}.json", id)
+        _save_account(2, f"{uuid_v1}.json", id, platform_name)
         status_queue.put("200")
 
 # 快手登录
@@ -273,11 +310,12 @@ async def get_ks_cookie(id,status_queue):
             await context.close()
             await browser.close()
             return None
+        platform_name = await _grab_platform_username(page, 4)
         await page.close()
         await context.close()
         await browser.close()
 
-        _save_account(4, f"{uuid_v1}.json", id)
+        _save_account(4, f"{uuid_v1}.json", id, platform_name)
         status_queue.put("200")
 
 # 小红书登录
@@ -340,11 +378,12 @@ async def xiaohongshu_cookie_gen(id,status_queue):
             await context.close()
             await browser.close()
             return None
+        platform_name = await _grab_platform_username(page, 1)
         await page.close()
         await context.close()
         await browser.close()
 
-        _save_account(1, f"{uuid_v1}.json", id)
+        _save_account(1, f"{uuid_v1}.json", id, platform_name)
         status_queue.put("200")
 
 # a = asyncio.run(xiaohongshu_cookie_gen(4,None))
@@ -519,7 +558,8 @@ async def get_taobao_guanghe_cookie(id, status_queue):
             return None
 
         # 先入库并通知前端成功，再关闭浏览器：避免 close 阻塞拖住成功信号
-        _save_account(5, f"{uuid_v1}.json", id)
+        platform_name = await _grab_platform_username(page, 5)
+        _save_account(5, f"{uuid_v1}.json", id, platform_name)
         status_queue.put("200")
 
         await _safe_close(page, context, browser)
