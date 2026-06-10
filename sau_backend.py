@@ -11,8 +11,8 @@ from myUtils.auth import check_cookie
 from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 from werkzeug.utils import secure_filename
 from conf import BASE_DIR
-from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
-from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs
+from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen, get_taobao_guanghe_cookie
+from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs, post_video_taobao
 
 active_queues = {}
 app = Flask(__name__)
@@ -383,7 +383,7 @@ def delete_account():
 # SSE 登录接口
 @app.route('/login')
 def login():
-    # 1 小红书 2 视频号 3 抖音 4 快手
+    # 1 小红书 2 视频号 3 抖音 4 快手 5 淘宝
     type = request.args.get('type')
     # 账号名
     id = request.args.get('id')
@@ -460,6 +460,9 @@ def postVideo():
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
+            case 5:
+                post_video_taobao(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days, productLink, productTitle)
             case _:
                 return jsonify({"code": 400, "msg": f"不支持的平台类型: {type}", "data": None}), 400
 
@@ -556,6 +559,9 @@ def postVideoBatch():
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
+            case 5:
+                post_video_taobao(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days, productLink, productTitle)
     # 返回响应给客户端
     return jsonify(
         {
@@ -708,6 +714,17 @@ def run_async_function(type,id,status_queue):
             asyncio.set_event_loop(loop)
             loop.run_until_complete(get_ks_cookie(id,status_queue))
             loop.close()
+        case '5':
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(get_taobao_guanghe_cookie(id, status_queue))
+                loop.close()
+            except Exception as e:
+                print(f"淘宝登录异常: {e}")
+                import traceback
+                traceback.print_exc()
+                status_queue.put("500")
 
 # SSE 流生成器函数
 def sse_stream(status_queue):

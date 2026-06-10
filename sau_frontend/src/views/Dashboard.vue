@@ -53,6 +53,9 @@
                 <el-tooltip content="小红书账号" placement="top">
                   <el-tag size="small" type="info">{{ platformStats.xiaohongshu }}</el-tag>
                 </el-tooltip>
+                <el-tooltip content="淘宝账号" placement="top">
+                  <el-tag size="small" type="primary">{{ platformStats.taobao }}</el-tag>
+                </el-tooltip>
               </div>
             </div>
           </el-card>
@@ -194,9 +197,10 @@ const platformStats = computed(() => {
   const douyin = accounts.filter(a => a.platform === '抖音').length
   const channels = accounts.filter(a => a.platform === '视频号').length
   const xiaohongshu = accounts.filter(a => a.platform === '小红书').length
+  const taobao = accounts.filter(a => a.platform === '淘宝').length
   // 统计有账号的平台数量
-  const total = [kuaishou, douyin, channels, xiaohongshu].filter(n => n > 0).length
-  return { total, kuaishou, douyin, channels, xiaohongshu }
+  const total = [kuaishou, douyin, channels, xiaohongshu, taobao].filter(n => n > 0).length
+  return { total, kuaishou, douyin, channels, xiaohongshu, taobao }
 })
 
 // 素材统计数据 - 从真实数据计算

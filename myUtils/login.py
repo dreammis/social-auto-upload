@@ -1,10 +1,12 @@
 import asyncio
 import sqlite3
+import base64
 
 from playwright.async_api import async_playwright
 
 from myUtils.auth import check_cookie
 from utils.base_social_media import set_init_script
+from utils.log import taobao_guanghe_logger
 import uuid
 from pathlib import Path
 from conf import BASE_DIR, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
@@ -318,3 +320,180 @@ async def xiaohongshu_cookie_gen(id,status_queue):
 
 # a = asyncio.run(xiaohongshu_cookie_gen(4,None))
 # print(a)
+
+# 淘宝光合登录（type=5）
+# 使用 playwright（与抖音/快手/小红书/视频号一致），不用 patchright
+async def get_taobao_guanghe_cookie(id, status_queue):
+    url_changed_event = asyncio.Event()
+    async def on_url_change():
+        if page.url != original_url:
+            url_changed_event.set()
+
+    async with async_playwright() as playwright:
+        options = get_browser_options()
+        browser = await playwright.chromium.launch(**options)
+        context = await browser.new_context()
+        context = await set_init_script(context)
+        page = await context.new_page()
+
+        # 访问淘宝光合创作者中心
+        taobao_guanghe_logger.info("🌐 访问淘宝光合创作者中心: https://creator.guanghe.taobao.com/")
+        await page.goto("https://creator.guanghe.taobao.com/", timeout=60000, wait_until="domcontentloaded")
+        await asyncio.sleep(3)
+        original_url = page.url
+        taobao_guanghe_logger.info(f"📍 当前 URL: {original_url}")
+
+        # 调试：保存页面 HTML 和截图，分析二维码结构
+        debug_path = Path(BASE_DIR) / "logs" / "taobao_login_debug.png"
+        debug_html_path = Path(BASE_DIR) / "logs" / "taobao_login_debug.html"
+        debug_path.parent.mkdir(parents=True, exist_ok=True)
+        await page.screenshot(path=str(debug_path), full_page=True)
+        html_content = await page.content()
+        debug_html_path.write_text(html_content, encoding="utf-8")
+        taobao_guanghe_logger.info(f"📸 调试截图: {debug_path}")
+        taobao_guanghe_logger.info(f"📄 调试 HTML: {debug_html_path}")
+
+        # 分析页面上的二维码相关元素
+        all_imgs = await page.locator("img").all()
+        taobao_guanghe_logger.info(f"🔍 页面共有 {len(all_imgs)} 个 img 标签")
+        for i, img in enumerate(all_imgs[:10]):
+            try:
+                src = await img.get_attribute("src") or ""
+                alt = await img.get_attribute("alt") or ""
+                visible = await img.is_visible()
+                w = await img.get_attribute("width") or ""
+                h = await img.get_attribute("height") or ""
+                taobao_guanghe_logger.info(f"  img[{i}] visible={visible} {w}x{h} alt={alt[:30]} src={src[:80]}")
+            except Exception:
+                pass
+
+        all_canvas = await page.locator("canvas").all()
+        taobao_guanghe_logger.info(f"🔍 页面共有 {len(all_canvas)} 个 canvas 标签")
+        for i, cvs in enumerate(all_canvas[:5]):
+            try:
+                visible = await cvs.is_visible()
+                box = await cvs.bounding_box()
+                taobao_guanghe_logger.info(f"  canvas[{i}] visible={visible} box={box}")
+            except Exception:
+                pass
+
+        # 等待二维码出现 — 尝试多种选择器
+        taobao_guanghe_logger.info("⏳ 等待二维码加载...")
+        qrcode_src = None
+
+        # 尝试1: canvas 二维码
+        try:
+            qrcode_canvas = page.locator("#qrcode-img canvas").first
+            await qrcode_canvas.wait_for(state="visible", timeout=10000)
+            taobao_guanghe_logger.info("📸 截取二维码 Canvas...")
+            screenshot_bytes = await qrcode_canvas.screenshot()
+            b64 = base64.b64encode(screenshot_bytes).decode("ascii")
+            print("✅ 二维码已截图(base64)")
+            status_queue.put(b64)
+            qrcode_src = "canvas"
+        except Exception as e:
+            taobao_guanghe_logger.warning(f"⚠️ canvas 二维码未找到: {e}")
+
+        # 尝试2: img 标签二维码
+        if not qrcode_src:
+            try:
+                qrcode_img = page.locator("#qrcode-img img").first
+                await qrcode_img.wait_for(state="visible", timeout=5000)
+                src = await qrcode_img.get_attribute("src")
+                if src:
+                    print("✅ 图片地址(img):", src)
+                    status_queue.put(src)
+                    qrcode_src = "img"
+            except Exception as e:
+                taobao_guanghe_logger.warning(f"⚠️ img 二维码未找到: {e}")
+
+        # 尝试3: 页面上任意含二维码特征的 img
+        if not qrcode_src:
+            try:
+                # 淘宝登录页二维码通常是页面上的大图
+                qrcode_img = page.locator("img[src*='qrcode'], img[src*='qr'], img[alt*='二维码']").first
+                await qrcode_img.wait_for(state="visible", timeout=5000)
+                src = await qrcode_img.get_attribute("src")
+                if src:
+                    print("✅ 图片地址(generic):", src[:80])
+                    status_queue.put(src)
+                    qrcode_src = "generic_img"
+            except Exception as e:
+                taobao_guanghe_logger.warning(f"⚠️ 通用 img 二维码未找到: {e}")
+
+        # 尝试4: 整页截图作为二维码区域
+        if not qrcode_src:
+            try:
+                # 淘宝登录可能整个页面就是扫码页，截整个可见区域
+                taobao_guanghe_logger.info("📸 尝试整页截图作为二维码...")
+                screenshot_bytes = await page.screenshot()
+                b64 = base64.b64encode(screenshot_bytes).decode("ascii")
+                print("✅ 整页截图(base64)")
+                status_queue.put(b64)
+                qrcode_src = "fullpage"
+            except Exception as e:
+                taobao_guanghe_logger.error(f"❌ 整页截图也失败: {e}")
+
+        if not qrcode_src:
+            taobao_guanghe_logger.error("❌ 无法获取二维码")
+            status_queue.put("500")
+            await page.close()
+            await context.close()
+            await browser.close()
+            return None
+
+        # 监听页面跳转（扫码成功后跳到创作者中心）
+        page.on('framenavigated',
+                lambda frame: asyncio.create_task(on_url_change()) if frame == page.main_frame else None)
+
+        taobao_guanghe_logger.info("📱 请使用淘宝 App 扫描二维码登录")
+        taobao_guanghe_logger.info("⏱️  等待扫码（最多 200 秒）...")
+
+        try:
+            await asyncio.wait_for(url_changed_event.wait(), timeout=200)
+            taobao_guanghe_logger.info("✅ 登录成功！")
+        except asyncio.TimeoutError:
+            taobao_guanghe_logger.error("⏱️ 登录超时")
+            status_queue.put("500")
+            await page.close()
+            await context.close()
+            await browser.close()
+            return None
+
+        # 等待页面稳定
+        await asyncio.sleep(2)
+
+        # 关闭可能的新手引导弹窗
+        try:
+            close_btn = page.locator(".guide-modal-close-icon").first
+            if await close_btn.count() > 0:
+                await close_btn.click()
+        except Exception:
+            pass
+
+        uuid_v1 = uuid.uuid1()
+        print(f"UUID v1: {uuid_v1}")
+        # 确保cookiesFile目录存在
+        cookies_dir = Path(BASE_DIR / "cookiesFile")
+        cookies_dir.mkdir(exist_ok=True)
+        await context.storage_state(path=cookies_dir / f"{uuid_v1}.json")
+        result = await check_cookie(5, f"{uuid_v1}.json")
+        if not result:
+            status_queue.put("500")
+            await page.close()
+            await context.close()
+            await browser.close()
+            return None
+        await page.close()
+        await context.close()
+        await browser.close()
+
+        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                               INSERT INTO user_info (type, filePath, userName, status)
+                               VALUES (?, ?, ?, ?)
+                               ''', (5, f"{uuid_v1}.json", id, 1))
+            conn.commit()
+            print("✅ 用户状态已记录")
+        status_queue.put("200")

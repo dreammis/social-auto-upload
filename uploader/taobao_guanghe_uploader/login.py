@@ -73,6 +73,7 @@ async def cookie_auth(
         launch_options = {
             "headless": True,
             "args": [
+                '--disable-features=AsyncDns',
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
             ]
@@ -222,8 +223,11 @@ async def taobao_guanghe_cookie_gen(
             "headless": headless,
             "args": [
                 '--disable-blink-features=AutomationControlled',
+                '--disable-features=AsyncDns',       # 强制 Chromium 使用系统 DNS（Windows 下 headless 模式必备）
+                '--host-resolver-rules=MAP guanghe.taobao.com 59.82.122.140, MAP creator.guanghe.taobao.com 59.82.122.172',
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
             ]
         }
 
@@ -395,3 +399,91 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
+# ============================================================
+# 旧版后端 (sau_backend.py) 兼容入口
+# ============================================================
+# 旧版后端使用 (id, status_queue) 协议，账号 cookie 保存到
+# cookiesFile/{uuid}.json，并通过 user_info(type=5) 记录。
+# 这里在 taobao_guanghe_cookie_gen 之上做一次轻量包装，复用其扫码流程。
+
+import base64
+import sqlite3
+import uuid as _uuid
+
+from conf import BASE_DIR as _BASE_DIR
+from myUtils.auth import check_cookie as _check_cookie
+
+
+def _read_qrcode_as_base64(qrcode_path: Path) -> str:
+    """读取二维码图片文件并编码为 base64 字符串，供 SSE 推送给前端展示。"""
+    return base64.b64encode(qrcode_path.read_bytes()).decode("ascii")
+
+
+async def get_taobao_guanghe_cookie(id, status_queue):
+    """淘宝光合扫码登录（旧版后端 SSE 协议）
+
+    Args:
+        id: 用户自定义账号名
+        status_queue: 后端传入的 Queue；先 put 二维码 base64，再 put "200"/"500"
+    """
+    try:
+        cookies_dir = Path(_BASE_DIR / "cookiesFile")
+        cookies_dir.mkdir(parents=True, exist_ok=True)
+        target_file = cookies_dir / f"{_uuid.uuid1()}.json"
+
+        qrcode_callback_done = {"ok": False}
+
+        def _cb(info):
+            # 把二维码图片读为 base64，丢给前端 <img src="data:image/png;base64,..."> 显示
+            try:
+                b64 = _read_qrcode_as_base64(Path(info["qrcode_path"]))
+                status_queue.put(b64)
+                qrcode_callback_done["ok"] = True
+            except Exception as e:
+                taobao_guanghe_logger.warning(f"⚠️ 二维码读取失败: {e}")
+
+        result = await taobao_guanghe_cookie_gen(
+            target_file,
+            qrcode_callback=_cb,
+            headless=False,        # 淘宝二维码 canvas 在 headless 下可能不渲染，使用有头模式
+            use_system_chrome=True, # 优先找本地已安装的 Chrome，绕过 headless 检测
+        )
+
+        if not qrcode_callback_done["ok"]:
+            # 二维码都没拿到，直接告诉前端失败
+            status_queue.put("500")
+            return None
+
+        if not result.get("success"):
+            taobao_guanghe_logger.error(f"❌ 登录失败: {result.get('message')}")
+            status_queue.put("500")
+            return None
+
+        # 用 legacy 路径下的相对文件名做 cookie 验证
+        rel_path = target_file.name
+        verified = await _check_cookie(5, rel_path)
+        if not verified:
+            taobao_guanghe_logger.error("❌ cookie 验证失败")
+            status_queue.put("500")
+            return None
+
+        # 写入 user_info(type=5)
+        db_path = Path(_BASE_DIR / "db" / "database.db")
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO user_info (type, filePath, userName, status) VALUES (?, ?, ?, ?)",
+                (5, rel_path, id, 1),
+            )
+            conn.commit()
+            taobao_guanghe_logger.success(f"✅ 淘宝账号已入库: {id}")
+
+        status_queue.put("200")
+        return rel_path
+    except Exception as exc:
+        taobao_guanghe_logger.error(f"❌ 淘宝登录异常: {exc}", exc_info=True)
+        status_queue.put("500")
+        return None

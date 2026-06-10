@@ -4,6 +4,7 @@ from pathlib import Path
 from conf import BASE_DIR
 from uploader.douyin_uploader.main import DouYinVideo
 from uploader.ks_uploader.main import KSVideo
+from uploader.taobao_guanghe_uploader.main import TaobaoGuangheVideo
 from uploader.tencent_uploader.main import TencentVideo
 from uploader.xiaohongshu_uploader.main import XiaoHongShuVideo
 from utils.constant import TencentZoneTypes
@@ -84,6 +85,40 @@ def post_video_xhs(title,files,tags,account_file,category=TencentZoneTypes.LIFES
             print(f"标题：{title}")
             print(f"Hashtag：{tags}")
             app = XiaoHongShuVideo(title, file, tags, publish_datetimes, cookie)
+            asyncio.run(app.main(), debug=False)
+
+
+def post_video_taobao(title, files, tags, account_file, category=TencentZoneTypes.LIFESTYLE.value,
+                      enableTimer=False, videos_per_day=1, daily_times=None, start_days=0,
+                      productLink='', productTitle=''):
+    """淘宝光合视频发布（type=5）
+
+    行为与 post_video_DouYin 对齐：
+    - account_file 中的元素是相对 cookiesFile/ 目录的文件名
+    - files 中的元素是相对 videoFile/ 目录的文件名
+    - 商品链接/标题是可选的；为空时跳过商品关联步骤
+    """
+    account_file = [Path(BASE_DIR / "cookiesFile" / file) for file in account_file]
+    files = [Path(BASE_DIR / "videoFile" / file) for file in files]
+    if enableTimer:
+        publish_datetimes = generate_schedule_time_next_day(len(files), videos_per_day, daily_times, start_days)
+    else:
+        publish_datetimes = [0 for _ in range(len(files))]
+    for index, file in enumerate(files):
+        for cookie in account_file:
+            print(f"文件路径{str(file)}")
+            print(f"视频文件名：{file}")
+            print(f"标题：{title}")
+            print(f"Hashtag：{tags}")
+            app = TaobaoGuangheVideo(
+                title=title,
+                file_path=str(file),
+                tags=tags,
+                publish_date=publish_datetimes[index],
+                account_file=cookie,
+                productLink=productLink,
+                productTitle=productTitle,
+            )
             asyncio.run(app.main(), debug=False)
 
 

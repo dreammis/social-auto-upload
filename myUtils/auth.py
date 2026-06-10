@@ -116,8 +116,23 @@ async def check_cookie(type, file_path):
         # 快手
         case 4:
             return await cookie_auth_ks(Path(BASE_DIR / "cookiesFile" / file_path))
+        # 淘宝（淘宝光合）
+        case 5:
+            return await cookie_auth_taobao(Path(BASE_DIR / "cookiesFile" / file_path))
         case _:
             return False
+
+
+async def cookie_auth_taobao(account_file):
+    """验证淘宝光合 cookie 是否仍然有效
+
+    复用了 uploader/taobao_guanghe_uploader.login.cookie_auth 的逻辑
+    （保持使用 patchright，与登录流程一致）。这里独立封装一份，
+    是为了与 cookie_auth_douyin / _tencent / _ks / _xhs 保持同样的
+    "一个平台一个 async 函数" 的风格，便于在 match 中直接调用。
+    """
+    from uploader.taobao_guanghe_uploader.login import cookie_auth as _taobao_cookie_auth
+    return await _taobao_cookie_auth(account_file)
 
 # a = asyncio.run(check_cookie(1,"3a6cfdc0-3d51-11f0-8507-44e51723d63c.json"))
 # print(a)
