@@ -61,6 +61,7 @@
                 </el-table-column>
                 <el-table-column label="操作">
                   <template #default="scope">
+                    <el-button v-if="scope.row.platform === '淘宝'" size="small" type="success" @click="handleEnterTaobao(scope.row)">进入</el-button>
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
@@ -69,7 +70,7 @@
                 </el-table-column>
               </el-table>
             </div>
-            
+
             <div v-else class="empty-data">
               <el-empty description="暂无账号数据" />
             </div>
