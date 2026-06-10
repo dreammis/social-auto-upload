@@ -34,6 +34,18 @@ def get_browser_options():
 
     return options
 
+# 逐个关闭 page/context/browser，单个失败不影响其余，也不向上抛
+# （扫码登录成功后浏览器可能仍有残留活动，close 偶发阻塞/报错，
+#  不能因此影响已发出的成功信号）
+async def _safe_close(*closeables):
+    for obj in closeables:
+        if obj is None:
+            continue
+        try:
+            await obj.close()
+        except Exception:
+            pass
+
 # 抖音登录
 async def douyin_cookie_gen(id,status_queue):
     url_changed_event = asyncio.Event()
@@ -331,8 +343,11 @@ async def xiaohongshu_cookie_gen(id,status_queue):
 # 使用 playwright（与抖音/快手/小红书/视频号一致），不用 patchright
 async def get_taobao_guanghe_cookie(id, status_queue):
     url_changed_event = asyncio.Event()
-    async def on_url_change():
-        if page.url != original_url:
+    page = None
+    def _on_frame_navigated(frame):
+        # 仅主框架跳转才关心；用具名函数以便登录成功后能解绑，
+        # 避免淘宝创作者中心 SPA 持续跳转时回调访问已关闭的 page
+        if page is not None and frame == page.main_frame and page.url != original_url:
             url_changed_event.set()
 
     async with async_playwright() as playwright:
@@ -443,14 +458,11 @@ async def get_taobao_guanghe_cookie(id, status_queue):
         if not qrcode_src:
             taobao_guanghe_logger.error("❌ 无法获取二维码")
             status_queue.put("500")
-            await page.close()
-            await context.close()
-            await browser.close()
+            await _safe_close(page, context, browser)
             return None
 
         # 监听页面跳转（扫码成功后跳到创作者中心）
-        page.on('framenavigated',
-                lambda frame: asyncio.create_task(on_url_change()) if frame == page.main_frame else None)
+        page.on('framenavigated', _on_frame_navigated)
 
         taobao_guanghe_logger.info("📱 请使用淘宝 App 扫描二维码登录")
         taobao_guanghe_logger.info("⏱️  等待扫码（最多 200 秒）...")
@@ -461,10 +473,16 @@ async def get_taobao_guanghe_cookie(id, status_queue):
         except asyncio.TimeoutError:
             taobao_guanghe_logger.error("⏱️ 登录超时")
             status_queue.put("500")
-            await page.close()
-            await context.close()
-            await browser.close()
+            await _safe_close(page, context, browser)
             return None
+
+        # 登录成功后立即解绑跳转监听：淘宝创作者中心是 SPA，成功后会持续
+        # 触发 framenavigated，若不解绑，后续回调会在 page 关闭期间访问已失效的
+        # page.main_frame，阻塞 async_playwright 退出，导致 "200" 永远发不出去。
+        try:
+            page.remove_listener('framenavigated', _on_frame_navigated)
+        except Exception:
+            pass
 
         # 等待页面稳定
         await asyncio.sleep(2)
@@ -486,14 +504,10 @@ async def get_taobao_guanghe_cookie(id, status_queue):
         result = await check_cookie(5, f"{uuid_v1}.json")
         if not result:
             status_queue.put("500")
-            await page.close()
-            await context.close()
-            await browser.close()
+            await _safe_close(page, context, browser)
             return None
-        await page.close()
-        await context.close()
-        await browser.close()
 
+        # 先入库并通知前端成功，再关闭浏览器：避免 close 阻塞拖住成功信号
         with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -503,3 +517,5 @@ async def get_taobao_guanghe_cookie(id, status_queue):
             conn.commit()
             print("✅ 用户状态已记录")
         status_queue.put("200")
+
+        await _safe_close(page, context, browser)
