@@ -92,7 +92,14 @@ pub fn run() {
                         .build(),
                 )?;
             }
-            spawn_backend(app.handle());
+            // dev（debug build / npm run tauri dev）跳过 sidecar：
+            // 后端请自行 `python sau_backend.py`（或 flask --debug）热重载，
+            // 避免和 sidecar 抢 5409 端口。release（打包）才拉起 sidecar。
+            if cfg!(debug_assertions) {
+                log::info!("[sidecar] dev 模式跳过 sidecar，请手动运行 python sau_backend.py");
+            } else {
+                spawn_backend(app.handle());
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
