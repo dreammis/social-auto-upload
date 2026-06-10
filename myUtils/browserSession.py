@@ -6,16 +6,27 @@
 """
 
 import asyncio
+import sqlite3
 import threading
 from pathlib import Path
 
 from playwright.async_api import async_playwright
 
 from conf import BASE_DIR
-from myUtils.login import get_browser_options
+from myUtils.login import get_browser_options, _grab_platform_username, _safe_close
+from utils.base_social_media import set_init_script
 from utils.log import taobao_guanghe_logger
 
 TAOBAO_GUANGHE_URL = "https://creator.guanghe.taobao.com/"
+
+# 各平台创作者中心 URL（与 myUtils/auth.cookie_auth_* 一致，用 cookie 打开后可抓昵称）
+_CREATOR_URLS = {
+    1: "https://creator.xiaohongshu.com/creator-micro/content/upload",
+    2: "https://channels.weixin.qq.com/platform/post/create",
+    3: "https://creator.douyin.com/creator-micro/content/upload",
+    4: "https://cp.kuaishou.com/article/publish/video",
+    5: TAOBAO_GUANGHE_URL,
+}
 
 # key = cookie 文件名（filePath），value = {"thread": Thread}
 # 以 filePath 去重，保证同一账号同时只有一个窗口。
@@ -98,3 +109,73 @@ async def _run_browser(file_path: str):
         # 后续再点「进入」就会误报「该账号已打开」。
         while browser.is_connected():
             await asyncio.sleep(1)
+
+
+def _get_account(account_id):
+    """按 id 查账号，返回 (type, filePath) 或 None。"""
+    db_path = Path(BASE_DIR / "db" / "database.db")
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT type, filePath FROM user_info WHERE id = ?", (account_id,)
+        ).fetchone()
+    return row
+
+
+async def _fetch_username(account_id):
+    """用已存 cookie 在 headless 浏览器打开创作者中心抓昵称并回写 DB。
+
+    Returns (ok: bool, name: str|None)。全程容错，不抛异常。
+    """
+    row = _get_account(account_id)
+    if not row:
+        return False, None
+    account_type, file_path = row
+    cookie_file = Path(BASE_DIR / "cookiesFile" / file_path)
+    if not cookie_file.exists():
+        return False, None
+    url = _CREATOR_URLS.get(account_type)
+    if not url:
+        return False, None
+
+    options = get_browser_options()
+    options["headless"] = True
+
+    page = context = browser = None
+    try:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(**options)
+            context = await browser.new_context(storage_state=str(cookie_file))
+            context = await set_init_script(context)
+            page = await context.new_page()
+            try:
+                await page.goto(url, timeout=60000, wait_until="domcontentloaded")
+                # 给前端框架渲染昵称留点时间
+                await asyncio.sleep(2)
+            except Exception as e:
+                taobao_guanghe_logger.warning(f"⚠️ 获取用户名打开页面失败 [{account_id}]: {e}")
+            name = await _grab_platform_username(page, account_type)
+            await _safe_close(page, context, browser)
+    except Exception as e:
+        taobao_guanghe_logger.error(f"❌ 获取用户名异常 [{account_id}]: {e}")
+        return False, None
+
+    if name:
+        db_path = Path(BASE_DIR / "db" / "database.db")
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "UPDATE user_info SET platformUserName = ? WHERE id = ?",
+                (name, account_id),
+            )
+            conn.commit()
+        return True, name
+    return False, None
+
+
+def fetch_username_sync(account_id):
+    """同步包装：在独立事件循环里跑 _fetch_username，供 Flask 路由调用。"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(_fetch_username(account_id))
+    finally:
+        loop.close()

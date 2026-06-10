@@ -30,5 +30,10 @@ export const accountApi = {
   // 用该账号 cookie 打开光合平台浏览器窗口
   openTaobao(filePath) {
     return http.get(`/openTaobao?filePath=${encodeURIComponent(filePath)}`)
+  },
+
+  // 用已存 cookie 后台抓取平台用户名并回写
+  fetchUsername(id) {
+    return http.get(`/fetchUsername?id=${id}`)
   }
 }

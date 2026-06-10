@@ -417,6 +417,21 @@ def open_taobao():
     return jsonify({"code": 200, "msg": msg, "data": {"opened": True}}), 200
 
 
+# 用已存 cookie 在后台 headless 抓取平台用户名并回写数据库
+@app.route('/fetchUsername', methods=['GET'])
+def fetch_username():
+    account_id = request.args.get('id')
+    if not account_id or not str(account_id).isdigit():
+        return jsonify({"code": 400, "msg": "缺少或非法 id", "data": None}), 400
+    from myUtils.browserSession import fetch_username_sync
+    ok, name = fetch_username_sync(int(account_id))
+    return jsonify({
+        "code": 200,
+        "msg": "ok" if ok else "未获取到用户名",
+        "data": {"platformUserName": name},
+    }), 200
+
+
 # SSE 登录接口
 @app.route('/login')
 def login():

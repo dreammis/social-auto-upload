@@ -67,8 +67,11 @@
                     <el-button v-if="scope.row.platform === '淘宝'" size="small" type="success" @click="handleEnterTaobao(scope.row)">进入</el-button>
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
                     <el-button size="small" type="warning" @click="handleReLogin(scope.row)">重登</el-button>
+                    <el-button size="small" type="primary" :loading="scope.row._fetchingName" @click="handleFetchUsername(scope.row)">获取用户名</el-button>
+                    <!-- 下载/上传 Cookie 暂时隐藏，保留代码备用
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
+                    -->
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -141,8 +144,11 @@
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
                     <el-button size="small" type="warning" @click="handleReLogin(scope.row)">重登</el-button>
+                    <el-button size="small" type="primary" :loading="scope.row._fetchingName" @click="handleFetchUsername(scope.row)">获取用户名</el-button>
+                    <!-- 下载/上传 Cookie 暂时隐藏，保留代码备用
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
+                    -->
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -215,8 +221,11 @@
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
                     <el-button size="small" type="warning" @click="handleReLogin(scope.row)">重登</el-button>
+                    <el-button size="small" type="primary" :loading="scope.row._fetchingName" @click="handleFetchUsername(scope.row)">获取用户名</el-button>
+                    <!-- 下载/上传 Cookie 暂时隐藏，保留代码备用
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
+                    -->
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -289,8 +298,11 @@
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
                     <el-button size="small" type="warning" @click="handleReLogin(scope.row)">重登</el-button>
+                    <el-button size="small" type="primary" :loading="scope.row._fetchingName" @click="handleFetchUsername(scope.row)">获取用户名</el-button>
+                    <!-- 下载/上传 Cookie 暂时隐藏，保留代码备用
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
+                    -->
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -363,8 +375,11 @@
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
                     <el-button size="small" type="warning" @click="handleReLogin(scope.row)">重登</el-button>
+                    <el-button size="small" type="primary" :loading="scope.row._fetchingName" @click="handleFetchUsername(scope.row)">获取用户名</el-button>
+                    <!-- 下载/上传 Cookie 暂时隐藏，保留代码备用
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
+                    -->
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -438,8 +453,11 @@
                     <el-button size="small" type="success" @click="handleEnterTaobao(scope.row)">进入</el-button>
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
                     <el-button size="small" type="warning" @click="handleReLogin(scope.row)">重登</el-button>
+                    <el-button size="small" type="primary" :loading="scope.row._fetchingName" @click="handleFetchUsername(scope.row)">获取用户名</el-button>
+                    <!-- 下载/上传 Cookie 暂时隐藏，保留代码备用
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
+                    -->
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
                   </template>
                 </el-table-column>
@@ -877,6 +895,25 @@ const handleEnterTaobao = async (row) => {
   } catch (error) {
     // 真正失败（如 cookie 文件不存在）由拦截器统一提示，这里兜底日志
     console.error('打开光合平台失败:', error)
+  }
+}
+
+// 获取平台用户名：后台用 cookie 抓取昵称并回写
+const handleFetchUsername = async (row) => {
+  row._fetchingName = true
+  try {
+    const res = await accountApi.fetchUsername(row.id)
+    const name = res.data && res.data.platformUserName
+    if (res.code === 200 && name) {
+      row.platformUserName = name
+      ElMessage.success('已获取：' + name)
+    } else {
+      ElMessage.warning('未获取到用户名（该平台可能暂未适配或 cookie 失效）')
+    }
+  } catch (error) {
+    console.error('获取用户名失败:', error)
+  } finally {
+    row._fetchingName = false
   }
 }
 
