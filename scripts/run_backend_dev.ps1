@@ -7,12 +7,12 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
 
-# 优先用 flask --debug 自动 reload（改 py 存盘即重启）；
-# 没装 flask CLI 时回退到 python sau_backend.py。
+# 用 python -m flask（而非裸 flask）确保跑在装了依赖的同一个解释器里，
+# 避免 PATH 上的其它 flask（如 anaconda）找不到 flask_cors。
 $env:FLASK_APP = "sau_backend"
 try {
-    flask --app sau_backend --debug run --host 0.0.0.0 --port 5409
+    python -m flask --app sau_backend --debug run --host 0.0.0.0 --port 5409
 } catch {
-    Write-Host "flask CLI 不可用，回退 python sau_backend.py" -ForegroundColor Yellow
+    Write-Host "flask 不可用，回退 python sau_backend.py" -ForegroundColor Yellow
     python sau_backend.py
 }

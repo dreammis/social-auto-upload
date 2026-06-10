@@ -8,10 +8,11 @@ set -e
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-# 优先 flask --debug 自动 reload；没有 flask CLI 时回退 python sau_backend.py
-if command -v flask >/dev/null 2>&1; then
-    FLASK_APP=sau_backend flask --app sau_backend --debug run --host 0.0.0.0 --port 5409
+# 用 python -m flask（而非裸 flask）确保跑在装了依赖的同一个解释器里，
+# 避免 PATH 上的其它 flask（如 anaconda）找不到 flask_cors。
+if python -m flask --version >/dev/null 2>&1; then
+    FLASK_APP=sau_backend python -m flask --app sau_backend --debug run --host 0.0.0.0 --port 5409
 else
-    echo "flask CLI 不可用，回退 python sau_backend.py"
+    echo "flask 不可用，回退 python sau_backend.py"
     python sau_backend.py
 fi
