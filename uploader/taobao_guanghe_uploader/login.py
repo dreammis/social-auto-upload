@@ -93,29 +93,25 @@ async def _cookie_auth_impl(
                 context = await set_init_script(context)
             page = await context.new_page()
 
-            # 访问创作者中心
+            # 访问创作者中心（与小红书/抖音同样的 goto + wait_for_url 风格）
             try:
                 await page.goto("https://creator.guanghe.taobao.com/", timeout=30000, wait_until="domcontentloaded")
             except Exception as e:
-                from utils.log import taobao_guanghe_logger
-                taobao_guanghe_logger.warning(f"⚠️ 访问创作者中心失败: {str(e)}")
                 return False, ""
 
-            await asyncio.sleep(3)
-
-            # 检查当前 URL
-            current_url = page.url
-            from utils.log import taobao_guanghe_logger
-            taobao_guanghe_logger.info(f"📍 当前 URL: {current_url}")
-
-            # 有效：停留在 creator.guanghe.taobao.com 域
-            if "creator.guanghe.taobao.com" in current_url:
-                taobao_guanghe_logger.info("✅ Cookie 有效")
+            # 等 URL 确定落在 creator 域；被重定向到 login/passport 时 wait_for_url
+            # 等不到匹配，5s 后抛 TimeoutError → 判失效。与小红书/抖音风格一致。
+            try:
+                await page.wait_for_url("**creator.guanghe.taobao.com**", timeout=5000)
+                current_url = page.url
+                taobao_guanghe_logger.info(f"✅ Cookie 有效: {current_url}")
                 return True, current_url
-
-            # 其它情况一律判失效（含 login.taobao.com SSO 跳板 / passport.taobao.com 风控页 / 任何重定向）
-            taobao_guanghe_logger.warning(f"❌ Cookie 已失效（未落在 creator 域: {current_url[:80]}）")
-            return False, current_url
+            except Exception:
+                current_url = page.url
+                taobao_guanghe_logger.warning(
+                    f"❌ Cookie 已失效（未落在 creator 域: {current_url[:80]}）"
+                )
+                return False, current_url
 
         finally:
             await browser.close()
