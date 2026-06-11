@@ -899,14 +899,22 @@ const handleEnterTaobao = async (row) => {
 }
 
 // 获取平台用户名：后台用 cookie 抓取昵称并回写
+// valid=true 表示抓到昵称（账号正常），同步把行 status 切到「正常」
 const handleFetchUsername = async (row) => {
   row._fetchingName = true
   try {
     const res = await accountApi.fetchUsername(row.id)
-    const name = res.data && res.data.platformUserName
+    const data = res.data || {}
+    const name = data.platformUserName
+    const valid = data.valid === true
     if (res.code === 200 && name) {
       row.platformUserName = name
-      ElMessage.success('已获取：' + name)
+      if (valid) {
+        row.status = '正常'
+        ElMessage.success('已获取：' + name)
+      } else {
+        ElMessage.warning('已获取昵称但账号状态异常，请重新登录')
+      }
     } else {
       ElMessage.warning('未获取到用户名（该平台可能暂未适配或 cookie 失效）')
     }
