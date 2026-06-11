@@ -96,7 +96,10 @@ def _save_account(account_type, file_name, user_name, platform_user_name=None):
 _USERNAME_SELECTORS = {
     4: ["div.names div.container div.name"],          # 快手
     3: ["span[class*='name']", "div[class*='nickname']"],  # 抖音
-    5: ["div[class*='userName']", "div[class*='nick']", "span[class*='name']"],  # 淘宝光合
+    5: [                                              # 淘宝光合
+        "div[class^='name--']",                      # 风控平台 CSS Modules：name--<hash>
+        "div[class*='userName']", "div[class*='nick']", "span[class*='name']",
+    ],
     # 2 视频号 / 1 小红书：暂未提供选择器，留空待补
 }
 
