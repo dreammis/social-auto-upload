@@ -97,8 +97,8 @@ _USERNAME_SELECTORS = {
     4: ["div.names div.container div.name"],          # 快手
     3: ["span[class*='name']", "div[class*='nickname']"],  # 抖音
     5: [                                              # 淘宝光合
-        "div[class*='name--']:not([class*='text--'])",  # 风控平台 CSS Modules name--<hash>（排除 name-text-- 按钮）
-        "div[class*='userName']", "div[class*='nick']", "span[class*='name']",
+        "div[class*='name--']",                      # 风控平台 CSS Modules：name--<hash>（昵称专用，避免匹中 name-text-- 按钮）
+        "div[class*='userName']", "div[class*='nick']",
     ],
     # 2 视频号 / 1 小红书：暂未提供选择器，留空待补
 }
@@ -108,20 +108,27 @@ async def _grab_platform_username(page, account_type):
     """登录成功后从创作者中心页面抓取平台真实昵称。
 
     全程容错：任何异常或抓不到都返回 None，绝不影响登录流程。
+    策略：枚举选择器的所有匹配，按文本长度取**最长**且**非空**的——
+    昵称通常最长（侧栏/导航词 2~4 字、昵称 3~15 字）。
     """
     selectors = _USERNAME_SELECTORS.get(account_type)
     if not selectors:
         return None
+    best = ""
     for sel in selectors:
         try:
-            loc = page.locator(sel).first
-            text = await loc.inner_text(timeout=3000)
-            text = (text or "").strip()
-            if text:
-                return text
+            loc = page.locator(sel)
+            n = await loc.count()
+            for i in range(n):
+                try:
+                    text = (await loc.nth(i).inner_text(timeout=3000) or "").strip()
+                except Exception:
+                    continue
+                if text and len(text) > len(best):
+                    best = text
         except Exception:
             continue
-    return None
+    return best or None
 
 # 抖音登录
 async def douyin_cookie_gen(id,status_queue):
