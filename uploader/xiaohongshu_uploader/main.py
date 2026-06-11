@@ -406,23 +406,64 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
         if not getattr(self, "tags", None):
             return
 
+        # 小红书标签上限为 10 个，超过会导致死循环卡住发布
+        max_tags = 10
+        if len(self.tags) > max_tags:
+            xiaohongshu_logger.warning(
+                _msg("🏷️", f"标签数量 {len(self.tags)} 超过小红书上限 {max_tags}，只取前 {max_tags} 个: {self.tags[:max_tags]}")
+            )
+            self.tags = self.tags[:max_tags]
+
         if not getattr(self, "desc", ""):
             desc = page.locator('p[data-placeholder*="输入正文描述"]')
             await desc.click()
 
-        await page.keyboard.type("#" + self.tags[0], delay=30)
-        await page.locator('#creator-editor-topic-container').wait_for(
-            state="visible",
-            timeout=3000
-        )
-        first_item = page.locator('#creator-editor-topic-container .item').first
-        await first_item.wait_for(state="visible", timeout=2000)
-        await first_item.click()
+        for tag in self.tags:  # 循环处理所有 tags
+            # 话题候选下拉框依赖小红书联想接口实时返回，网络抖动/无匹配时会等不到。
+            # 标签是可选增强项：等不到候选框就跳过该标签继续，不让整条发布因此失败。
+            try:
+                await page.keyboard.type("#" + tag, delay=30)
+                await page.locator('#creator-editor-topic-container').wait_for(
+                    state="visible",
+                    timeout=6000
+                )
+                first_item = page.locator('#creator-editor-topic-container .item').first
+                await first_item.wait_for(state="visible", timeout=4000)
+                await first_item.click()
+            except Exception as exc:
+                xiaohongshu_logger.warning(
+                    _msg("🏷️", f"话题『{tag}』未出现候选，跳过该标签继续发布: {exc}")
+                )
+                # 清掉已键入但未成词的 "#tag" 文本，避免它残留进正文
+                for _ in range(len("#" + tag)):
+                    await page.keyboard.press("Backspace")
+                continue
 
     async def fill_meta(self, page: Page) -> None:
         await self.fill_title(page)
         await self.fill_desc(page)
         await self.fill_tags(page)
+
+    async def check_original_declaration(self, page: Page) -> None:
+        """勾选原创声明（如果页面上有的话）"""
+        try:
+            # 小红书的原创声明通常是 checkbox 或 switch 组件
+            original_checkbox = page.locator('div.original-declaration checkbox, div.original-declaration input[type="checkbox"], label:has-text("原创") input[type="checkbox"]').first
+            if await original_checkbox.count() and not await original_checkbox.is_checked():
+                await original_checkbox.check()
+                xiaohongshu_logger.success(_msg("✅", "原创声明已勾选"))
+                return
+
+            # 尝试通过文本匹配找到原创声明区域并点击
+            original_text = page.locator('div:has-text("原创声明"), span:has-text("原创声明"), div:has-text("原创"), label:has-text("原创")').first
+            if await original_text.count():
+                await original_text.click()
+                xiaohongshu_logger.success(_msg("✅", "原创声明已勾选"))
+                return
+
+            xiaohongshu_logger.info(_msg("🧾", "未发现原创声明选项，跳过"))
+        except Exception as exc:
+            xiaohongshu_logger.warning(_msg("⚠️", f"勾选原创声明时出错，跳过: {exc}"))
 
 
 class XiaoHongShuVideo(XiaoHongShuBaseUploader):
@@ -527,8 +568,8 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
                         break
                     
                     if self.debug:
-                        preview_text = all_text.strip().replace("\n", " ")
-                        xiaohongshu_logger.debug(_msg("🧍", f"预览区域内容: {preview_text}"))
+                        normalized_text = all_text.strip().replace("\n", " ")
+                        xiaohongshu_logger.debug(_msg("🧍", f"预览区域内容: {normalized_text}"))
                     xiaohongshu_logger.debug(_msg("🧍", "还没看到上传成功标识，小人继续等一会"))
                 else:
                     # 尝试检查标题输入框是否已经出现，如果是，说明已经进入编辑状态
@@ -547,6 +588,8 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         await self.set_thumbnail(page, self.thumbnail_path)
 
         # await self.set_location(page, "青岛市")
+
+        await self.check_original_declaration(page)
 
         if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)
@@ -665,6 +708,8 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
 
         xiaohongshu_logger.info(_msg("✍️", "小人开始填标题、描述和话题"))
         await self.fill_meta(page)
+
+        await self.check_original_declaration(page)
 
         if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)

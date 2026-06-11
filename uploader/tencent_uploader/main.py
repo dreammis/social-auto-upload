@@ -539,8 +539,10 @@ class TencentBaseUploader(BaseVideoUploader):
             await collection_elements.first.click()
 
     async def apply_original_statement(self, page: Page) -> None:
+        original_set = False
         if await page.get_by_label("视频为原创").count():
             await page.get_by_label("视频为原创").check()
+            original_set = True
 
         try:
             label_locator = await page.locator('label:has-text("我已阅读并同意 《视频号原创声明使用条款》")').is_visible()
@@ -550,30 +552,90 @@ class TencentBaseUploader(BaseVideoUploader):
         if label_locator:
             await page.get_by_label("我已阅读并同意 《视频号原创声明使用条款》").check()
             await page.get_by_role("button", name="声明原创").click()
+            original_set = True
 
-        if await page.locator('div.label span:has-text("声明原创")').count() and getattr(self, "category", None):
-            if not await page.locator("div.declare-original-checkbox input.ant-checkbox-input").is_disabled():
-                await page.locator("div.declare-original-checkbox input.ant-checkbox-input").click()
+        declaration_entry = page.locator(
+            'div.label span:has-text("声明原创"), '
+            'div:has-text("声明原创"):has(input.ant-checkbox-input), '
+            'div:has-text("原创声明"):has(input.ant-checkbox-input)'
+        ).first
+        if await declaration_entry.count():
+            original_checkbox = page.locator("div.declare-original-checkbox input.ant-checkbox-input").first
+            if await original_checkbox.count() and not await original_checkbox.is_disabled():
+                await original_checkbox.click()
+                await page.wait_for_timeout(500)
                 checked_locator = page.locator(
                     "div.declare-original-dialog "
                     "label.ant-checkbox-wrapper.ant-checkbox-wrapper-checked:visible"
                 )
                 if not await checked_locator.count():
-                    await page.locator("div.declare-original-dialog input.ant-checkbox-input:visible").click()
+                    await page.locator("div.declare-original-dialog input.ant-checkbox-input:visible").first.click()
 
             original_type_form = page.locator('div.original-type-form > div.form-label:has-text("原创类型"):visible')
             if await original_type_form.count():
+                category = getattr(self, "category", None)
                 await page.locator("div.form-content:visible").click()
-                await page.locator(
-                    "div.form-content:visible "
-                    "ul.weui-desktop-dropdown__list "
-                    f'li.weui-desktop-dropdown__list-ele:has-text("{self.category}")'
-                ).first.click()
+                option = None
+                if category:
+                    option = page.locator(
+                        "ul.weui-desktop-dropdown__list "
+                        f'li.weui-desktop-dropdown__list-ele:has-text("{category}")'
+                    ).first
+                    if not await option.count():
+                        option = None
+                if option is None:
+                    option = page.locator(
+                        "ul.weui-desktop-dropdown__list "
+                        "li.weui-desktop-dropdown__list-ele:visible"
+                    ).first
+                if await option.count():
+                    await option.click()
                 await page.wait_for_timeout(1000)
 
             declare_button = page.locator('button:has-text("声明原创"):visible')
             if await declare_button.count():
-                await declare_button.click()
+                await declare_button.first.click()
+                original_set = True
+                await page.wait_for_timeout(1000)
+
+        if not original_set:
+            for original_text in ("声明原创", "原创声明", "视频为原创"):
+                try:
+                    modern_original = page.locator(f'text="{original_text}"').first
+                    if await modern_original.count() and await modern_original.is_visible():
+                        await modern_original.click()
+                        original_set = True
+                        await page.wait_for_timeout(1000)
+                        break
+                except Exception:
+                    continue
+
+        content_declaration = page.locator('text="内容声明"').first
+        try:
+            if await content_declaration.count() and await content_declaration.is_visible():
+                await content_declaration.click()
+                for option_text in ("无需声明", "不声明", "无"):
+                    option = page.locator(f'text="{option_text}"').first
+                    if await option.count() and await option.is_visible():
+                        await option.click()
+                        tencent_logger.info(_msg("🧾", f"内容声明已选择: {option_text}"))
+                        break
+            else:
+                tencent_logger.info(_msg("🧾", "当前页面未发现内容声明字段"))
+        except Exception as exc:
+            tencent_logger.warning(_msg("😵", f"内容声明设置失败，继续前先人工确认页面: {exc}"))
+
+        if not original_set:
+            try:
+                diagnostic_path = Path(BASE_DIR) / "debug_tencent_original_missing.png"
+                await page.screenshot(path=str(diagnostic_path), full_page=True)
+                visible_text = (await page.locator("body").first.inner_text())[-4000:]
+                tencent_logger.warning(_msg("😵", f"未确认声明原创，诊断截图: {diagnostic_path}"))
+                tencent_logger.warning(_msg("🧾", f"页面末尾文本: {visible_text}"))
+            except Exception as exc:
+                tencent_logger.warning(_msg("😵", f"生成原创声明诊断信息失败: {exc}"))
+            # 视频号「声明原创」为可选项：页面无对应入口时跳过并继续发布，而非中止。
+            tencent_logger.warning(_msg("📭", "本视频未声明原创（页面无入口或为可选项），跳过并继续发布"))
 
     async def set_location(self, page: Page, location_name: str = "不显示位置") -> None:
         try:
@@ -661,6 +723,8 @@ class TencentVideo(TencentBaseUploader):
         is_draft=False,
         desc: str | None = None,
         thumbnail_path: str | None = None,
+        thumbnail_landscape_path: str | None = None,
+        thumbnail_portrait_path: str | None = None,
         short_title: str | None = None,
         publish_strategy: str = TENCENT_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
@@ -680,6 +744,8 @@ class TencentVideo(TencentBaseUploader):
         self.is_draft = is_draft
         self.desc = desc or ""
         self.thumbnail_path = thumbnail_path
+        self.thumbnail_landscape_path = thumbnail_landscape_path
+        self.thumbnail_portrait_path = thumbnail_portrait_path or thumbnail_path
         self.short_title = short_title
 
     async def validate_upload_args(self):
@@ -687,8 +753,10 @@ class TencentVideo(TencentBaseUploader):
         if not self.title or not str(self.title).strip():
             raise ValueError("视频模式下，title 是必须的")
         self.file_path = str(self.validate_video_file(self.file_path))
-        if self.thumbnail_path:
-            self.thumbnail_path = str(self.validate_image_file(self.thumbnail_path))
+        if self.thumbnail_landscape_path:
+            self.thumbnail_landscape_path = str(self.validate_image_file(self.thumbnail_landscape_path))
+        if self.thumbnail_portrait_path:
+            self.thumbnail_portrait_path = str(self.validate_image_file(self.thumbnail_portrait_path))
 
     async def handle_upload_error(self, page: Page) -> None:
         tencent_logger.info(_msg("😵", "视频出错了，重新上传中"))
@@ -696,18 +764,8 @@ class TencentVideo(TencentBaseUploader):
         await page.get_by_role("button", name="删除", exact=True).click()
         await self.upload_video_file(page, self.file_path)
 
-    async def set_thumbnail(self, page: Page) -> None:
-        if not self.thumbnail_path:
-            return
-
-        tencent_logger.info(_msg("🖼️", "小人准备设置封面"))
-
-        cover_entry_selectors = [
-            'div.vertical-cover-wrap:has-text("个人主页卡片"):has-text("3:4")',
-            'div.vertical-cover-wrap:has-text("3:4")',
-            'div.vertical-cover-wrap:has-text("个人主页卡片")',
-        ]
-        for selector in cover_entry_selectors:
+    async def open_thumbnail_dialog(self, page: Page, selectors: list[str], dialog_titles: list[str]):
+        for selector in selectors:
             cover_entry = page.locator(selector).first
             try:
                 if not await cover_entry.count():
@@ -719,48 +777,101 @@ class TencentVideo(TencentBaseUploader):
             except Exception:
                 continue
 
-        cover_dialog = page.locator("div.weui-desktop-dialog").filter(has_text="编辑个人主页卡片").first
-        if not await cover_dialog.count():
-            tencent_logger.info(_msg("🧍", "当前页面没有出现封面编辑弹窗，小人先跳过自定义封面"))
+        for title in dialog_titles:
+            cover_dialog = page.locator("div.weui-desktop-dialog").filter(has_text=title).first
+            if await cover_dialog.count():
+                return cover_dialog
+        return None
+
+    async def confirm_thumbnail_crop(self, page: Page) -> None:
+        crop_dialog = page.locator("div.weui-desktop-dialog").filter(has_text="裁剪封面图").first
+        if not await crop_dialog.count():
             return
 
         try:
-            await cover_dialog.wait_for(state="visible", timeout=5000)
-        except Exception:
-            tencent_logger.warning(_msg("😵", "封面编辑弹窗暂时不可见，这次先跳过自定义封面"))
-            return
+            await crop_dialog.wait_for(state="visible", timeout=10000)
+            crop_confirm_button = crop_dialog.locator(
+                'div.weui-desktop-dialog__ft button.weui-desktop-btn_primary:has-text("确定")'
+            ).first
+            if await crop_confirm_button.count():
+                await crop_confirm_button.wait_for(state="visible", timeout=5000)
+                await crop_confirm_button.click()
+                await page.wait_for_timeout(1000)
+        except Exception as exc:
+            tencent_logger.warning(_msg("😵", f"封面裁剪确认时出错，小人继续尝试保存主弹窗: {exc}"))
 
+    async def upload_thumbnail_in_dialog(self, page: Page, cover_dialog, thumbnail_path: str) -> None:
+        await cover_dialog.wait_for(state="visible", timeout=5000)
         file_input = cover_dialog.locator('.single-cover-uploader-wrap input[type="file"]').first
         await file_input.wait_for(state="attached", timeout=10000)
-        await file_input.set_input_files(self.thumbnail_path)
+        await file_input.set_input_files(thumbnail_path)
         await page.wait_for_timeout(1000)
-
-        crop_dialog = page.locator("div.weui-desktop-dialog").filter(has_text="裁剪封面图").first
-        if await crop_dialog.count():
-            try:
-                await crop_dialog.wait_for(state="visible", timeout=10000)
-                crop_confirm_button = crop_dialog.locator(
-                    'div.weui-desktop-dialog__ft button.weui-desktop-btn_primary:has-text("确定")'
-                ).first
-                if await crop_confirm_button.count():
-                    await crop_confirm_button.wait_for(state="visible", timeout=5000)
-                    await crop_confirm_button.click()
-                    await page.wait_for_timeout(1000)
-            except Exception as exc:
-                tencent_logger.warning(_msg("😵", f"封面裁剪确认时出错，小人继续尝试保存主弹窗: {exc}"))
+        await self.confirm_thumbnail_crop(page)
 
         confirm_button = cover_dialog.locator(
             'div.weui-desktop-dialog__ft button.weui-desktop-btn_primary:has-text("确认")'
         ).first
         await confirm_button.wait_for(state="visible", timeout=10000)
         await confirm_button.click()
-        tencent_logger.success(_msg("🥳", "封面已经设置完成"))
+
+    async def set_single_thumbnail(
+        self,
+        page: Page,
+        thumbnail_path: str,
+        selectors: list[str],
+        dialog_titles: list[str],
+        label: str,
+    ) -> None:
+        cover_dialog = await self.open_thumbnail_dialog(page, selectors, dialog_titles)
+        if not cover_dialog:
+            tencent_logger.info(_msg("🧍", f"当前页面没有出现{label}封面编辑弹窗，小人先跳过"))
+            return
+
+        try:
+            await self.upload_thumbnail_in_dialog(page, cover_dialog, thumbnail_path)
+            tencent_logger.success(_msg("🥳", f"{label}封面已经设置完成"))
+        except Exception as exc:
+            tencent_logger.warning(_msg("😵", f"{label}封面设置失败，这次先跳过: {exc}"))
+
+    async def set_thumbnail(self, page: Page) -> None:
+        if not self.thumbnail_landscape_path and not self.thumbnail_portrait_path:
+            return
+
+        tencent_logger.info(_msg("🖼️", "小人准备设置封面"))
+
+        landscape_selectors = [
+            'div.horizontal-cover-wrap:has-text("4:3")',
+            'div[class*="cover-wrap"]:has-text("4:3"):has-text("动态")',
+            'div:has-text("视频号动态"):has-text("4:3")',
+            'div:has-text("横版封面"):has-text("4:3")',
+        ]
+        portrait_selectors = [
+            'div.vertical-cover-wrap:has-text("个人主页卡片"):has-text("3:4")',
+            'div.vertical-cover-wrap:has-text("3:4")',
+            'div.vertical-cover-wrap:has-text("个人主页卡片")',
+        ]
+
+        if self.thumbnail_landscape_path:
+            await self.set_single_thumbnail(
+                page,
+                self.thumbnail_landscape_path,
+                landscape_selectors,
+                ["编辑视频号动态封面", "编辑动态封面", "编辑封面"],
+                "4:3 横版",
+            )
+        if self.thumbnail_portrait_path:
+            await self.set_single_thumbnail(
+                page,
+                self.thumbnail_portrait_path,
+                portrait_selectors,
+                ["编辑个人主页卡片", "编辑封面"],
+                "3:4 竖版",
+            )
 
     async def prepare_video_for_publish(self, page: Page) -> None:
         await self.fill_title_and_tags(page)
         await self.fill_description(page)
         await self.apply_collection(page)
-        await self.apply_original_statement(page)
 
     async def upload(self, playwright: Playwright) -> None:
         tencent_logger.info(_msg("🧍", "小人先检查 cookie、视频文件和发布时间"))
@@ -779,6 +890,7 @@ class TencentVideo(TencentBaseUploader):
             await self.prepare_video_for_publish(page)
             await self.wait_for_upload_complete(page)
             await self.set_location(page)
+            await self.apply_original_statement(page)
             await self.set_thumbnail(page)
 
             if self.publish_strategy == TENCENT_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
