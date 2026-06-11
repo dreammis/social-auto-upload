@@ -97,7 +97,7 @@ _USERNAME_SELECTORS = {
     4: ["div.names div.container div.name"],          # 快手
     3: ["span[class*='name']", "div[class*='nickname']"],  # 抖音
     5: [                                              # 淘宝光合
-        "div[class^='name--']",                      # 风控平台 CSS Modules：name--<hash>
+        "div[class*='name--']:not([class*='text--'])",  # 风控平台 CSS Modules name--<hash>（排除 name-text-- 按钮）
         "div[class*='userName']", "div[class*='nick']", "span[class*='name']",
     ],
     # 2 视频号 / 1 小红书：暂未提供选择器，留空待补
