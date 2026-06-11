@@ -19,7 +19,9 @@ def get_browser_options():
             '--disable-blink-features=AutomationControlled',  # 核心防爬屏蔽：去掉 window.navigator.webdriver 标签
             '--lang=zh-CN',
             '--disable-infobars',
-            '--start-maximized'
+            # 不加 --start-maximized：context 默认 viewport 是 1280×720，
+            # 加了会让窗口最大化（如 1920×1080）但页面仍按 1280×720 渲染后被拉伸，
+            # 导致窗口尺寸和实际显示内容不一致。保持 Chrome 默认窗口大小与 viewport 对齐。
         ]
     }
     # 浏览器选择优先级：
