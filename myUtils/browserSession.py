@@ -155,21 +155,69 @@ def _get_account(account_id):
     return row
 
 
-async def _fetch_username(account_id):
-    """用已存 cookie 在 headless 浏览器打开创作者中心抓昵称并回写 DB。
+async def _grab_account_status(page, account_type):
+    """从创作者中心页面判断账号是否正常。
 
-    Returns (ok: bool, name: str|None)。全程容错，不抛异常。
+    Returns:
+        (ok: bool, name: str|None, detail: str|None)
+        - ok=True: 账号正常，name 为平台昵称，detail=None
+        - ok=False: 账号异常，detail 为具体原因（如"账号违规: 原创性不足"），
+                    name 仍然尝试抓取（页面正常会渲染昵称）
+        - ok=False, name=None, detail=None: 抓不到任何信息（页面未渲染/选择器全失效）
+
+    不同平台判断策略：
+    - 5 淘宝：DOM 有 .normal-desc--* / .error-desc--*，直接读最权威
+    - 1-4 平台：DOM 没有统一的状态元素，沿用「抓昵称」作为正常标志
+    """
+    # 淘宝光合：class 是 CSS Modules，hash 后缀每次构建会变，用前缀匹配
+    if account_type == 5:
+        try:
+            normal_loc = page.locator("span[class^='normal-desc--']")
+            if await normal_loc.count() > 0:
+                name = await _grab_platform_username(page, account_type)
+                return True, name, None
+            error_loc = page.locator("span[class^='error-desc--']")
+            n = await error_loc.count()
+            for i in range(n):
+                try:
+                    text = (await error_loc.nth(i).inner_text(timeout=3000) or "").strip()
+                except Exception:
+                    continue
+                if text:
+                    name = await _grab_platform_username(page, account_type)
+                    return False, name, text
+            # 都没找到：页面没渲染出状态栏（登录态失效/Cookie 被踢）
+            name = await _grab_platform_username(page, account_type)
+            return False, name, None
+        except Exception as e:
+            taobao_guanghe_logger.warning(f"⚠️ 淘宝状态元素抓取失败: {e}")
+            name = await _grab_platform_username(page, account_type)
+            return False, name, None
+
+    # 其他平台：保持原「抓昵称」逻辑
+    name = await _grab_platform_username(page, account_type)
+    return bool(name), name, None
+
+
+async def _fetch_username(account_id):
+    """用已存 cookie 在 headless 浏览器打开创作者中心判断账号状态并回写 DB。
+
+    Returns:
+        (ok: bool, name: str|None, detail: str|None)
+        - ok: True=正常 / False=异常
+        - name: 平台昵称（抓得到就回写 DB）
+        - detail: 异常详情（淘宝 .error-desc-- 文本），正常为 None
     """
     row = _get_account(account_id)
     if not row:
-        return False, None
+        return False, None, None
     account_type, file_path = row
     cookie_file = Path(BASE_DIR / "cookiesFile" / file_path)
     if not cookie_file.exists():
-        return False, None
+        return False, None, None
     url = _CREATOR_URLS.get(account_type)
     if not url:
-        return False, None
+        return False, None, None
 
     options = get_browser_options()
     options["headless"] = True
@@ -183,30 +231,48 @@ async def _fetch_username(account_id):
             page = await context.new_page()
             try:
                 await page.goto(url, timeout=60000, wait_until="domcontentloaded")
-                # 给前端框架渲染昵称留点时间
+                # 给前端框架渲染昵称/状态栏留点时间
                 await asyncio.sleep(2)
             except Exception as e:
                 taobao_guanghe_logger.warning(f"⚠️ 获取用户名打开页面失败 [{account_id}]: {e}")
-            name = await _grab_platform_username(page, account_type)
+            ok, name, detail = await _grab_account_status(page, account_type)
             await _safe_close(page, context, browser)
     except Exception as e:
         taobao_guanghe_logger.error(f"❌ 获取用户名异常 [{account_id}]: {e}")
-        return False, None
+        return False, None, None
 
-    if name:
-        db_path = Path(BASE_DIR / "db" / "database.db")
-        with sqlite3.connect(db_path) as conn:
+    # 回写 DB：昵称（如果有）+ 异常详情（如果有）
+    # 状态字段不在此函数里改写，由 getValidAccounts 路由统一写，
+    # 避免和批量巡检逻辑重复。
+    db_path = Path(BASE_DIR / "db" / "database.db")
+    with sqlite3.connect(db_path) as conn:
+        if name:
             conn.execute(
                 "UPDATE user_info SET platformUserName = ? WHERE id = ?",
                 (name, account_id),
             )
-            conn.commit()
-        return True, name
-    return False, None
+        # 正常→清空 detail；异常→写入 detail（即使是空串也表示"已知异常但无原因"）
+        # 用 COALESCE 保证 detail=None 时不覆盖已存值；detail 显式置空则用空串
+        if ok:
+            conn.execute(
+                "UPDATE user_info SET statusDetail = NULL WHERE id = ?",
+                (account_id,),
+            )
+        else:
+            conn.execute(
+                "UPDATE user_info SET statusDetail = ? WHERE id = ?",
+                (detail, account_id),
+            )
+        conn.commit()
+    return ok, name, detail
 
 
 def fetch_username_sync(account_id):
-    """同步包装：在独立事件循环里跑 _fetch_username，供 Flask 路由调用。"""
+    """同步包装：在独立事件循环里跑 _fetch_username，供 Flask 路由调用。
+
+    Returns:
+        (ok: bool, name: str|None, detail: str|None)
+    """
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:

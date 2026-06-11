@@ -229,14 +229,14 @@ def getAccounts():
 
 @app.route("/getValidAccounts",methods=['GET'])
 def getValidAccounts():
-    """校验所有账号：用 cookie 抓平台昵称判断是否正常。
+    """校验所有账号：用 cookie 在创作者中心抓取平台状态判断是否正常。
 
-    - 抓得到昵称 → status=1（正常），platformUserName 同步回写
-    - 抓不到昵称（cookie 失效 / 平台未适配选择器）→ status=0（异常）
+    - ok=True  → status=1（正常），清空 statusDetail
+    - ok=False → status=0（异常），把 statusDetail（淘宝 .error-desc-- 文本）落库
 
     与「登录流程」的 check_cookie 语义不同：
     - 登录时刚扫完码必须立刻确认能用，否则不下发 cookie
-    - 此处是事后批量巡检，账号已在 DB 中；抓不到昵称就标异常，让用户重登
+    - 此处是事后批量巡检，账号已在 DB 中；异常就标，让用户重登
     """
     from myUtils.browserSession import fetch_username_sync
 
@@ -252,17 +252,18 @@ def getValidAccounts():
 
         for row in rows_list:
             account_id = row[0]
-            ok, _name = fetch_username_sync(account_id)
+            ok, _name, detail = fetch_username_sync(account_id)
             new_status = 1 if ok else 0
             if row[4] != new_status:
                 row[4] = new_status
+                # 异常时落库 statusDetail；正常时清空（detail 入参此时为 None）
                 cursor.execute(
-                    'UPDATE user_info SET status = ? WHERE id = ?',
-                    (new_status, account_id),
+                    'UPDATE user_info SET status = ?, statusDetail = ? WHERE id = ?',
+                    (new_status, detail, account_id),
                 )
                 conn.commit()
                 state = "✅ 正常" if new_status else "⚠️ 异常"
-                print(f"{state}（id={account_id}）")
+                print(f"{state}（id={account_id}, detail={detail!r}）")
         for row in rows_list:
             print(row)
         return jsonify(
@@ -438,12 +439,18 @@ def fetch_username():
     if not account_id or not str(account_id).isdigit():
         return jsonify({"code": 400, "msg": "缺少或非法 id", "data": None}), 400
     from myUtils.browserSession import fetch_username_sync
-    ok, name = fetch_username_sync(int(account_id))
+    ok, name, detail = fetch_username_sync(int(account_id))
+    # valid 用抓取结果判断账号是否正常：ok=True 表示抓到正常状态元素（淘宝）
+    # 或抓到昵称（其他平台）。同时把 statusDetail 透出，前端用它在异常 tag 上
+    # 展示 hover tooltip。
     return jsonify({
         "code": 200,
         "msg": "ok" if ok else "未获取到用户名",
-        # valid 用抓昵称结果判断账号是否正常：抓到=正常
-        "data": {"platformUserName": name, "valid": ok},
+        "data": {
+            "platformUserName": name,
+            "valid": ok,
+            "statusDetail": detail,
+        },
     }), 200
 
 

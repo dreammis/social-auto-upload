@@ -25,15 +25,19 @@ def create_tables(db_path="./database.db"):
             filePath TEXT NOT NULL,  -- 存储文件路径
             userName TEXT NOT NULL,
             status INTEGER DEFAULT 0,
-            platformUserName TEXT    -- 登录后抓取的平台真实昵称（可空）
+            platformUserName TEXT,           -- 登录后抓取的平台真实昵称（可空）
+            statusDetail TEXT                -- 异常详情：淘宝页面 .error-desc-- 的文本
+                                             -- 例如 "账号违规: 原创性不足"；正常行为 NULL
         )
         ''')
 
-        # 迁移：旧库可能缺 platformUserName 列，缺则补加（幂等，不影响旧数据）
+        # 迁移：旧库可能缺列，缺则补加（幂等，不影响旧数据）
         cursor.execute("PRAGMA table_info(user_info)")
         cols = [r[1] for r in cursor.fetchall()]
         if "platformUserName" not in cols:
             cursor.execute("ALTER TABLE user_info ADD COLUMN platformUserName TEXT")
+        if "statusDetail" not in cols:
+            cursor.execute("ALTER TABLE user_info ADD COLUMN statusDetail TEXT")
 
         # 创建文件记录表
         cursor.execute('''CREATE TABLE IF NOT EXISTS file_records (

@@ -49,17 +49,10 @@
                 </el-table-column>
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
-                    <el-tag
-                      :type="getStatusTagType(scope.row.status)"
-                      effect="plain"
-                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
-                      @click="handleStatusClick(scope.row)"
-                    >
-                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
-                        <Loading />
-                      </el-icon>
-                      {{ scope.row.status }}
-                    </el-tag>
+                    <StatusTag
+                      :status="scope.row.status"
+                      :status-detail="scope.row.statusDetail"
+                    />
                   </template>
                 </el-table-column>
                 <el-table-column label="操作">
@@ -130,17 +123,10 @@
                 </el-table-column>
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
-                    <el-tag
-                      :type="getStatusTagType(scope.row.status)"
-                      effect="plain"
-                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
-                      @click="handleStatusClick(scope.row)"
-                    >
-                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
-                        <Loading />
-                      </el-icon>
-                      {{ scope.row.status }}
-                    </el-tag>
+                    <StatusTag
+                      :status="scope.row.status"
+                      :status-detail="scope.row.statusDetail"
+                    />
                   </template>
                 </el-table-column>
                 <el-table-column label="操作">
@@ -210,17 +196,10 @@
                 </el-table-column>
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
-                    <el-tag
-                      :type="getStatusTagType(scope.row.status)"
-                      effect="plain"
-                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
-                      @click="handleStatusClick(scope.row)"
-                    >
-                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
-                        <Loading />
-                      </el-icon>
-                      {{ scope.row.status }}
-                    </el-tag>
+                    <StatusTag
+                      :status="scope.row.status"
+                      :status-detail="scope.row.statusDetail"
+                    />
                   </template>
                 </el-table-column>
                 <el-table-column label="操作">
@@ -290,17 +269,10 @@
                 </el-table-column>
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
-                    <el-tag
-                      :type="getStatusTagType(scope.row.status)"
-                      effect="plain"
-                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
-                      @click="handleStatusClick(scope.row)"
-                    >
-                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
-                        <Loading />
-                      </el-icon>
-                      {{ scope.row.status }}
-                    </el-tag>
+                    <StatusTag
+                      :status="scope.row.status"
+                      :status-detail="scope.row.statusDetail"
+                    />
                   </template>
                 </el-table-column>
                 <el-table-column label="操作">
@@ -370,17 +342,10 @@
                 </el-table-column>
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
-                    <el-tag
-                      :type="getStatusTagType(scope.row.status)"
-                      effect="plain"
-                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
-                      @click="handleStatusClick(scope.row)"
-                    >
-                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
-                        <Loading />
-                      </el-icon>
-                      {{ scope.row.status }}
-                    </el-tag>
+                    <StatusTag
+                      :status="scope.row.status"
+                      :status-detail="scope.row.statusDetail"
+                    />
                   </template>
                 </el-table-column>
                 <el-table-column label="操作">
@@ -450,17 +415,10 @@
                 </el-table-column>
                 <el-table-column prop="status" label="状态">
                   <template #default="scope">
-                    <el-tag
-                      :type="getStatusTagType(scope.row.status)"
-                      effect="plain"
-                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
-                      @click="handleStatusClick(scope.row)"
-                    >
-                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
-                        <Loading />
-                      </el-icon>
-                      {{ scope.row.status }}
-                    </el-tag>
+                    <StatusTag
+                      :status="scope.row.status"
+                      :status-detail="scope.row.statusDetail"
+                    />
                   </template>
                 </el-table-column>
                 <el-table-column label="操作">
@@ -577,6 +535,7 @@ import { accountApi } from '@/api/account'
 import { useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
 import { http } from '@/utils/request'
+import StatusTag from '@/components/StatusTag.vue'
 
 // 获取账号状态管理
 const accountStore = useAccountStore()
@@ -669,30 +628,6 @@ const getPlatformTagType = (platform) => {
     '淘宝': 'primary'
   }
   return typeMap[platform] || 'info'
-}
-
-// 判断状态是否可点击（异常状态可点击）
-const isStatusClickable = (status) => {
-  return status === '异常'; // 只有异常状态可点击，验证中不可点击
-}
-
-// 获取状态标签类型
-const getStatusTagType = (status) => {
-  if (status === '验证中') {
-    return 'info'; // 验证中使用灰色
-  } else if (status === '正常') {
-    return 'success'; // 正常使用绿色
-  } else {
-    return 'danger'; // 无效使用红色
-  }
-}
-
-// 处理状态点击事件
-const handleStatusClick = (row) => {
-  if (isStatusClickable(row.status)) {
-    // 触发重新登录流程
-    handleReLogin(row)
-  }
 }
 
 // 过滤后的账号列表
@@ -916,8 +851,9 @@ const handleEnterTaobao = async (row) => {
   }
 }
 
-// 刷新单行账号：用 cookie 抓昵称判断是否正常
-// valid=true 表示抓到昵称（账号正常），同步把行 status 切到「正常」
+// 刷新单行账号：用 cookie 在创作者中心抓状态元素判断是否正常
+// valid=true 表示账号正常；异常时把后端返回的 statusDetail（淘宝 .error-desc--
+// 文本）写到 row.statusDetail，表格的异常 tag 会 hover 显示这个详情。
 const handleFetchUsername = async (row) => {
   row._fetchingName = true
   try {
@@ -925,15 +861,25 @@ const handleFetchUsername = async (row) => {
     const data = res.data || {}
     const name = data.platformUserName
     const valid = data.valid === true
+    const detail = data.statusDetail || ''
     if (res.code === 200 && name) {
       row.platformUserName = name
       if (valid) {
         row.status = '正常'
+        row.statusDetail = ''
         ElMessage.success('已获取：' + name)
       } else {
-        ElMessage.warning('已获取昵称但账号状态异常，请重新登录')
+        // 正常流程里 valid=false 走这里：detail 给 tooltip 用；
+        // detail 为空说明抓不到具体原因（cookie 失效），hover 不会显示 tooltip
+        row.status = '异常'
+        row.statusDetail = detail
+        ElMessage.warning(detail
+          ? `账号异常：${detail}，请重新登录`
+          : '已获取昵称但账号状态异常，请重新登录')
       }
     } else {
+      // 连昵称都抓不到：保留旧 status（避免误覆盖），但允许 detail 被覆盖
+      row.statusDetail = detail
       ElMessage.warning('未获取到用户名（该平台可能暂未适配或 cookie 失效）')
     }
   } catch (error) {
@@ -1210,17 +1156,6 @@ onBeforeUnmount(() => {
     
     .empty-data {
       padding: 40px 0;
-    }
-  }
-  
-  // 二维码容器样式
-  .clickable-status {
-    cursor: pointer;
-    transition: all 0.3s;
-
-    &:hover {
-      transform: scale(1.05);
-      box-shadow: 0 0 8px rgba(0, 0, 0, 0.15);
     }
   }
 

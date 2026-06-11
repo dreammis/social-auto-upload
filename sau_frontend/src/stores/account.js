@@ -17,6 +17,7 @@ export const useAccountStore = defineStore('account', () => {
   // 设置账号列表
   const setAccounts = (accountsData) => {
     // 转换后端返回的数据格式为前端使用的格式
+    // 后端 list 顺序：id, type, filePath, userName, status, platformUserName, statusDetail
     accounts.value = accountsData.map(item => {
       return {
         id: item[0],
@@ -25,7 +26,10 @@ export const useAccountStore = defineStore('account', () => {
         name: item[3],
         status: item[4] === -1 ? '验证中' : (item[4] === 1 ? '正常' : '异常'),
         platform: platformTypes[item[1]] || '未知',
-        platformUserName: item[5] || ''
+        platformUserName: item[5] || '',
+        // 异常详情：淘宝页面 .error-desc-- 文本（如"账号违规: 原创性不足"）；
+        // 正常行为 null/undefined，hover tooltip 不显示。
+        statusDetail: item[6] || ''
       }
     })
   }
