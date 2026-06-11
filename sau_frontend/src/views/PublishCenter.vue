@@ -88,7 +88,7 @@
           <!-- 上传选项弹窗 -->
           <el-dialog
             v-model="uploadOptionsVisible"
-            title="选择上传方式"
+            :title="uploadOptionsTitle"
             width="400px"
             class="upload-options-dialog"
           >
@@ -107,7 +107,7 @@
           <!-- 本地上传弹窗 -->
           <el-dialog
             v-model="localUploadVisible"
-            title="本地上传"
+            :title="localUploadTitle"
             width="600px"
             class="local-upload-dialog"
           >
@@ -115,20 +115,20 @@
               class="video-upload"
               drag
               :auto-upload="true"
-              :action="`${apiBaseUrl}/upload`"
-              :on-success="(response, file) => handleUploadSuccess(response, file, currentUploadTab)"
+              :http-request="handleCustomUpload"
               :on-error="handleUploadError"
-              multiple
-              accept="video/*"
+              :multiple="allowMultipleUpload"
+              :accept="uploadAccept"
               :headers="authHeaders"
+              :show-file-list="false"
             >
               <el-icon class="el-icon--upload"><Upload /></el-icon>
               <div class="el-upload__text">
-                将视频文件拖到此处，或<em>点击上传</em>
+                将{{ uploadTargetNoun }}拖到此处，或<em>点击上传</em>
               </div>
               <template #tip>
                 <div class="el-upload__tip">
-                  支持MP4、AVI等视频格式，可上传多个文件
+                  {{ uploadTargetTip }}
                 </div>
               </template>
             </el-upload>
@@ -187,18 +187,73 @@
             </template>
           </el-dialog>
 
+          <div v-if="tab.selectedPlatform === 2" class="cover-section">
+            <h3>封面</h3>
+            <div class="cover-grid">
+              <div class="cover-card">
+                <div class="cover-card-header">
+                  <span>视频号封面</span>
+                  <el-button size="small" type="primary" plain @click="showUploadOptions(tab, UPLOAD_TARGETS.COVER_SINGLE)">
+                    选择封面
+                  </el-button>
+                </div>
+                <div v-if="tab.coverSingle" class="cover-file-item">
+                  <el-link :href="tab.coverSingle.url" target="_blank" type="primary">{{ tab.coverSingle.name }}</el-link>
+                  <span class="file-size">{{ (tab.coverSingle.size / 1024 / 1024).toFixed(2) }}MB</span>
+                  <el-button type="danger" size="small" @click="removeCover(tab, UPLOAD_TARGETS.COVER_SINGLE)">删除</el-button>
+                </div>
+                <div v-else class="cover-empty">未选择封面</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="tab.selectedPlatform === 3" class="cover-section">
+            <h3>封面</h3>
+            <div class="cover-grid">
+              <div class="cover-card">
+                <div class="cover-card-header">
+                  <span>竖封面 3:4</span>
+                  <el-button size="small" type="primary" plain @click="showUploadOptions(tab, UPLOAD_TARGETS.COVER_PORTRAIT)">
+                    选择封面
+                  </el-button>
+                </div>
+                <div v-if="tab.coverPortrait" class="cover-file-item">
+                  <el-link :href="tab.coverPortrait.url" target="_blank" type="primary">{{ tab.coverPortrait.name }}</el-link>
+                  <span class="file-size">{{ (tab.coverPortrait.size / 1024 / 1024).toFixed(2) }}MB</span>
+                  <el-button type="danger" size="small" @click="removeCover(tab, UPLOAD_TARGETS.COVER_PORTRAIT)">删除</el-button>
+                </div>
+                <div v-else class="cover-empty">未选择竖封面</div>
+              </div>
+
+              <div class="cover-card">
+                <div class="cover-card-header">
+                  <span>横封面 4:3</span>
+                  <el-button size="small" type="primary" plain @click="showUploadOptions(tab, UPLOAD_TARGETS.COVER_LANDSCAPE)">
+                    选择封面
+                  </el-button>
+                </div>
+                <div v-if="tab.coverLandscape" class="cover-file-item">
+                  <el-link :href="tab.coverLandscape.url" target="_blank" type="primary">{{ tab.coverLandscape.name }}</el-link>
+                  <span class="file-size">{{ (tab.coverLandscape.size / 1024 / 1024).toFixed(2) }}MB</span>
+                  <el-button type="danger" size="small" @click="removeCover(tab, UPLOAD_TARGETS.COVER_LANDSCAPE)">删除</el-button>
+                </div>
+                <div v-else class="cover-empty">未选择横封面</div>
+              </div>
+            </div>
+          </div>
+
           <!-- 素材库选择弹窗 -->
           <el-dialog
             v-model="materialLibraryVisible"
-            title="选择素材"
+            :title="currentUploadTarget === UPLOAD_TARGETS.VIDEO ? '选择视频素材' : '选择封面素材'"
             width="800px"
             class="material-library-dialog"
           >
             <div class="material-library-content">
-              <el-checkbox-group v-model="selectedMaterials">
+              <el-checkbox-group v-model="selectedMaterials" :max="isCoverUploadTarget ? 1 : undefined">
                 <div class="material-list">
                   <div
-                    v-for="material in materials"
+                    v-for="material in selectableMaterials"
                     :key="material.id"
                     class="material-item"
                   >
@@ -214,6 +269,7 @@
                   </div>
                 </div>
               </el-checkbox-group>
+              <el-empty v-if="selectableMaterials.length === 0" description="暂无可选素材" />
             </div>
             <template #footer>
               <div class="dialog-footer">
@@ -333,6 +389,38 @@
               maxlength="200"
               class="product-link-input"
             />
+            <h3 style="margin-top: 10px;">请选择声明类型（单选）</h3>
+            <el-radio-group v-model="tab.declaration_type" @change="onDeclarationTypeChange(tab)">
+              <el-radio label="内容自行拍摄" disabled>内容自行拍摄</el-radio> <!-- TODO: 暂时选择不了地区，后续有时间再优化 -->
+              <el-radio label="内容取材网络">内容取材网络</el-radio>
+              <el-radio label="内容由AI生成">内容由AI生成</el-radio>
+              <el-radio label="可能引人不适">可能引人不适</el-radio>
+              <el-radio label="虚构演绎，仅供娱乐">虚构演绎，仅供娱乐</el-radio>
+              <el-radio label="危险行为，请勿模仿">危险行为，请勿模仿</el-radio>
+            </el-radio-group>
+            <div v-if="tab.declaration_type === '内容取材网络'" style="margin-top: 10px;">
+              <el-radio-group v-model="tab.declaration_network_subtype">
+                <el-radio label="取材站外">取材站外</el-radio>
+              </el-radio-group>
+            </div>
+            <div v-if="tab.declaration_type === '内容自行拍摄'" class="shot-extra" style="margin-top: 10px;">
+              <el-cascader
+                v-model="tab.declaration_location"
+                :options="regionsCountryOptions"
+                :props="regionsCascaderProps"
+                placeholder="选择拍摄地点"
+                style="width: 300px;"
+                filterable
+                clearable
+              />
+              <el-date-picker
+                v-model="tab.declaration_date"
+                type="date"
+                placeholder="设置拍摄日期"
+                value-format="YYYY-MM-DD"
+                style="margin-left: 10px;"
+              />
+            </div>
           </div>
 
           <!-- 标题输入 -->
@@ -346,6 +434,19 @@
               maxlength="100"
               show-word-limit
               class="title-input"
+            />
+          </div>
+
+          <div v-if="tab.selectedPlatform === 3" class="description-section">
+            <h3>描述</h3>
+            <el-input
+              v-model="tab.desc"
+              type="textarea"
+              :rows="4"
+              placeholder="请输入描述"
+              maxlength="2000"
+              show-word-limit
+              class="description-input"
             />
           </div>
 
@@ -498,9 +599,14 @@ import { useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
 import { materialApi } from '@/api/material'
 import { http } from '@/utils/request'
+import { countryOptions as regionsCountryOptions, declarationCascaderProps as regionsCascaderProps } from '@/utils/regions.zh'
 
-// API base URL
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
+const UPLOAD_TARGETS = {
+  VIDEO: 'video',
+  COVER_SINGLE: 'coverSingle',
+  COVER_PORTRAIT: 'coverPortrait',
+  COVER_LANDSCAPE: 'coverLandscape'
+}
 
 // Authorization headers
 const authHeaders = computed(() => ({
@@ -521,8 +627,18 @@ const uploadOptionsVisible = ref(false)
 const localUploadVisible = ref(false)
 const materialLibraryVisible = ref(false)
 const currentUploadTab = ref(null)
+const currentUploadTarget = ref(UPLOAD_TARGETS.VIDEO)
 const selectedMaterials = ref([])
 const materials = computed(() => appStore.materials)
+const isCoverUploadTarget = computed(() => currentUploadTarget.value !== UPLOAD_TARGETS.VIDEO)
+const allowMultipleUpload = computed(() => currentUploadTarget.value === UPLOAD_TARGETS.VIDEO)
+const uploadAccept = computed(() => currentUploadTarget.value === UPLOAD_TARGETS.VIDEO ? 'video/*' : 'image/*')
+const uploadTargetNoun = computed(() => currentUploadTarget.value === UPLOAD_TARGETS.VIDEO ? '视频文件' : '封面图片')
+const uploadTargetTip = computed(() => currentUploadTarget.value === UPLOAD_TARGETS.VIDEO
+  ? '支持MP4、AVI等视频格式，可上传多个文件'
+  : '支持 JPG、PNG、WEBP 等图片格式，上传后会写入素材库')
+const uploadOptionsTitle = computed(() => currentUploadTarget.value === UPLOAD_TARGETS.VIDEO ? '选择视频上传方式' : '选择封面上传方式')
+const localUploadTitle = computed(() => currentUploadTarget.value === UPLOAD_TARGETS.VIDEO ? '本地上传视频' : '本地上传封面')
 
 // 批量发布相关状态
 const batchPublishing = ref(false)
@@ -542,11 +658,19 @@ const defaultTabInit = {
   label: '发布1',
   fileList: [], // 后端返回的文件名列表
   displayFileList: [], // 用于显示的文件列表
+  coverSingle: null,
+  coverPortrait: null,
+  coverLandscape: null,
   selectedAccounts: [], // 选中的账号ID列表
   selectedPlatform: 1, // 选中的平台（单选）
   title: '',
+  desc: '',
   productLink: '', // 商品链接
   productTitle: '', // 商品名称
+  declaration_type: '', // 自主声明类型（与抖音页面选项文字一致）
+  declaration_location: [], // 拍摄地点
+  declaration_date: '', // 拍摄日期
+  declaration_network_subtype: '', // 内容取材网络的下级默认选项
   selectedTopics: [], // 话题列表（不带#号）
   scheduleEnabled: false, // 定时发布开关
   videosPerDay: 1, // 每天发布视频数量
@@ -604,6 +728,86 @@ const recommendedTopics = [
   '健康', '时尚', '美妆', '摄影', '宠物', '汽车'
 ]
 
+const getMaterialFileName = (materialOrFile) => {
+  if (!materialOrFile) {
+    return ''
+  }
+
+  if (typeof materialOrFile === 'string') {
+    return materialOrFile
+  }
+
+  const displayName = materialOrFile.filename || materialOrFile.name || ''
+  if (displayName && displayName !== '未命名') {
+    return displayName
+  }
+
+  return materialOrFile.file_path || materialOrFile.path || displayName
+}
+
+const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+const videoExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv']
+
+const isImageMaterial = (materialOrFile) => {
+  const filename = getMaterialFileName(materialOrFile).toLowerCase()
+  return imageExtensions.some(ext => filename.endsWith(ext))
+}
+
+const isVideoMaterial = (materialOrFile) => {
+  const filename = getMaterialFileName(materialOrFile).toLowerCase()
+  return videoExtensions.some(ext => filename.endsWith(ext))
+}
+
+const selectableMaterials = computed(() => materials.value.filter(material => (
+  currentUploadTarget.value === UPLOAD_TARGETS.VIDEO ? isVideoMaterial(material) : isImageMaterial(material)
+)))
+
+const buildPreviewUrl = (filePath) => {
+  const normalizedPath = String(filePath || '').replace(/\\/g, '/')
+  const filename = normalizedPath.split('/').pop()
+  return materialApi.getMaterialPreviewUrl(filename)
+}
+
+const buildFileInfo = ({ name, path, size, type }) => ({
+  name,
+  path,
+  size,
+  type,
+  url: buildPreviewUrl(path)
+})
+
+const syncMaterials = async () => {
+  const response = await materialApi.getAllMaterials()
+  if (response.code === 200) {
+    appStore.setMaterials(response.data)
+  }
+  return response
+}
+
+const setCoverFile = (tab, target, fileInfo) => {
+  if (target === UPLOAD_TARGETS.COVER_SINGLE) {
+    tab.coverSingle = fileInfo
+    return
+  }
+
+  if (target === UPLOAD_TARGETS.COVER_PORTRAIT) {
+    tab.coverPortrait = fileInfo
+    return
+  }
+
+  if (target === UPLOAD_TARGETS.COVER_LANDSCAPE) {
+    tab.coverLandscape = fileInfo
+  }
+}
+
+const addVideoFile = (tab, fileInfo) => {
+  tab.fileList.push(fileInfo)
+  tab.displayFileList = [...tab.fileList.map(item => ({
+    name: item.name,
+    url: item.url
+  }))]
+}
+
 // 添加新tab
 const addTab = () => {
   tabCounter++
@@ -627,40 +831,73 @@ const removeTab = (tabName) => {
 }
 
 // 处理文件上传成功
-const handleUploadSuccess = (response, file, tab) => {
-  if (response.code === 200) {
-    // 获取文件路径
-    const filePath = response.data.path || response.data
-    // 从路径中提取文件名
-    const filename = filePath.split('/').pop()
-    
-    // 保存文件信息到fileList，包含文件路径和其他信息
-    const fileInfo = {
-      name: file.name,
-      url: materialApi.getMaterialPreviewUrl(filename), // 使用getMaterialPreviewUrl生成预览URL
-      path: filePath,
-      size: file.size,
-      type: file.type
-    }
-    
-    // 添加到文件列表
-    tab.fileList.push(fileInfo)
-    
-    // 更新显示列表
-    tab.displayFileList = [...tab.fileList.map(item => ({
-      name: item.name,
-      url: item.url
-    }))]
-    
-    ElMessage.success('文件上传成功')
-  } else {
+const handleUploadSuccess = (response, file, tab, target = UPLOAD_TARGETS.VIDEO) => {
+  if (response.code !== 200) {
     ElMessage.error(response.msg || '上传失败')
+    return
+  }
+
+  const responseData = response.data || {}
+  const filePath = responseData.filepath || responseData.path || responseData
+  const displayName = responseData.filename || file.name
+  const fileInfo = buildFileInfo({
+    name: displayName,
+    path: filePath,
+    size: file.size,
+    type: file.type
+  })
+
+  if (target === UPLOAD_TARGETS.VIDEO) {
+    addVideoFile(tab, fileInfo)
+    ElMessage.success('视频上传成功')
+    return
+  }
+
+  setCoverFile(tab, target, fileInfo)
+  ElMessage.success('封面上传成功，已同步到素材库')
+}
+
+const handleCustomUpload = async (options) => {
+  const { file, onSuccess, onError } = options
+  const formData = new FormData()
+  formData.append('file', file)
+
+  try {
+    let response
+    if (currentUploadTarget.value === UPLOAD_TARGETS.VIDEO) {
+      response = await http.upload('/upload', formData)
+    } else {
+      response = await materialApi.uploadMaterial(formData)
+    }
+
+    handleUploadSuccess(response, file, currentUploadTab.value, currentUploadTarget.value)
+    onSuccess?.(response)
+
+    if (currentUploadTarget.value !== UPLOAD_TARGETS.VIDEO) {
+      try {
+        await syncMaterials()
+      } catch (syncError) {
+        console.error('同步素材列表出错:', syncError)
+      }
+      localUploadVisible.value = false
+    }
+  } catch (error) {
+    onError?.(error)
   }
 }
 
 // 处理文件上传失败
 const handleUploadError = (error) => {
   ElMessage.error('文件上传失败')
+}
+
+// 声明类型变更时设置子级默认值
+const onDeclarationTypeChange = (tab) => {
+  if (tab.declaration_type === '内容取材网络') {
+    tab.declaration_network_subtype = '取材站外'
+  } else {
+    tab.declaration_network_subtype = ''
+  }
 }
 
 // 删除已上传文件
@@ -675,6 +912,11 @@ const removeFile = (tab, index) => {
   }))]
   
   ElMessage.success('文件删除成功')
+}
+
+const removeCover = (tab, target) => {
+  setCoverFile(tab, target, null)
+  ElMessage.success('封面已移除')
 }
 
 // 话题相关方法
@@ -793,6 +1035,7 @@ const confirmPublish = async (tab) => {
   const publishData = {
     type: tab.selectedPlatform,
     title: tab.title,
+    desc: tab.desc?.trim() || '',
     tags: tab.selectedTopics, // 不带#号的话题列表
     fileList: tab.fileList.map(file => file.path), // 只发送文件路径
     accountList: tab.selectedAccounts.map(accountId => {
@@ -806,7 +1049,28 @@ const confirmPublish = async (tab) => {
     category: tab.isOriginal ? 1 : 0, // 1表示原创，0表示非原创
     productLink: tab.productLink.trim() || '',
     productTitle: tab.productTitle.trim() || '',
+    thumbnail: tab.coverSingle?.path || '',
+    thumbnailLandscape: tab.coverSingle?.path || tab.coverLandscape?.path || '',
+    thumbnailPortrait: tab.coverPortrait?.path || '',
+    declaration_info: tab.declaration_type ? {
+      declaration_type: tab.declaration_type.trim(),
+      declaration_location: Array.isArray(tab.declaration_location) ? tab.declaration_location : [],
+      declaration_date: tab.declaration_date || '',
+      isDraft: tab.isDraft
+    } : null,
     isDraft: tab.isDraft
+  }
+
+  // 校验“内容自行拍摄”时必须选择地点与日期
+  if (tab.declaration_type === '内容自行拍摄') {
+    const hasLocation = Array.isArray(tab.declaration_location) && tab.declaration_location.length > 0
+    const hasDate = !!tab.declaration_date
+    if (!(hasLocation && hasDate)) {
+      ElMessage.error('请选择拍摄位置和拍摄时间')
+      tab.publishing = false
+      reject(new Error('请选择拍摄位置和拍摄时间'))
+      return
+    }
   }
 
   // 调用后端发布API（使用统一的http封装）
@@ -823,6 +1087,9 @@ const confirmPublish = async (tab) => {
     tab.selectedTopics = []
     tab.selectedAccounts = []
     tab.scheduleEnabled = false
+    tab.coverSingle = null
+    tab.coverPortrait = null
+    tab.coverLandscape = null
   } catch (error) {
     console.error('发布错误:', error)
     tab.publishStatus = {
@@ -836,8 +1103,9 @@ const confirmPublish = async (tab) => {
 }
 
 // 显示上传选项
-const showUploadOptions = (tab) => {
+const showUploadOptions = (tab, target = UPLOAD_TARGETS.VIDEO) => {
   currentUploadTab.value = tab
+  currentUploadTarget.value = target
   uploadOptionsVisible.value = true
 }
 
@@ -854,18 +1122,23 @@ const selectMaterialLibrary = async () => {
   // 如果素材库为空，先获取素材数据
   if (materials.value.length === 0) {
     try {
-      const response = await materialApi.getAllMaterials()
+      const response = await syncMaterials()
       if (response.code === 200) {
-        appStore.setMaterials(response.data)
-      } else {
-        ElMessage.error('获取素材列表失败')
-        return
+        if (selectableMaterials.value.length === 0) {
+          ElMessage.warning(currentUploadTarget.value === UPLOAD_TARGETS.VIDEO ? '素材库中暂无视频素材' : '素材库中暂无图片素材')
+          return
+        }
       }
     } catch (error) {
       console.error('获取素材列表出错:', error)
       ElMessage.error('获取素材列表失败')
       return
     }
+  }
+
+  if (selectableMaterials.value.length === 0) {
+    ElMessage.warning(currentUploadTarget.value === UPLOAD_TARGETS.VIDEO ? '素材库中暂无视频素材' : '素材库中暂无图片素材')
+    return
   }
   
   selectedMaterials.value = []
@@ -878,33 +1151,43 @@ const confirmMaterialSelection = () => {
     ElMessage.warning('请选择至少一个素材')
     return
   }
+
+  if (isCoverUploadTarget.value && selectedMaterials.value.length > 1) {
+    ElMessage.warning('封面一次只能选择一个素材')
+    return
+  }
   
   if (currentUploadTab.value) {
-    // 将选中的素材添加到当前tab的文件列表
     selectedMaterials.value.forEach(materialId => {
-      const material = materials.value.find(m => m.id === materialId)
-      if (material) {
-        const fileInfo = {
-          name: material.filename,
-          url: materialApi.getMaterialPreviewUrl(material.file_path.split('/').pop()),
-          path: material.file_path,
-          size: material.filesize * 1024 * 1024, // 转换为字节
-          type: 'video/mp4'
-        }
-        
-        // 检查是否已存在相同文件
+      const material = selectableMaterials.value.find(m => m.id === materialId)
+      if (!material) {
+        return
+      }
+
+      const fileInfo = buildFileInfo({
+        name: material.filename,
+        path: material.file_path,
+        size: material.filesize * 1024 * 1024,
+        type: isImageMaterial(material) ? 'image/*' : 'video/*'
+      })
+
+      if (currentUploadTarget.value === UPLOAD_TARGETS.VIDEO) {
         const exists = currentUploadTab.value.fileList.some(file => file.path === fileInfo.path)
         if (!exists) {
           currentUploadTab.value.fileList.push(fileInfo)
         }
+        return
       }
+
+      setCoverFile(currentUploadTab.value, currentUploadTarget.value, fileInfo)
     })
     
-    // 更新显示列表
-    currentUploadTab.value.displayFileList = [...currentUploadTab.value.fileList.map(item => ({
-      name: item.name,
-      url: item.url
-    }))]
+    if (currentUploadTarget.value === UPLOAD_TARGETS.VIDEO) {
+      currentUploadTab.value.displayFileList = [...currentUploadTab.value.fileList.map(item => ({
+        name: item.name,
+        url: item.url
+      }))]
+    }
   }
   
   const addedCount = selectedMaterials.value.length
@@ -1170,6 +1453,7 @@ const batchPublish = async () => {
         }
         
         .upload-section,
+        .cover-section,
         .account-section,
         .platform-section,
         .title-section,
@@ -1192,6 +1476,59 @@ const batchPublish = async () => {
           :deep(.el-upload-dragger) {
             width: 100%;
             height: 180px;
+          }
+        }
+
+        .cover-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 16px;
+        }
+
+        .cover-card {
+          border: 1px solid #ebeef5;
+          border-radius: 8px;
+          padding: 14px;
+          background-color: #fafafa;
+
+          .cover-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-weight: 500;
+            color: #303133;
+          }
+
+          .cover-empty {
+            color: #909399;
+            font-size: 13px;
+            min-height: 32px;
+            display: flex;
+            align-items: center;
+          }
+
+          .cover-file-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background-color: #fff;
+            border-radius: 6px;
+
+            .el-link {
+              max-width: 180px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+
+            .file-size {
+              color: #909399;
+              font-size: 13px;
+              margin-left: auto;
+            }
           }
         }
         

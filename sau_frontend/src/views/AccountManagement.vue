@@ -62,6 +62,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button v-if="scope.row.status === '异常'" size="small" type="warning" @click="handleReLogin(scope.row)">重新登录</el-button>
+                    <el-button v-if="scope.row.status === '正常'" size="small" type="success" @click="handleOpenPlatformUploadPage(scope.row)">上传页</el-button>
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
@@ -132,6 +134,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button v-if="scope.row.status === '异常'" size="small" type="warning" @click="handleReLogin(scope.row)">重新登录</el-button>
+                    <el-button v-if="scope.row.status === '正常'" size="small" type="success" @click="handleOpenPlatformUploadPage(scope.row)">上传页</el-button>
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
@@ -202,6 +206,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button v-if="scope.row.status === '异常'" size="small" type="warning" @click="handleReLogin(scope.row)">重新登录</el-button>
+                    <el-button v-if="scope.row.status === '正常'" size="small" type="success" @click="handleOpenPlatformUploadPage(scope.row)">上传页</el-button>
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
@@ -272,6 +278,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button v-if="scope.row.status === '异常'" size="small" type="warning" @click="handleReLogin(scope.row)">重新登录</el-button>
+                    <el-button v-if="scope.row.status === '正常'" size="small" type="success" @click="handleOpenPlatformUploadPage(scope.row)">上传页</el-button>
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
@@ -342,6 +350,8 @@
                 <el-table-column label="操作">
                   <template #default="scope">
                     <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button v-if="scope.row.status === '异常'" size="small" type="warning" @click="handleReLogin(scope.row)">重新登录</el-button>
+                    <el-button v-if="scope.row.status === '正常'" size="small" type="success" @click="handleOpenPlatformUploadPage(scope.row)">上传页</el-button>
                     <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
                     <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
                     <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
@@ -361,7 +371,7 @@
     <!-- 添加/编辑账号对话框 -->
     <el-dialog
       v-model="dialogVisible"
-      :title="dialogType === 'add' ? '添加账号' : '编辑账号'"
+      :title="dialogTitle"
       width="500px"
       :close-on-click-modal="false"
       :close-on-press-escape="!sseConnecting"
@@ -391,9 +401,27 @@
         
         <!-- 二维码显示区域 -->
         <div v-if="sseConnecting" class="qrcode-container">
-          <div v-if="qrCodeData && !loginStatus" class="qrcode-wrapper">
+          <div v-if="qrCodeData && !loginStatus && !needVerification" class="qrcode-wrapper">
             <p class="qrcode-tip">请使用对应平台APP扫描二维码登录</p>
             <img :src="qrCodeData" alt="登录二维码" class="qrcode-image" />
+          </div>
+          <div v-else-if="needVerification && accountForm.platform === '抖音'" class="verification-wrapper">
+            <p class="verification-tip">需要短信验证码，请输入收到的验证码</p>
+            <el-input 
+              v-model="verificationCode" 
+              placeholder="请输入验证码" 
+              class="verification-input"
+              maxlength="6"
+              @keyup.enter="submitVerificationCode"
+            />
+            <el-button 
+              type="primary" 
+              class="verification-button"
+              @click="submitVerificationCode"
+              :loading="submittingVerification"
+            >
+              提交
+            </el-button>
           </div>
           <div v-else-if="!qrCodeData && !loginStatus" class="loading-wrapper">
             <el-icon class="is-loading"><Refresh /></el-icon>
@@ -447,17 +475,22 @@ const activeTab = ref('all')
 const searchKeyword = ref('')
 
 // 获取账号数据（快速，不验证）
-const fetchAccountsQuick = async () => {
+const fetchAccountsQuick = async ({ markAsPending = false } = {}) => {
   try {
     const res = await accountApi.getAccounts()
     if (res.code === 200 && res.data) {
-      // 将所有账号的状态暂时设为"验证中"
-      const accountsWithPendingStatus = res.data.map(account => {
-        const updatedAccount = [...account];
-        updatedAccount[4] = -1; // -1 表示验证中的临时状态
-        return updatedAccount;
-      });
-      accountStore.setAccounts(accountsWithPendingStatus);
+      if (markAsPending) {
+        // 页面首次进入时，先快速展示账号，再由后台统一校验
+        const accountsWithPendingStatus = res.data.map(account => {
+          const updatedAccount = [...account]
+          updatedAccount[4] = -1 // -1 表示验证中的临时状态
+          return updatedAccount
+        })
+        accountStore.setAccounts(accountsWithPendingStatus)
+        return
+      }
+
+      accountStore.setAccounts(res.data)
     }
   } catch (error) {
     console.error('快速获取账号数据失败:', error)
@@ -508,7 +541,7 @@ const validateAllAccountsInBackground = async () => {
 // 页面加载时获取账号数据
 onMounted(() => {
   // 快速获取账号列表（不验证），立即显示
-  fetchAccountsQuick()
+  fetchAccountsQuick({ markAsPending: true })
 
   // 在后台验证所有账号
   setTimeout(() => {
@@ -583,8 +616,13 @@ const handleSearch = () => {
 
 // 对话框相关
 const dialogVisible = ref(false)
-const dialogType = ref('add') // 'add' 或 'edit'
+const dialogType = ref('add') // 'add'、'edit' 或 'relogin'
 const accountFormRef = ref(null)
+const dialogTitle = computed(() => {
+  if (dialogType.value === 'add') return '添加账号'
+  if (dialogType.value === 'relogin') return '重新登录'
+  return '编辑账号'
+})
 
 // 账号表单
 const accountForm = reactive({
@@ -605,6 +643,11 @@ const sseConnecting = ref(false)
 const qrCodeData = ref('')
 const loginStatus = ref('')
 
+// 验证码相关状态
+const needVerification = ref(false)
+const verificationCode = ref('')
+const submittingVerification = ref(false)
+
 // 添加账号
 const handleAddAccount = () => {
   dialogType.value = 'add'
@@ -618,7 +661,19 @@ const handleAddAccount = () => {
   sseConnecting.value = false
   qrCodeData.value = ''
   loginStatus.value = ''
+  needVerification.value = false
+  verificationCode.value = ''
+  submittingVerification.value = false
   dialogVisible.value = true
+}
+
+const handleOpenPlatformUploadPage = async (row) => {
+  try {
+    await accountApi.openUploadPage(row.id)
+    ElMessage.success(`已为 ${row.name} 打开上传页`)
+  } catch (error) {
+    console.error('打开上传页失败:', error)
+  }
 }
 
 // 编辑账号
@@ -718,7 +773,7 @@ const handleUploadCookie = (row) => {
 
       ElMessage.success('Cookie文件上传成功')
       // 刷新账号列表以显示更新
-      fetchAccounts()
+      fetchAccountsQuick()
     } catch (error) {
       ElMessage.error('Cookie文件上传失败')
     } finally {
@@ -732,7 +787,7 @@ const handleUploadCookie = (row) => {
 // 重新登录账号
 const handleReLogin = (row) => {
   // 设置表单信息
-  dialogType.value = 'edit'
+  dialogType.value = 'relogin'
   Object.assign(accountForm, {
     id: row.id,
     name: row.name,
@@ -744,13 +799,16 @@ const handleReLogin = (row) => {
   sseConnecting.value = false
   qrCodeData.value = ''
   loginStatus.value = ''
+  needVerification.value = false
+  verificationCode.value = ''
+  submittingVerification.value = false
 
   // 显示对话框
   dialogVisible.value = true
 
   // 立即开始登录流程
   setTimeout(() => {
-    connectSSE(row.platform, row.name)
+    connectSSE(row.platform, row.name, row.id)
   }, 300)
 }
 
@@ -772,7 +830,7 @@ const closeSSEConnection = () => {
 }
 
 // 建立SSE连接
-const connectSSE = (platform, name) => {
+const connectSSE = (platform, name, accountId = null) => {
   // 关闭可能存在的连接
   closeSSEConnection()
 
@@ -793,13 +851,37 @@ const connectSSE = (platform, name) => {
 
   // 创建SSE连接
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
-  const url = `${baseUrl}/login?type=${type}&id=${encodeURIComponent(name)}`
+  const params = new URLSearchParams({
+    type,
+    id: name
+  })
+  if (accountId !== null && accountId !== undefined) {
+    params.set('accountId', String(accountId))
+  }
+  const url = `${baseUrl}/login?${params.toString()}`
 
   eventSource = new EventSource(url)
 
   // 监听消息
   eventSource.onmessage = (event) => {
     const data = event.data
+
+    // 只有抖音平台才处理验证码相关消息
+    if (accountForm.platform === '抖音') {
+      // 如果收到需要验证码的消息
+      if (data === 'NEED_VERIFICATION') {
+        needVerification.value = true
+        verificationCode.value = ''
+        return
+      }
+
+      // 如果收到验证码错误的消息
+      if (data === 'VERIFICATION_ERROR') {
+        ElMessage.error('验证码错误，请重新输入')
+        verificationCode.value = ''
+        return
+      }
+    }
 
     // 如果还没有二维码数据，且数据长度较长，认为是二维码
     if (!qrCodeData.value && data.length > 100) {
@@ -827,9 +909,11 @@ const connectSSE = (platform, name) => {
           setTimeout(() => {
             dialogVisible.value = false
             sseConnecting.value = false
+            needVerification.value = false
+            verificationCode.value = ''
 
             // 根据是否是重新登录显示不同提示
-            ElMessage.success(dialogType.value === 'edit' ? '重新登录成功' : '账号添加成功')
+            ElMessage.success(dialogType.value === 'relogin' ? '重新登录成功' : '账号添加成功')
 
             // 显示更新账号信息提示
             ElMessage({
@@ -839,7 +923,7 @@ const connectSSE = (platform, name) => {
             })
 
             // 触发刷新操作
-            fetchAccounts().then(() => {
+            fetchAccountsQuick().then(() => {
               // 刷新完成后关闭提示
               ElMessage.closeAll()
               ElMessage.success('账号信息已更新')
@@ -855,6 +939,8 @@ const connectSSE = (platform, name) => {
           sseConnecting.value = false
           qrCodeData.value = ''
           loginStatus.value = ''
+          needVerification.value = false
+          verificationCode.value = ''
         }, 2000)
       }
     }
@@ -876,6 +962,8 @@ const submitAccountForm = () => {
       if (dialogType.value === 'add') {
         // 建立SSE连接
         connectSSE(accountForm.platform, accountForm.name)
+      } else if (dialogType.value === 'relogin') {
+        connectSSE(accountForm.platform, accountForm.name, accountForm.id)
       } else {
         // 编辑账号逻辑
         try {
@@ -905,7 +993,7 @@ const submitAccountForm = () => {
             ElMessage.success('更新成功')
             dialogVisible.value = false
             // 刷新账号列表
-            fetchAccounts()
+            fetchAccountsQuick()
           } else {
             ElMessage.error(res.msg || '更新账号失败')
           }
@@ -918,6 +1006,41 @@ const submitAccountForm = () => {
       return false
     }
   })
+}
+
+// 提交验证码
+const submitVerificationCode = async () => {
+  if (!verificationCode.value || verificationCode.value.length < 4) {
+    ElMessage.warning('请输入有效的验证码')
+    return
+  }
+
+  submittingVerification.value = true
+
+  try {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
+    const response = await fetch(`${baseUrl}/submitVerification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ code: verificationCode.value })
+    })
+
+    const result = await response.json()
+
+    if (result.code === 200) {
+      ElMessage.success('验证码已提交，正在验证...')
+      // 验证码提交成功后，继续等待登录结果
+    } else {
+      ElMessage.error(result.msg || '提交验证码失败')
+    }
+  } catch (error) {
+    console.error('提交验证码失败:', error)
+    ElMessage.error('提交验证码失败，请稍后再试')
+  } finally {
+    submittingVerification.value = false
+  }
 }
 
 // 组件卸载前关闭SSE连接
@@ -1049,6 +1172,25 @@ onBeforeUnmount(() => {
     
     .error-wrapper .el-icon {
       color: #f56c6c;
+    }
+
+    .verification-wrapper {
+      text-align: center;
+      width: 100%;
+      
+      .verification-tip {
+        margin-bottom: 15px;
+        color: #606266;
+      }
+      
+      .verification-input {
+        width: 200px;
+        margin-bottom: 15px;
+      }
+      
+      .verification-button {
+        min-width: 100px;
+      }
     }
   }
 }

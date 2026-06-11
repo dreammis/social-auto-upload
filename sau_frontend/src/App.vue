@@ -32,6 +32,10 @@
               <el-icon><Upload /></el-icon>
               <span>发布中心</span>
             </el-menu-item>
+            <el-menu-item index="/config">
+              <el-icon><Setting /></el-icon>
+              <span>配置中心</span>
+            </el-menu-item>
             <el-menu-item index="/about">
               <el-icon><DataAnalysis /></el-icon>
               <span>关于</span>
@@ -63,7 +67,7 @@ import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   HomeFilled, User, DataAnalysis,
-  Fold, Picture, Upload
+  Fold, Picture, Upload, Setting
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

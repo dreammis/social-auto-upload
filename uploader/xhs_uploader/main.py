@@ -6,7 +6,8 @@ from time import sleep
 import requests
 from playwright.sync_api import sync_playwright
 
-from conf import BASE_DIR, XHS_SERVER, LOCAL_CHROME_HEADLESS
+from conf import BASE_DIR, XHS_SERVER
+from utils.runtime_config import get_local_chrome_headless
 
 config = configparser.RawConfigParser()
 config.read('accounts.ini')
@@ -20,7 +21,7 @@ def sign_local(uri, data=None, a1="", web_session=""):
                 chromium = playwright.chromium
 
                 # 如果一直失败可尝试设置成 False 让其打开浏览器，适当添加 sleep 可查看浏览器状态
-                browser = chromium.launch(headless=LOCAL_CHROME_HEADLESS)
+                browser = chromium.launch(headless=get_local_chrome_headless())
 
                 browser_context = browser.new_context()
                 browser_context.add_init_script(path=stealth_js_path)

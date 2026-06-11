@@ -7,8 +7,7 @@ python 版本：3.10
 4. 运行根目录的 sau_backend.py
 5. type字段（平台标识） 1 小红书 2 视频号 3 抖音 4 快手
 ## 接口说明
-1. /upload post
-    上传接口，上传成功会返回文件的唯一id，后期靠这个发布视频
+1. /upload post 上传接口，上传成功会返回文件的唯一id，后期靠这个发布视频
 2. /login id参数 用户名 type参数 平台标识：登录流程，前端和后端建立sse连接，后端获取到图片base64编码后返回给前端，前端接受扫码后后端存库后返回200，前端主动断开连接，然后调取/getValidAccounts获取当前所有可用账号
 3. /getValidAccounts 会获取当前所有可用cookie，时间较慢，会逐个校验cookie，status 1 有效 0 无效cookie
 4. /postVideo 发布视频接口 post json传参

@@ -25,5 +25,10 @@ export const accountApi = {
   // 删除账号
   deleteAccount(id) {
     return http.get(`/deleteAccount?id=${id}`)
+  },
+
+  // 打开账号对应的上传页（使用该账号Cookie）
+  openUploadPage(id) {
+    return http.post('/openUploadPage', { id })
   }
 }
