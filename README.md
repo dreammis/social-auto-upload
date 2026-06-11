@@ -11,14 +11,24 @@
 <table width="100%">
   <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="http://t.clawpower.vip/1005">
-        <img src="static/clawpower.png" alt="ClawPower Sponsor" width="180">
+      <a href="https://chilltion.com/?ref=1y5k5k">
+        <img src="static/chilltion.png" alt="chilltion Sponsor" width="180">
       </a>
     </td>
     <td width="75%" align="left" valign="middle">
-      ClawPower 是一家稳定可靠 AI 大模型中转服务商，提供 Claude、GPT、Gemini 60+ 大模型接入。无论是 OpenClaw、Hermes 智能体自动化场景，Claude Code、Codex 编程工具接入，还是公众号、小红书内容创作；都能获得稳定、顺滑、可长期使用的模型服务体验。低至官方价格的 30%，点击<a href="http://t.clawpower.vip/1005">免费领取 5 刀现金</a>体验券
+      轻视AI：一句话生产MG动画，适合知识，科普，讲解，教程，介绍等类型视频的低成本制作，视频矩阵，养号等，成本只有seedance等1%。现在<a href="https://chilltion.com/?ref=1y5k5k">注册</a>送1500积分
     </td>
   </tr>
+    <tr>
+        <td width="25%" align="center" valign="middle">
+          <a href="http://t.clawpower.vip/1005">
+            <img src="static/clawpower.png" alt="ClawPower Sponsor" width="180">
+          </a>
+        </td>
+        <td width="75%" align="left" valign="middle">
+          ClawPower 是一家稳定可靠 AI 大模型中转服务商，提供 Claude、GPT、Gemini 60+ 大模型接入。无论是 OpenClaw、Hermes 智能体自动化场景，Claude Code、Codex 编程工具接入，还是公众号、小红书内容创作；都能获得稳定、顺滑、可长期使用的模型服务体验。低至官方价格的 30%，点击<a href="http://t.clawpower.vip/1005">免费领取 5 刀现金</a>体验券
+        </td>
+      </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
       <img src="static/wechat.png" alt="Sponsor Contact" width="150">
@@ -243,24 +253,8 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
     </td>
 </table>
 
-### Active Core Team
 
-<table>
-    <td align="center">
-        <a href="https://leedebug.github.io/">
-            <img src="media/edan-qrcode.png" width="200px" alt="Edan Lee"/>
-            <br />
-            <sub><b>Edan Lee</b></sub>
-        </a>
-        <br />
-        <a href="https://github.com/dreammis/social-auto-upload/commits?author=LeeDebug" title="Code">💻</a>
-        <a href="https://leedebug.github.io/" title="Documentation">📖</a>
-        <br />
-        封装了 api 接口和 web 前端管理界面
-        <br />
-        （请注明来意：进群、学习、企业咨询等）
-    </td>
-</table>
+
 
 ## 🤝贡献指南
 
@@ -278,6 +272,13 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 4.  Push到您的分支 (`git push origin feature/YourFeature`)。
 5.  创建一个 Pull Request。
 
+## 主要贡献者
+
+<a href="https://github.com/dreammis/social-auto-upload/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=dreammis/social-auto-upload" />
+</a>
+
+
 ## 🙏致谢
 
 本项目的 Bilibili 上传能力基于开源项目 `biliup` 的能力进行接入与封装。
@@ -293,7 +294,7 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 
 > 如果这个项目对您有帮助，请给一个 ⭐ Star 以表示支持！
 
-[![Star History Chart](https://api.star-history.com/svg?repos=dreammis/social-auto-upload&type=Date)](https://star-history.com/#dreammis/social-auto-upload&Date)
 
-## Community
-LINUX DO - The New Ideal Community
+
+
+[![Star History Chart](https://api.star-history.com/svg?repos=dreammis/social-auto-upload&type=Date)](https://star-history.com/#dreammis/social-auto-upload&Date)
