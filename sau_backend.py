@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from queue import Queue
 from flask_cors import CORS
-from myUtils.auth import check_cookie
+from myUtils.auth import check_cookie  # noqa: F401  保留以便其他模块/工具脚本按需调用
 from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 from werkzeug.utils import secure_filename
 from conf import BASE_DIR
@@ -228,35 +228,49 @@ def getAccounts():
 
 
 @app.route("/getValidAccounts",methods=['GET'])
-async def getValidAccounts():
+def getValidAccounts():
+    """校验所有账号：用 cookie 抓平台昵称判断是否正常。
+
+    - 抓得到昵称 → status=1（正常），platformUserName 同步回写
+    - 抓不到昵称（cookie 失效 / 平台未适配选择器）→ status=0（异常）
+
+    与「登录流程」的 check_cookie 语义不同：
+    - 登录时刚扫完码必须立刻确认能用，否则不下发 cookie
+    - 此处是事后批量巡检，账号已在 DB 中；抓不到昵称就标异常，让用户重登
+    """
+    from myUtils.browserSession import fetch_username_sync
+
     with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
-        SELECT * FROM user_info''')
+        cursor.execute('SELECT * FROM user_info')
         rows = cursor.fetchall()
         rows_list = [list(row) for row in rows]
+
         print("\n📋 当前数据表内容：")
         for row in rows:
             print(row)
+
         for row in rows_list:
-            flag = await check_cookie(row[1],row[2])
-            if not flag:
-                row[4] = 0
-                cursor.execute('''
-                UPDATE user_info 
-                SET status = ? 
-                WHERE id = ?
-                ''', (0,row[0]))
+            account_id = row[0]
+            ok, _name = fetch_username_sync(account_id)
+            new_status = 1 if ok else 0
+            if row[4] != new_status:
+                row[4] = new_status
+                cursor.execute(
+                    'UPDATE user_info SET status = ? WHERE id = ?',
+                    (new_status, account_id),
+                )
                 conn.commit()
-                print("✅ 用户状态已更新")
-        for row in rows:
+                state = "✅ 正常" if new_status else "⚠️ 异常"
+                print(f"{state}（id={account_id}）")
+        for row in rows_list:
             print(row)
         return jsonify(
-                        {
-                            "code": 200,
-                            "msg": None,
-                            "data": rows_list
-                        }),200
+            {
+                "code": 200,
+                "msg": None,
+                "data": rows_list
+            }),200
 
 @app.route('/deleteFile', methods=['GET'])
 def delete_file():
@@ -428,7 +442,8 @@ def fetch_username():
     return jsonify({
         "code": 200,
         "msg": "ok" if ok else "未获取到用户名",
-        "data": {"platformUserName": name},
+        # valid 用抓昵称结果判断账号是否正常：抓到=正常
+        "data": {"platformUserName": name, "valid": ok},
     }), 200
 
 
