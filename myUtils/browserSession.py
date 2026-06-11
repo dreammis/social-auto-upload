@@ -53,6 +53,8 @@ def open_taobao_browser(file_path: str):
         if existing is not None:
             # 仅当登记的线程仍存活才算「已打开」。线程已死说明窗口早已关闭
             # （或后端重启过），属于残留登记，清掉后放行重新打开。
+            # 线程退出会由 _browser_thread 的 finally 自动从 _active_browsers 摘除；
+            # 这里再用线程存活状态兜底，防止退出与重新打开之间有竞态。
             thread = existing.get("thread")
             if thread is not None and thread.is_alive():
                 return False, "该账号已打开"
@@ -69,7 +71,12 @@ def open_taobao_browser(file_path: str):
 
 
 def _browser_thread(file_path: str):
-    """后台线程入口：独立事件循环跑浏览器，直到窗口关闭。"""
+    """后台线程入口：独立事件循环跑浏览器，直到窗口关闭。
+
+    退出路径：page.on("close") 或 browser.on("disconnected") 任一触发 → 跳出
+    内部 await sleep 循环 → async with playwright() 清理资源 → finally 从
+    _active_browsers 摘除登记。任一环节失败都仍能保证 _active_browsers 被清。
+    """
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -84,7 +91,13 @@ def _browser_thread(file_path: str):
 
 
 async def _run_browser(file_path: str):
-    """启动浏览器并保持打开，直到用户手动关窗（browser disconnected）。"""
+    """启动浏览器并保持打开，直到用户手动关窗。
+
+    退出判定（任一触发即跳出循环）：
+    1) browser.on("disconnected") —— 驱动进程或系统 Chrome 进程退出
+    2) page.on("close") —— 唯一页面被关（用户关掉最后一个标签）
+    3) 轮询 browser.is_connected() —— 上述事件偶发不触发时兜底
+    """
     cookie_file = Path(BASE_DIR / "cookiesFile" / file_path)
 
     # 复用登录流程的浏览器配置（系统 Chrome / channel / 防自动化检测），
@@ -97,18 +110,39 @@ async def _run_browser(file_path: str):
 
         context = await browser.new_context(storage_state=str(cookie_file))
         page = await context.new_page()
+
+        # 共享一个事件：disconnected / page close 任意一个 set，循环就跳。
+        # 用事件而不是标志位的好处：disconnected 回调是同步触发的，从
+        # await sleep 中醒来最多 100ms；不让循环傻等 is_connected。
+        closed = asyncio.Event()
+
+        def _mark_closed(_=None):
+            # browser.on("disconnected") 和 page.on("close") 的回调，
+            # playwright 在事件循环内同步触发——直接 set 即可。
+            try:
+                closed.set()
+            except Exception:
+                pass
+
+        browser.on("disconnected", _mark_closed)
+        page.on("close", _mark_closed)
+
         try:
             await page.goto(TAOBAO_GUANGHE_URL, timeout=60000,
                             wait_until="domcontentloaded")
         except Exception as e:
             taobao_guanghe_logger.warning(f"⚠️ 打开光合平台页面失败 [{file_path}]: {e}")
+            # 页面都打不开就别让用户干等了，触发关闭清理
+            _mark_closed()
 
-        # 轮询浏览器连接状态保持存活，直到用户关闭窗口（进程退出）。
-        # 不依赖 browser.on("disconnected") 事件——用系统 Chrome 启动时该事件
-        # 常常不触发，会导致线程永久卡住、_active_browsers 永不清理，
-        # 后续再点「进入」就会误报「该账号已打开」。
-        while browser.is_connected():
-            await asyncio.sleep(1)
+        # 轮询兜底：is_connected 偶发不返回 False（系统 Chrome 通道已知问题），
+        # 100ms 粒度保证「关窗→清理」< 0.5s 体感无感。
+        while not closed.is_set():
+            if not browser.is_connected():
+                taobao_guanghe_logger.info(
+                    f"🪟 检测到浏览器已断开 [{file_path}]")
+                break
+            await asyncio.sleep(0.1)
 
 
 def _get_account(account_id):
