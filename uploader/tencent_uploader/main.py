@@ -492,7 +492,13 @@ class TencentBaseUploader(BaseVideoUploader):
         await page.click('input[placeholder="请选择时间"]')
         await page.keyboard.press("Control+KeyA")
         await page.keyboard.type(publish_date.strftime("%H"))
-        await page.locator("div.input-editor").click()
+        await page.keyboard.press("Enter")  # 确认小时并关闭时间下拉
+        await page.wait_for_timeout(500)
+        # 收起时间选择浮层：直接点描述区可能被 weui-desktop-dialog 遮挡，做容错
+        try:
+            await page.locator("div.input-editor").click(timeout=5000)
+        except Exception:
+            await page.keyboard.press("Escape")
 
     async def open_upload_page(self, page: Page) -> None:
         await page.goto(TENCENT_UPLOAD_URL, timeout=120000, wait_until="domcontentloaded")
