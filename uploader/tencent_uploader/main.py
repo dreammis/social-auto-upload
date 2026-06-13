@@ -495,12 +495,35 @@ class TencentBaseUploader(BaseVideoUploader):
         await page.locator("div.input-editor").click()
 
     async def open_upload_page(self, page: Page) -> None:
-        await page.goto(TENCENT_UPLOAD_URL)
-        await page.wait_for_url(TENCENT_UPLOAD_URL)
+        await page.goto(TENCENT_UPLOAD_URL, timeout=120000, wait_until="domcontentloaded")
+        await page.wait_for_url(TENCENT_UPLOAD_URL, timeout=120000)
 
     async def upload_video_file(self, page: Page, file_path: str) -> None:
-        file_input = page.locator('input[type="file"]')
-        await file_input.set_input_files(file_path)
+        async def find_file_input():
+            for fr in page.frames:  # 主 frame + 所有 iframe（视频号编辑器可能在 iframe 内）
+                try:
+                    fi = fr.locator('input[type="file"]')
+                    if await fi.count():
+                        return fi.first
+                except Exception:
+                    continue
+            return None
+
+        fi = await find_file_input()
+        if fi is None:
+            # 助手落在首页：先点「发表视频」唤出编辑器与上传控件
+            publish_btn = page.get_by_text("发表视频").first
+            if await publish_btn.count():
+                await publish_btn.click()
+                await asyncio.sleep(3)
+            for _ in range(20):
+                fi = await find_file_input()
+                if fi is not None:
+                    break
+                await asyncio.sleep(1)
+        if fi is None:
+            raise RuntimeError("未找到视频号文件上传框")
+        await fi.set_input_files(file_path)
 
     async def set_short_title(self, page: Page, title: str, short_title: str | None = None) -> None:
         short_title_element = (

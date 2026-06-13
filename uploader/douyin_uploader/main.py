@@ -263,17 +263,12 @@ class DouYinBaseUploader(BaseVideoUploader):
         await asyncio.sleep(1)
 
     async def fill_title_and_description(self, page: Page, title: str, description: str, tags: list[str] | None = None):
-        description_section = (
-            page.get_by_text("作品描述", exact=True)
-            .locator("xpath=ancestor::div[2]")
-            .locator("xpath=following-sibling::div[1]")
-        )
-
-        title_input = description_section.locator('input[type="text"]').first
+        # 2026-06 抖音发布页 DOM：标题=input[placeholder*=填写作品标题]，描述=div.zone-container[contenteditable]
+        title_input = page.locator('input[placeholder*="填写作品标题"]').first
         await title_input.wait_for(state="visible", timeout=10000)
         await title_input.fill(title[:30])
 
-        description_editor = description_section.locator('.zone-container[contenteditable="true"]').first
+        description_editor = page.locator('div.zone-container[contenteditable="true"]').first
         await description_editor.wait_for(state="visible", timeout=10000)
         await description_editor.click()
         await page.keyboard.press("Control+KeyA")
@@ -283,6 +278,7 @@ class DouYinBaseUploader(BaseVideoUploader):
         for tag in tags or []:
             await page.keyboard.type(" #" + tag)
             await page.keyboard.press("Space")
+        await page.keyboard.press("Escape")  # 收起话题下拉，避免浮层拦截后续点击
 
     async def set_location(self, page: Page, location: str = ""):
         if not location:
@@ -471,12 +467,12 @@ class DouYinVideo(DouYinBaseUploader):
             return
 
         douyin_logger.info(_msg("🏃", "小人正在设置视频封面"))
-        await page.click('text="选择封面"')
-        cover_locator_str = 'div[id*="creator-content-modal"]'
-        cover_locator = page.locator(cover_locator_str)
-        await page.wait_for_selector(cover_locator_str)
+        await page.click('text="选择封面"', force=True)
+        cover_locator_str = 'div.dy-creator-content-modal'
+        cover_locator = page.locator(cover_locator_str).first
+        await page.wait_for_selector(cover_locator_str, timeout=15000)
 
-        upload_input = cover_locator.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input")
+        upload_input = cover_locator.locator("input.semi-upload-hidden-input").first
 
         if self.thumbnail_landscape_path:
             await page.wait_for_timeout(1000)
@@ -485,15 +481,15 @@ class DouYinVideo(DouYinBaseUploader):
             douyin_logger.info(_msg("🖼️", "横版封面上传完成"))
 
         if self.thumbnail_portrait_path:
-            await cover_locator.locator("div[class*='steps'] div").nth(1).click()
+            await cover_locator.locator('button:has-text("设置竖封面")').first.click()
             await page.wait_for_timeout(1000)
             await upload_input.set_input_files(self.thumbnail_portrait_path)
             await page.wait_for_timeout(2000)
             douyin_logger.info(_msg("🖼️", "竖版封面上传完成"))
 
-        await cover_locator.locator('button:visible:has-text("完成")').click()
+        await cover_locator.locator('button:has-text("完成")').first.click()
         douyin_logger.info(_msg("🥳", "视频封面设置完成"))
-        await page.wait_for_selector("div.extractFooter", state="detached")
+        await cover_locator.wait_for(state="detached", timeout=15000)
 
     async def upload(self, playwright: Playwright) -> None:
         douyin_logger.info(_msg("🧍", "小人先检查 cookie、视频文件、封面和发布时间"))
@@ -573,9 +569,13 @@ class DouYinVideo(DouYinBaseUploader):
 
         while True:
             try:
+                # 移除会拦截发布按钮点击的新手引导/话题下拉浮层
+                await page.evaluate(
+                    "() => { document.querySelectorAll('.shepherd-element, .shepherd-modal-overlay-container, [class*=\"mention-wrapper\"]').forEach(e => e.remove()); }"
+                )
                 publish_button = page.get_by_role("button", name="发布", exact=True)
                 if await publish_button.count():
-                    await publish_button.click()
+                    await publish_button.click(force=True)
                 await page.wait_for_url(
                     "https://creator.douyin.com/creator-micro/content/manage**",
                     timeout=3000,
