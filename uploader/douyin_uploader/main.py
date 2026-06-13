@@ -50,7 +50,11 @@ def _build_login_result(success: bool, status: str, message: str, account_file: 
 
 async def cookie_auth(account_file):
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True, channel="chrome")
+        # 抖音无头会撞反爬墙→content/upload 跳登录→误判 cookie 失效（间歇性）。校验必须有头。
+        browser = await playwright.chromium.launch(
+            headless=False, channel="chrome",
+            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+        )
         try:
             context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
