@@ -49,28 +49,28 @@ def _build_login_result(success: bool, status: str, message: str, account_file: 
 
 
 async def cookie_auth(account_file):
-    async with async_playwright() as playwright:
-        # 抖音无头会撞反爬墙→content/upload 跳登录→误判 cookie 失效（间歇性）。校验必须有头。
-        browser = await playwright.chromium.launch(
-            headless=False, channel="chrome",
-            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
-        )
-        try:
-            context = await browser.new_context(storage_state=account_file)
-            context = await set_init_script(context)
-            page = await context.new_page()
-            await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
+    # 抖音无头会撞反爬墙→content/upload 跳登录→误判 cookie 失效（间歇性）。校验必须有头。
+    # 即便有头，页面慢/瞬时跳转仍会让 wait_for_url(精确URL,5s) 误判→重试3次+宽松判定(URL含 content/upload 且无登录文案)。
+    for _attempt in range(3):
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(
+                headless=False, channel="chrome",
+                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+            )
             try:
-                await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=5000)
+                context = await browser.new_context(storage_state=account_file)
+                context = await set_init_script(context)
+                page = await context.new_page()
+                await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
+                await page.wait_for_timeout(2500)  # 等页面稳定，避免瞬时跳转误判
+                has_login = await page.get_by_text("手机号登录").count() or await page.get_by_text("扫码登录").count()
+                if "content/upload" in page.url and not has_login:
+                    return True
             except Exception:
-                return False
-
-            if await page.get_by_text("手机号登录").count() or await page.get_by_text("扫码登录").count():
-                return False
-
-            return True
-        finally:
-            await browser.close()
+                pass
+            finally:
+                await browser.close()
+    return False
 
 
 async def douyin_setup(account_file, handle=False, return_detail=False, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS):
