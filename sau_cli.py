@@ -41,6 +41,11 @@ from uploader.xiaohongshu_uploader.main import (
     cookie_auth as xiaohongshu_cookie_auth,
     xiaohongshu_setup,
 )
+from uploader.youtube_uploader.main import (
+    YouTubeVideo,
+    cookie_auth as youtube_cookie_auth,
+    youtube_setup,
+)
 
 SCHEDULE_FORMAT = "%Y-%m-%d %H:%M"
 
@@ -160,6 +165,20 @@ class TencentVideoUploadRequest:
     headless: bool = True
 
 
+@dataclass(slots=True)
+class YouTubeVideoUploadRequest:
+    account_name: str
+    video_file: Path
+    title: str
+    description: str
+    tags: list[str]
+    thumbnail_file: Path | None = None
+    playlist: str | None = None
+    visibility: str = "public"
+    debug: bool = True
+    headless: bool = False
+
+
 def has_interactive_terminal() -> bool:
     return sys.stdin.isatty() and sys.stdout.isatty()
 
@@ -272,6 +291,42 @@ async def check_tencent_account(account_name: str) -> bool:
     if not account_file.exists():
         return False
     return await tencent_cookie_auth(str(account_file))
+
+
+async def login_youtube_account(account_name: str, headless: bool = False) -> dict:
+    account_file = resolve_account_file("youtube", account_name)
+    return await youtube_setup(str(account_file), handle=True, return_detail=True, headless=headless)
+
+
+async def check_youtube_account(account_name: str) -> bool:
+    account_file = resolve_account_file("youtube", account_name)
+    if not account_file.exists():
+        return False
+    return await youtube_cookie_auth(str(account_file))
+
+
+async def upload_youtube_video(request: YouTubeVideoUploadRequest) -> Path:
+    account_file = resolve_account_file("youtube", request.account_name)
+    is_ready = await youtube_setup(str(account_file), handle=False)
+    if not is_ready:
+        raise RuntimeError(
+            f"YouTube cookie is missing or expired: {account_file}. Run `sau youtube login --account {request.account_name}` first."
+        )
+
+    app = YouTubeVideo(
+        request.title,
+        str(request.video_file),
+        request.tags,
+        str(account_file),
+        description=request.description,
+        thumbnail_path=str(request.thumbnail_file) if request.thumbnail_file else None,
+        playlist=request.playlist,
+        visibility=request.visibility,
+        debug=request.debug,
+        headless=request.headless,
+    )
+    await app.main()
+    return account_file
 
 
 async def upload_video(request: DouyinVideoUploadRequest) -> Path:
@@ -646,6 +701,27 @@ def build_parser() -> argparse.ArgumentParser:
     tencent_upload_video_parser.add_argument("--category", help="Optional original content category")
     tencent_upload_video_parser.add_argument("--draft", action="store_true", help="Save as draft instead of publishing")
     add_runtime_flags(tencent_upload_video_parser)
+
+    youtube_parser = platform_parsers.add_parser("youtube", help="YouTube operations")
+    youtube_actions = youtube_parser.add_subparsers(dest="action", required=True)
+
+    for action_name in ("login", "check"):
+        action_parser = youtube_actions.add_parser(action_name, help=f"YouTube {action_name}")
+        action_parser.add_argument("--account", required=True, help="YouTube user-defined account_name")
+        if action_name == "login":
+            add_runtime_flags(action_parser)
+
+    youtube_upload_video_parser = youtube_actions.add_parser("upload-video", help="Upload one video to YouTube")
+    youtube_upload_video_parser.add_argument("--account", required=True, help="YouTube user-defined account_name")
+    youtube_upload_video_parser.add_argument("--file", required=True, type=existing_file_path, help="Video file path")
+    youtube_upload_video_parser.add_argument("--title", required=True, help="Video title (<=100 chars)")
+    youtube_upload_video_parser.add_argument("--desc", default="", help="Optional video description")
+    youtube_upload_video_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
+    youtube_upload_video_parser.add_argument("--thumbnail", type=existing_file_path, help="Optional thumbnail image path")
+    youtube_upload_video_parser.add_argument("--playlist", help="Optional playlist name to add the video to (for series)")
+    youtube_upload_video_parser.add_argument(
+        "--visibility", default="public", choices=["public", "unlisted", "private"], help="Video visibility")
+    add_runtime_flags(youtube_upload_video_parser)
     return parser
 
 
@@ -881,6 +957,38 @@ async def dispatch(args: argparse.Namespace) -> int:
             return 0
 
         raise RuntimeError(f"Unsupported Tencent/WeChat Channels action: {args.action}")
+
+    if args.platform == "youtube":
+        if args.action == "login":
+            result = await login_youtube_account(args.account, headless=args.headless)
+            if not result["success"]:
+                raise RuntimeError(result["message"])
+            print(f"YouTube login flow completed: {result['account_file']}")
+            return 0
+
+        if args.action == "check":
+            is_valid = await check_youtube_account(args.account)
+            print("valid" if is_valid else "invalid")
+            return 0 if is_valid else 1
+
+        if args.action == "upload-video":
+            request = YouTubeVideoUploadRequest(
+                account_name=args.account,
+                video_file=args.file,
+                title=args.title,
+                description=args.desc,
+                tags=parse_tags(args.tags),
+                thumbnail_file=args.thumbnail,
+                playlist=args.playlist,
+                visibility=args.visibility,
+                debug=args.debug,
+                headless=args.headless,
+            )
+            await upload_youtube_video(request)
+            print(f"YouTube video upload submitted: {request.video_file}")
+            return 0
+
+        raise RuntimeError(f"Unsupported YouTube action: {args.action}")
 
     raise RuntimeError(f"Unsupported platform: {args.platform}")
 
