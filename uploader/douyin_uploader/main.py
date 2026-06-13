@@ -55,7 +55,7 @@ async def cookie_auth(account_file):
             context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
             page = await context.new_page()
-            await page.goto("https://creator.douyin.com/creator-micro/content/upload")
+            await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
             try:
                 await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=5000)
             except Exception:
@@ -522,10 +522,10 @@ class DouYinVideo(DouYinBaseUploader):
         context = await set_init_script(context)
 
         page = await context.new_page()
-        await page.goto("https://creator.douyin.com/creator-micro/content/upload")
+        await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
         douyin_logger.info(_msg("🏃", f"小人开始搬运视频: {self.title}.mp4"))
         douyin_logger.info(_msg("🧭", "小人正在赶往上传主页"))
-        await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
+        await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=90000)
         # wait_for_url 完成时上传页可能尚未渲染出文件 input（实测偶发），先等它挂载再 set_input_files
         await page.wait_for_selector("div[class^='container'] input", state="attached", timeout=60000)
         await page.locator("div[class^='container'] input").set_input_files(self.file_path)
@@ -725,9 +725,9 @@ class DouYinNote(DouYinBaseUploader):
         upload_success = False
         try:
             page = await context.new_page()
-            await page.goto("https://creator.douyin.com/creator-micro/content/upload")
+            await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
             douyin_logger.info(_msg("🧭", "小人正在赶往图文发布页"))
-            await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
+            await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=90000)
 
             await self.upload_note_content(page)
             upload_success = True
