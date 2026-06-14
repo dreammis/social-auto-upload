@@ -187,6 +187,8 @@ sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title
 > 是因为**未通过 Google 合规审核的 API 项目上传的视频会被强制锁为私享、无法改公开**，对个人/单频道不实用；
 > 浏览器自动化没有此限制，可直接发布公开视频，也与本项目其它平台的 cookie 方案一致。
 > `--playlist` 适合连载/系列追更；`--visibility` 可选 `public`/`unlisted`/`private`。
+> 上传会**等进度到 100% 再点发布**（浏览器上传靠窗口开着传，传一半就发布会被掐断卡在中途）。
+> youtube.com 被墙的地区：在 `conf.py` 设 `YT_PROXY = "http://127.0.0.1:7890"`（chromium 不吃系统代理，需显式指定）。
 
 补充说明：
 

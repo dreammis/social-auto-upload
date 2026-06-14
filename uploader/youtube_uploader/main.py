@@ -21,6 +21,13 @@ from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
 from utils.log import youtube_logger
 
+try:
+    # 国内直连 youtube.com 会超时，且 patchright 启的 chromium 不吃系统代理。
+    # 在 conf.py 设 YT_PROXY = "http://127.0.0.1:7890"（本地代理端口）即可；不设则不走代理。
+    from conf import YT_PROXY
+except Exception:
+    YT_PROXY = None
+
 STUDIO_URL = "https://studio.youtube.com"
 UPLOAD_URL = "https://www.youtube.com/upload"
 VISIBILITY = {"public": "PUBLIC", "unlisted": "UNLISTED", "private": "PRIVATE"}
@@ -121,6 +128,34 @@ async def _click_if_present(page: Page, selector: str, timeout: int = 4000) -> b
         return False
 
 
+async def _wait_upload_complete(page: Page, max_polls: int = 360) -> bool:
+    """等网页上传从 X% 跑到 100% 再发布。浏览器上传靠窗口开着才传得完，
+    若上传到一半就点发布并关闭浏览器，上传会被掐断卡在中途（如 76%）。
+    出现“处理/检查/上传完成”或不再“正在上传”即视为传完。max_polls*5s=30min 上限。"""
+    last = ""
+    for _ in range(max_polls):
+        txt = ""
+        for sel in (".progress-label", "span.progress-label", "ytcp-video-upload-progress"):
+            loc = page.locator(sel).first
+            try:
+                if await loc.count():
+                    txt = (await loc.inner_text()).strip()
+                    if txt:
+                        break
+            except Exception:
+                pass
+        if txt:
+            if any(k in txt for k in ("处理", "检查", "上传完成", "已上传", "Processing", "complete", "Checks", "Finished")):
+                youtube_logger.info(_msg("✅", f"上传完成: {txt[:40]}"))
+                return True
+            if txt != last:
+                youtube_logger.info(_msg("⏳", f"上传中: {txt[:40]}"))
+                last = txt
+        await page.wait_for_timeout(5000)
+    youtube_logger.warning(_msg("⚠️", "等上传超时(30min)，仍尝试发布"))
+    return False
+
+
 class YouTubeVideo(BaseVideoUploader):
     def __init__(self, title, file_path, tags, account_file, *,
                  description="", thumbnail_path=None, playlist=None,
@@ -137,7 +172,10 @@ class YouTubeVideo(BaseVideoUploader):
         self.headless = headless
 
     async def upload(self, playwright: Playwright) -> None:
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chrome")
+        browser = await playwright.chromium.launch(
+            headless=self.headless, channel="chrome",
+            proxy={"server": YT_PROXY} if YT_PROXY else None,
+        )
         context = await browser.new_context(storage_state=self.account_file)
         context = await set_init_script(context)
         page = await context.new_page()
@@ -234,6 +272,11 @@ class YouTubeVideo(BaseVideoUploader):
         # 10) 可见性
         youtube_logger.info(_msg("🌐", f"设置可见性 = {self.visibility}"))
         await _click_if_present(page, f"tp-yt-paper-radio-button[name='{VISIBILITY[self.visibility]}']", 10000)
+
+        # 10.5) 关键：等上传真正传完再发布。浏览器上传靠窗口开着传，
+        #       传到一半就点发布+关浏览器 = 上传被掐断卡在中途（如 76%）。
+        youtube_logger.info(_msg("📤", "等待上传完成（传完才发布）…"))
+        await _wait_upload_complete(page)
 
         # 11) 发布
         await page.wait_for_timeout(1200)
