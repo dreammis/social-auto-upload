@@ -103,8 +103,11 @@ sau bilibili --help
 sau douyin login --account <account_name>
 sau douyin check --account <account_name>
 sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介"
+图文正文1:
 $noteText = @"图文正文"@    
 sau douyin upload-note --account <account_name> --images videos/demo1.png videos/demo2.png --title "图文标题" --note $noteText  --tags 'tag1,tag2'
+图文正文2:
+sau douyin upload-note --account <account_name> --images videos/demo1.png videos/demo2.png --title "图文标题" --notef '图文文件路径'  --tags 'tag1,tag2'
 ``` 
 
 抖音卡login手动获取cookie:
