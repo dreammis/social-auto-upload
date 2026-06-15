@@ -278,11 +278,15 @@ class DouYinBaseUploader(BaseVideoUploader):
         await description_editor.click()
         await page.keyboard.press("Control+KeyA")
         await page.keyboard.press("Delete")
-        await page.keyboard.type(description)
 
-        for tag in tags or []:
-            await page.keyboard.type(" #" + tag)
-            await page.keyboard.press("Space")
+        # tags 合并到 description 结尾，一起用 textContent 赋值
+        if tags:
+            tags_text = " ".join(f"#{t}" for t in tags)
+            full_text = description + "\n\n" + tags_text
+        else:
+            full_text = description
+
+        await description_editor.evaluate('(el, text) => el.textContent = text', full_text)
 
     async def set_location(self, page: Page, location: str = ""):
         if not location:
