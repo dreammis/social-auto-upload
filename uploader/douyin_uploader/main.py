@@ -636,6 +636,10 @@ class DouYinNote(DouYinBaseUploader):
         await self.validate_base_args()
         if not self.title or not str(self.title).strip():
             raise ValueError("图文模式下，title 是必须的")
+
+        if len(self.title) > 20:
+            raise ValueError(f"标题不能超过20字符，当前: {len(self.title)}字符")
+
         if not self.image_paths:
             raise ValueError("图文模式下，图片是必须的")
 
@@ -644,6 +648,10 @@ class DouYinNote(DouYinBaseUploader):
 
         if len(self.image_paths) > 35:
             raise ValueError("图文模式下最多只支持上传 35 张图片")
+
+        note_len = len(self.note) if self.note else 0
+        if note_len > 1000:
+            raise ValueError(f"正文不能超过1000字符，当前: {note_len}字符")
 
         normalized_image_paths = []
         for image_path in self.image_paths:
