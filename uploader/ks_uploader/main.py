@@ -12,6 +12,7 @@ from patchright.async_api import Playwright
 from patchright.async_api import async_playwright
 
 from conf import DEBUG_MODE, LOCAL_CHROME_PATH
+from myUtils.screenshot_manager import ScreenshotManager
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
 from utils.files_times import get_absolute_path
@@ -382,6 +383,90 @@ class KSBaseUploader(BaseVideoUploader):
         else:
             print("未检测到 Joyride 遮罩，继续执行")
 
+    async def set_original_declaration(self, page: Page) -> None:
+        """快手「声明原创」功能。
+
+        快手平台目前没有「声明原创」入口，此方法保留用于未来可能的实现。
+        """
+        # 快手平台目前没有声明原创选项
+        kuaishou_logger.info(_msg("🧾", "快手平台暂无声明原创选项，跳过"))
+
+    async def set_collection(self, page: Page, collection_name: str) -> None:
+        """快手「合集」选择：通过"加入合集"label定位 → 点击Ant Design Select下拉框 → 等待选项列表 → 模糊匹配选择包含关键字的选项。
+
+        Args:
+            page: Playwright页面对象
+            collection_name: 合集名称关键字（如"大学篇"），会模糊匹配包含该文字的选项
+        """
+        if not collection_name:
+            kuaishou_logger.debug(_msg("📚", "未指定合集名称，跳过合集选择"))
+            return
+
+        try:
+            # 定位"加入合集"label（使用用户提供的HTML结构）
+            collection_label = page.locator("label").filter(has_text="加入合集").first
+            if not await collection_label.count():
+                kuaishou_logger.warning(_msg("📚", "未找到「加入合集」标签，跳过合集选择"))
+                return
+
+            await collection_label.wait_for(state="visible", timeout=6000)
+
+            # 从 label 向上找到父级 form item 容器，再定位其中的 .ant-select 下拉框
+            collection_select = collection_label.locator(
+                "xpath=ancestor::div[contains(@class, '_edit-form-item')]//div[contains(@class, 'ant-select')]"
+            ).first
+
+            if not await collection_select.count():
+                # 备用方案：直接查找包含占位符文本的 ant-select
+                collection_select = page.locator(
+                    'div.ant-select:has(span.ant-select-selection-placeholder:text("选择要加入到的合集"))'
+                ).first
+
+            if not await collection_select.count():
+                kuaishou_logger.warning(_msg("📚", "未找到合集下拉框，跳过合集选择"))
+                return
+
+            # 点击下拉框展开选项列表
+            await collection_select.click()
+            kuaishou_logger.debug(_msg("📚", "已点击合集下拉框，等待选项列表出现"))
+
+            # 等待 Ant Design 下拉菜单出现（通常会有 .ant-select-dropdown:not(.ant-select-dropdown-hidden)）
+            dropdown = page.locator('div.ant-select-dropdown:not(.ant-select-dropdown-hidden)').first
+            try:
+                await dropdown.wait_for(state="visible", timeout=5000)
+            except Exception:
+                kuaishou_logger.warning(_msg("📚", "合集下拉菜单未出现，关闭下拉框"))
+                await page.keyboard.press("Escape")
+                return
+
+            # 在下拉菜单中查找所有可见选项（使用 .ant-select-item-option，带 label 属性）
+            options = dropdown.locator('.ant-select-item-option')
+            option_count = await options.count()
+
+            if option_count == 0:
+                kuaishou_logger.warning(_msg("📚", "合集选项列表为空，关闭下拉框"))
+                await page.keyboard.press("Escape")
+                return
+
+            # 遍历选项查找包含关键字的项
+            found = False
+            for i in range(option_count):
+                option = options.nth(i)
+                # 优先读取 label 属性，其次读取文本内容
+                option_text = await option.get_attribute("label") or (await option.text_content())
+                if option_text and collection_name in option_text:
+                    await option.click()
+                    kuaishou_logger.info(_msg("📚", f"已选择合集：{option_text}"))
+                    found = True
+                    break
+
+            if not found:
+                kuaishou_logger.warning(_msg("📚", f"未找到包含「{collection_name}」的合集选项，关闭下拉框"))
+                await page.keyboard.press("Escape")
+
+        except Exception as exc:
+            kuaishou_logger.warning(_msg("📚", f"合集设置失败，跳过该步骤继续发布：{exc}"))
+
 
 class KSVideo(KSBaseUploader):
     upload_page = "https://cp.kuaishou.com/article/publish/video"
@@ -398,6 +483,14 @@ class KSVideo(KSBaseUploader):
         headless: bool | None = None,
         thumbnail_path=None,
         desc: str | None = None,
+        category=None,
+        # 快手特有参数
+        kuaishou_declaration: str = "内容为AI生成",  # 作者声明类型
+        allow_duet: bool = True,   # 允许别人跟我拍同框
+        allow_download: bool = True,  # 允许下载此作品
+        show_in_city: bool = True,  # 作品展示在同城页
+        collection: str | None = None,  # 合集名称
+        screenshot_manager: ScreenshotManager | None = None,  # 截图管理器（异常诊断）
     ):
         super().__init__(
             publish_date=publish_date,
@@ -411,6 +504,19 @@ class KSVideo(KSBaseUploader):
         self.tags = tags or []
         self.thumbnail_path = thumbnail_path
         self.desc = desc or ""
+        self.category = category
+        # 快手特有字段
+        self.kuaishou_declaration = kuaishou_declaration
+        self.allow_duet = allow_duet
+        self.allow_download = allow_download
+        self.show_in_city = show_in_city
+        self.collection = collection  # 合集名称
+        self.screenshot_manager = screenshot_manager  # 截图管理器
+
+    async def _take_error_screenshot(self, page: Page, error_msg: str = None) -> None:
+        """辅助方法：错误时截图"""
+        if self.screenshot_manager:
+            await self.screenshot_manager.take_error_screenshot(page, error_msg)
 
     async def validate_upload_args(self):
         await self.validate_base_args()
@@ -453,6 +559,71 @@ class KSVideo(KSBaseUploader):
         await modal.wait_for(state="hidden", timeout=30000)
         kuaishou_logger.success(_msg("🥳", "封面已经设置完成"))
 
+    async def set_declaration(self, page: Page) -> None:
+        """设置作者声明"""
+        kuaishou_logger.info(_msg("📝", f"小人正在设置作者声明: {self.kuaishou_declaration}"))
+        try:
+            # HTML结构: div._edit-form-item > label(作者声明) + div.ant-select
+            # 通过 label 文字定位到 form item 容器，再找到同级的 .ant-select 下拉框
+            declaration_label = page.locator("label").filter(has_text="作者声明").first
+            await declaration_label.wait_for(state="visible", timeout=10000)
+
+            # 从 label 向上找到父级 form item，再定位其中的 .ant-select
+            declaration_select = declaration_label.locator("xpath=ancestor::div[contains(@class, '_edit-form-item')]//div[contains(@class, 'ant-select')]").first
+            if await declaration_select.count() > 0 and await declaration_select.is_visible():
+                await declaration_select.click()
+                await asyncio.sleep(1)
+
+            # 在 ant-design Select 下拉菜单中选择目标选项
+            option = page.locator(".ant-select-item-option").filter(has_text=self.kuaishou_declaration).first
+            await option.wait_for(state="visible", timeout=5000)
+            await option.click()
+            await asyncio.sleep(0.5)
+
+            kuaishou_logger.success(_msg("✅", f"作者声明已设置为: {self.kuaishou_declaration}"))
+        except Exception as e:
+            kuaishou_logger.warning(_msg("⚠️", f"设置作者声明时出错（可能页面无此选项）: {e}"))
+
+    async def set_interaction_settings(self, page: Page) -> None:
+        """设置互动选项（取消默认勾选的选项）"""
+        kuaishou_logger.info(_msg("⚙️", "小人正在设置互动选项"))
+        try:
+            # 等待互动设置区域加载
+            interaction_section = page.locator("div").filter(has_text="允许别人跟我拍同框").first
+            await interaction_section.wait_for(state="visible", timeout=10000)
+
+            # 取消"允许别人跟我拍同框"
+            if not self.allow_duet:
+                duet_checkbox = page.get_by_text("允许别人跟我拍同框", exact=True).first
+                if await duet_checkbox.count() and await duet_checkbox.is_visible():
+                    # 查找关联的checkbox并点击取消
+                    checkbox_wrapper = duet_checkbox.locator("xpath=ancestor::label[contains(@class, 'ant-checkbox-wrapper')]")
+                    if await checkbox_wrapper.count():
+                        await checkbox_wrapper.click()
+                        kuaishou_logger.info(_msg("❌", "已取消：允许别人跟我拍同框"))
+
+            # 取消"允许下载此作品"
+            if not self.allow_download:
+                download_checkbox = page.get_by_text("允许下载此作品", exact=True).first
+                if await download_checkbox.count() and await download_checkbox.is_visible():
+                    checkbox_wrapper = download_checkbox.locator("xpath=ancestor::label[contains(@class, 'ant-checkbox-wrapper')]")
+                    if await checkbox_wrapper.count():
+                        await checkbox_wrapper.click()
+                        kuaishou_logger.info(_msg("❌", "已取消：允许下载此作品"))
+
+            # 取消"作品展示在同城页"
+            if not self.show_in_city:
+                city_checkbox = page.get_by_text("作品展示在同城页", exact=True).first
+                if await city_checkbox.count() and await city_checkbox.is_visible():
+                    checkbox_wrapper = city_checkbox.locator("xpath=ancestor::label[contains(@class, 'ant-checkbox-wrapper')]")
+                    if await checkbox_wrapper.count():
+                        await checkbox_wrapper.click()
+                        kuaishou_logger.info(_msg("❌", "已取消：作品展示在同城页"))
+
+            kuaishou_logger.success(_msg("✅", "互动选项设置完成"))
+        except Exception as e:
+            kuaishou_logger.warning(_msg("⚠️", f"设置互动选项时出错（可能页面结构变化）: {e}"))
+
     async def upload(self, playwright: Playwright) -> None:
         kuaishou_logger.info(_msg("🧍", "小人先检查 cookie、视频文件、封面和发布时间"))
         await self.validate_upload_args()
@@ -471,6 +642,7 @@ class KSVideo(KSBaseUploader):
         context = await browser.new_context(storage_state=self.account_file)
         context = await set_init_script(context)
 
+        page = None
         upload_success = False
         try:
             page = await context.new_page()
@@ -503,7 +675,11 @@ class KSVideo(KSBaseUploader):
             await page.keyboard.press("Backspace")
             await page.keyboard.press("Control+KeyA")
             await page.keyboard.press("Delete")
-            await page.keyboard.type(self.desc or self.title)
+            # 快手标题和描述合并填入作品描述框
+            combined_desc = self.title
+            if self.desc:
+                combined_desc = f"{self.title}\n{self.desc}"
+            await page.keyboard.type(combined_desc)
             await page.keyboard.press("Enter")
 
             for index, tag in enumerate(self.tags[:3], start=1):
@@ -537,6 +713,22 @@ class KSVideo(KSBaseUploader):
 
             await self.set_thumbnail(page)
 
+            # 设置作者声明（快手特有功能）
+            await self.set_declaration(page)
+
+            # 设置互动选项（快手特有功能）
+            await self.set_interaction_settings(page)
+
+            # 设置原创声明（可选项，根据category参数决定）
+            await self.set_original_declaration(page)
+
+            # 设置合集
+            if self.collection:
+                kuaishou_logger.info(_msg("📚", f"小人正在设置合集：{self.collection}"))
+                await asyncio.sleep(1)  # 等待页面渲染合集下拉框
+                await self.set_collection(page, self.collection)
+                kuaishou_logger.info(_msg("🥳", "合集设置完成"))
+
             if self.publish_strategy == KUAISHOU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
                 await self.set_schedule_time(page, self.publish_date)
 
@@ -556,11 +748,16 @@ class KSVideo(KSBaseUploader):
                     break
                 except Exception as exc:
                     kuaishou_logger.info(_msg("🏃", f"小人正在冲刺发布视频: {exc}"))
-                    if self.debug:
-                        await page.screenshot(full_page=True)
+                    if self.debug and self.screenshot_manager:
+                        await self.screenshot_manager.take_screenshot(page, "发布重试")
                     await asyncio.sleep(1)
 
             upload_success = True
+        except Exception as e:
+            kuaishou_logger.error(_msg("❌", f"上传过程中发生错误: {e}"))
+            if page and self.screenshot_manager:
+                await self._take_error_screenshot(page, str(e))
+            raise
         finally:
             if upload_success:
                 await context.storage_state(path=self.account_file)
@@ -695,8 +892,8 @@ class KSNote(KSBaseUploader):
                 break
             except Exception as exc:
                 kuaishou_logger.info(_msg("🏃", f"小人正在冲刺发布图文: {exc}"))
-                if self.debug:
-                    await page.screenshot(full_page=True)
+                if self.debug and self.screenshot_manager:
+                    await self.screenshot_manager.take_screenshot(page, "图文发布重试")
                 await asyncio.sleep(1)
 
     async def upload(self, playwright: Playwright) -> None:

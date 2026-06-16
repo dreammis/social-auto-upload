@@ -11,6 +11,7 @@ from patchright.async_api import Playwright
 from patchright.async_api import async_playwright
 
 from conf import DEBUG_MODE, LOCAL_CHROME_PATH
+from myUtils.screenshot_manager import ScreenshotManager
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
 from utils.login_qrcode import build_login_qrcode_path
@@ -390,7 +391,19 @@ class DouYinBaseUploader(BaseVideoUploader):
         """
         try:
             # 发布页底部「自主声明」行，未选时显示占位文案「请选择自主声明」
-            entry = page.get_by_text("请选择自主声明").first
+            # 或者已选时显示「添加声明」按钮
+            entry = None
+            if await page.get_by_text("请选择自主声明").count():
+                entry = page.get_by_text("请选择自主声明").first
+            elif await page.get_by_text("添加声明").count():
+                entry = page.get_by_text("添加声明").first
+            elif await page.get_by_role("button", name="添加声明").count():
+                entry = page.get_by_role("button", name="添加声明").first
+
+            if not entry:
+                douyin_logger.warning(_msg("🧾", "未找到自主声明入口，跳过"))
+                return
+
             await entry.wait_for(state="visible", timeout=6000)
             await entry.click()
 
@@ -411,6 +424,64 @@ class DouYinBaseUploader(BaseVideoUploader):
         except Exception as exc:
             douyin_logger.warning(_msg("🧾", f"自主声明设置失败，跳过该步骤继续发布：{exc}"))
 
+    async def set_collection(self, page: Page, collection_name: str) -> None:
+        """抖音「合集」选择：点击合集下拉框 → 等待选项列表 → 模糊匹配选择包含关键字的选项。
+
+        Args:
+            page: Playwright页面对象
+            collection_name: 合集名称关键字（如"大学篇"），会模糊匹配包含该文字的选项
+        """
+        if not collection_name:
+            douyin_logger.debug(_msg("📚", "未指定合集名称，跳过合集选择"))
+            return
+
+        try:
+            # 定位合集下拉框（使用用户提供的CSS选择器）
+            collection_select = page.locator('.select-collection-nkL6sA').first
+            if not await collection_select.count():
+                # 尝试备用选择器：通过文本内容定位
+                collection_select = page.locator('div.semi-select:has(div:has-text("请选择合集"))').first
+
+            if not await collection_select.count():
+                douyin_logger.warning(_msg("📚", "未找到合集下拉框，跳过合集选择"))
+                return
+
+            # 点击下拉框展开选项列表
+            await collection_select.wait_for(state="visible", timeout=6000)
+            await collection_select.click()
+            douyin_logger.debug(_msg("📚", "已点击合集下拉框"))
+
+            # 等待选项列表出现（Semi Design的下拉列表通常使用 role="listbox"）
+            await page.wait_for_selector('[role="listbox"]', timeout=5000)
+
+            # 模糊匹配：查找包含关键字的选项
+            options = page.locator('[role="option"]')
+            option_count = await options.count()
+
+            if option_count == 0:
+                douyin_logger.warning(_msg("📚", "合集选项列表为空，关闭下拉框"))
+                # 点击其他地方关闭下拉框
+                await page.keyboard.press("Escape")
+                return
+
+            # 遍历选项查找包含关键字的项
+            found = False
+            for i in range(option_count):
+                option = options.nth(i)
+                option_text = await option.text_content()
+                if option_text and collection_name in option_text:
+                    await option.click()
+                    douyin_logger.info(_msg("📚", f"已选择合集：{option_text}"))
+                    found = True
+                    break
+
+            if not found:
+                douyin_logger.warning(_msg("📚", f"未找到包含「{collection_name}」的合集选项，关闭下拉框"))
+                await page.keyboard.press("Escape")
+
+        except Exception as exc:
+            douyin_logger.warning(_msg("📚", f"合集设置失败，跳过该步骤继续发布：{exc}"))
+
 
 class DouYinVideo(DouYinBaseUploader):
     upload_page = "https://creator.douyin.com/creator-micro/content/upload"
@@ -428,9 +499,12 @@ class DouYinVideo(DouYinBaseUploader):
         declaration_info: dict | None = None,
         thumbnail_portrait_path=None,
         desc: str | None = None,
+        category=None,
         publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool | None = None,
+        collection: str | None = None,  # 合集名称
+        screenshot_manager: ScreenshotManager | None = None,  # 截图管理器（异常诊断）
     ):
         super().__init__(
             publish_date=publish_date,
@@ -448,6 +522,14 @@ class DouYinVideo(DouYinBaseUploader):
         self.productTitle = productTitle
         self.declaration_info = declaration_info
         self.desc = desc or ""
+        self.category = category
+        self.collection = collection  # 合集名称
+        self.screenshot_manager = screenshot_manager  # 截图管理器
+
+    async def _take_error_screenshot(self, page: Page, error_msg: str = None) -> None:
+        """辅助方法：错误时截图"""
+        if self.screenshot_manager:
+            await self.screenshot_manager.take_error_screenshot(page, error_msg)
 
     async def validate_upload_args(self):
         await self.validate_base_args()
@@ -486,111 +568,289 @@ class DouYinVideo(DouYinBaseUploader):
         return False
 
     async def set_thumbnail(self, page: Page):
+        """设置视频封面，抖音有两个封面：3:4竖封面和4:3横封面"""
         if not self.thumbnail_landscape_path and not self.thumbnail_portrait_path:
             return
 
         douyin_logger.info(_msg("🏃", "小人正在设置视频封面"))
-        open_cover_tip = "竖封面3:4" if self.thumbnail_portrait_path else "横封面4:3"
-        cover_locator = await self._open_cover_editor(page, open_cover_tip)
 
+        # 处理竖封面（3:4）
         if self.thumbnail_portrait_path:
-            await self._switch_cover_step(page, cover_locator, "设置竖封面")
-            await self._upload_cover_image(page, cover_locator, self.thumbnail_portrait_path, "竖版封面")
-            douyin_logger.info(_msg("🖼️", "竖版封面上传完成"))
+            douyin_logger.info(_msg("🖼️", "开始设置竖封面（3:4）"))
+            cover_locator = await self._upload_single_cover(
+                page, "选择封面", self.thumbnail_portrait_path, "竖版封面（3:4）", 
+                click_finish=False  # 竖封面上传后不点击完成
+            )
+            douyin_logger.info(_msg("✅", "竖版封面上传完成"))
 
-        if self.thumbnail_landscape_path:
-            await self._switch_cover_step(page, cover_locator, "设置横封面")
-            await self._upload_cover_image(page, cover_locator, self.thumbnail_landscape_path, "横版封面")
-            douyin_logger.info(_msg("🖼️", "横版封面上传完成"))
+            # 如果还需要上传横封面，点击"设置横封面"按钮，然后直接上传
+            if self.thumbnail_landscape_path:
+                await self._click_set_landscape_cover_button(page, cover_locator)
+                # 点击后弹窗已存在，直接上传横封面
+                douyin_logger.info(_msg("🖼️", "开始设置横封面（4:3）"))
+                await self._upload_landscape_cover(page, cover_locator, self.thumbnail_landscape_path, "横版封面（4:3）")
+                douyin_logger.info(_msg("✅", "横版封面上传完成"))
+        elif self.thumbnail_landscape_path:
+            # 只有横封面时，需要单独打开弹窗
+            douyin_logger.info(_msg("🖼️", "开始设置横封面（4:3）"))
+            await self._upload_single_cover(page, "选择封面", self.thumbnail_landscape_path, "横版封面（4:3）")
+            douyin_logger.info(_msg("✅", "横版封面上传完成"))
 
-        await self._finish_cover_editor(cover_locator)
         douyin_logger.info(_msg("🥳", "视频封面设置完成"))
 
-    async def _open_cover_editor(self, page: Page, cover_tip: str) -> Locator:
-        cover_control = page.locator(f"div.coverControl-CjlzqC:has-text('{cover_tip}')").first
-        await cover_control.wait_for(state="visible", timeout=30000)
-        await cover_control.scroll_into_view_if_needed()
-        await cover_control.locator("div.cover-Jg3T4p").first.click()
+    async def _upload_single_cover(self, page: Page, button_text: str, image_path: str, cover_name: str, click_finish: bool = True):
+        """上传单个封面：点击选择封面 → 弹窗中点击上传区域并上传文件 → 点击完成（可选）
+        
+        Args:
+            page: Playwright页面对象
+            button_text: 要点击的按钮文本
+            image_path: 图片路径
+            cover_name: 封面名称（用于日志）
+            click_finish: 是否点击完成按钮，默认为True。如果为False，则返回cover_locator供后续操作
+            
+        Returns:
+            如果click_finish为False，返回cover_locator；否则返回None
+        """
+        douyin_logger.info(_msg("📤", f"小人准备上传{cover_name}"))
 
-        cover_locator = page.locator("#dy-creator-content-modal-body").last
-        try:
-            await cover_locator.wait_for(state="visible", timeout=10000)
+        # 步骤1：点击"选择封面"按钮
+        await self._click_select_cover_button(page, button_text, cover_name)
+
+        # 步骤2：等待弹窗出现
+        cover_locator = await self._wait_for_cover_modal(page)
+
+        # 步骤3：在弹窗中点击上传区域并上传文件（合并为一个步骤，使用expect_file_chooser处理文件选择器）
+        await self._click_and_upload_file(page, cover_locator, image_path, cover_name)
+
+        # 步骤4：点击"完成"按钮（可选）
+        if click_finish:
+            await self._click_finish_button(page, cover_locator, cover_name)
+            return None
+        else:
             return cover_locator
-        except Exception:
-            return await self._wait_for_cover_modal(page)
 
-    async def _switch_cover_step(self, page: Page, cover_locator: Locator, step_text: str):
-        button_candidates = []
-        if step_text == "设置横封面":
-            button_candidates.append(
-                cover_locator.locator('div.buttons-BoCvr4 button:has-text("设置横封面")').first
-            )
+    async def _click_select_cover_button(self, page: Page, button_text: str, cover_name: str):
+        """点击"选择封面"按钮"""
+        douyin_logger.info(_msg("👆", f"小人准备点击'{button_text}'按钮"))
 
-        button_candidates.extend(
-            [
-                cover_locator.get_by_role("button", name=step_text, exact=True).first,
-                cover_locator.locator(f"div.steps-cgzd9T div.step-dXVbPX:has(span:text-is('{step_text}'))").first,
-                cover_locator.get_by_text(step_text, exact=True).first,
-            ]
-        )
+        # 方式1：查找包含"选择封面"文本的按钮
+        try:
+            select_cover_btn = page.get_by_text(button_text, exact=True).first
+            if await select_cover_btn.count():
+                await select_cover_btn.wait_for(state="visible", timeout=10000)
+                await select_cover_btn.scroll_into_view_if_needed()
+                await select_cover_btn.click()
+                douyin_logger.success(_msg("✅", f"已点击'{button_text}'按钮"))
+                await page.wait_for_timeout(1000)
+                return
+        except Exception as e:
+            douyin_logger.warning(_msg("⚠️", f"方式1点击'{button_text}'按钮失败: {e}"))
 
-        for candidate in button_candidates:
-            try:
-                if not await candidate.count():
-                    continue
-                await candidate.scroll_into_view_if_needed()
-                await candidate.click()
+        # 方式2：查找包含"选择封面"文本的div
+        try:
+            select_cover_div = page.locator(f"div:has-text('{button_text}')").filter(has_text="封面").first
+            if await select_cover_div.count():
+                await select_cover_div.wait_for(state="visible", timeout=10000)
+                await select_cover_div.scroll_into_view_if_needed()
+                await select_cover_div.click()
+                douyin_logger.success(_msg("✅", f"已点击'{button_text}'区域"))
+                await page.wait_for_timeout(1000)
+                return
+        except Exception as e:
+            douyin_logger.warning(_msg("⚠️", f"方式2点击'{button_text}'区域失败: {e}"))
+
+        # 方式3：查找封面相关的按钮
+        try:
+            cover_btn = page.locator("button:has-text('封面')").first
+            if await cover_btn.count():
+                await cover_btn.wait_for(state="visible", timeout=10000)
+                await cover_btn.scroll_into_view_if_needed()
+                await cover_btn.click()
+                douyin_logger.success(_msg("✅", "已点击封面按钮"))
+                await page.wait_for_timeout(1000)
+                return
+        except Exception as e:
+            douyin_logger.warning(_msg("⚠️", f"方式3点击封面按钮失败: {e}"))
+
+        raise RuntimeError(f"未找到'{button_text}'按钮")
+
+    async def _click_and_upload_file(self, page: Page, cover_locator: Locator, image_path: str, cover_name: str):
+        """点击上传区域并上传文件，使用expect_file_chooser处理系统文件选择器"""
+        douyin_logger.info(_msg("📤", f"小人准备点击上传区域并上传文件: {image_path}"))
+
+        # 使用精确的选择器，排除custom类的错误上传区域
+        upload_area = cover_locator.locator("div.semi-upload-drag-area:not(.semi-upload-drag-area-custom)").first
+        await upload_area.wait_for(state="visible", timeout=5000)
+        douyin_logger.info(_msg("👆", "找到正确的上传区域，准备点击"))
+        
+        # 使用expect_file_chooser监听文件选择器
+        async with page.expect_file_chooser() as file_chooser_info:
+            await upload_area.click()
+        
+        # 获取文件选择器并设置文件
+        file_chooser = await file_chooser_info.value
+        await file_chooser.set_files(image_path)
+        douyin_logger.info(_msg("📤", f"文件已选择，等待上传完成..."))
+        
+        # 等待上传完成
+        await page.wait_for_timeout(3000)
+        douyin_logger.success(_msg("✅", f"{cover_name}上传完成"))
+
+    async def _click_set_landscape_cover_button(self, page: Page, cover_locator: Locator):
+        """点击"设置横封面"按钮"""
+        douyin_logger.info(_msg("👆", "小人准备点击'设置横封面'按钮"))
+
+        # 方式1：查找包含"设置横封面"文本的按钮
+        try:
+            landscape_btn = cover_locator.locator("button:has-text('设置横封面')").first
+            if await landscape_btn.count():
+                await landscape_btn.wait_for(state="visible", timeout=5000)
+                await landscape_btn.click()
+                douyin_logger.success(_msg("✅", "已点击'设置横封面'按钮"))
+                await page.wait_for_timeout(1000)
+                return
+        except Exception as e:
+            douyin_logger.warning(_msg("⚠️", f"方式1点击'设置横封面'按钮失败: {e}"))
+
+        # 方式2：查找包含"横封面"文本的按钮
+        try:
+            landscape_btn = cover_locator.locator("button:has-text('横封面')").first
+            if await landscape_btn.count():
+                await landscape_btn.wait_for(state="visible", timeout=5000)
+                await landscape_btn.click()
+                douyin_logger.success(_msg("✅", "已点击'横封面'按钮"))
+                await page.wait_for_timeout(1000)
+                return
+        except Exception as e:
+            douyin_logger.warning(_msg("⚠️", f"方式2点击'横封面'按钮失败: {e}"))
+
+        # 方式3：查找包含"设置"和"横"文本的元素
+        try:
+            landscape_btn = cover_locator.locator("[class*='btn'], [class*='button']").filter(
+                has_text="设置横"
+            ).first
+            if await landscape_btn.count():
+                await landscape_btn.wait_for(state="visible", timeout=5000)
+                await landscape_btn.click()
+                douyin_logger.success(_msg("✅", "已点击'设置横封面'元素"))
+                await page.wait_for_timeout(1000)
+                return
+        except Exception as e:
+            douyin_logger.warning(_msg("⚠️", f"方式3点击'设置横封面'元素失败: {e}"))
+
+        raise RuntimeError("未找到'设置横封面'按钮")
+
+    async def _upload_landscape_cover(self, page: Page, cover_locator: Locator, image_path: str, cover_name: str):
+        """上传横封面（在竖封面上传后的弹窗中继续上传）
+        
+        此方法假设弹窗已经打开（cover_locator已存在），直接点击上传区域并上传文件，然后点击完成
+        """
+        douyin_logger.info(_msg("📤", f"小人准备上传{cover_name}"))
+
+        # 直接在已有弹窗中点击上传区域并上传文件
+        await self._click_and_upload_file(page, cover_locator, image_path, cover_name)
+
+        # 点击"完成"按钮
+        await self._click_finish_button(page, cover_locator, cover_name)
+
+    async def _click_finish_button(self, page: Page, cover_locator: Locator, cover_name: str):
+        """点击"完成"按钮"""
+        douyin_logger.info(_msg("👆", f"小人准备点击'完成'按钮"))
+
+        # 方式1：查找包含"完成"文本的按钮
+        try:
+            finish_btn = cover_locator.locator("button:has-text('完成')").first
+            if await finish_btn.count():
+                await finish_btn.wait_for(state="visible", timeout=5000)
+                await finish_btn.click()
+                douyin_logger.success(_msg("✅", "已点击'完成'按钮"))
+                await page.wait_for_timeout(1000)
+                
+                # 处理可能出现的确认弹窗
+                await self._handle_confirmation_dialog(page)
+                
+                # 等待弹窗关闭（宽松等待，不抛出异常）
+                try:
+                    await cover_locator.wait_for(state="hidden", timeout=3000)
+                except Exception:
+                    # 弹窗可能已关闭或有其他元素干扰，继续执行
+                    douyin_logger.debug(_msg("ℹ️", "弹窗等待超时，继续执行"))
+                return
+        except Exception as e:
+            douyin_logger.warning(_msg("⚠️", f"方式1点击'完成'按钮失败: {e}"))
+
+        # 方式2：使用get_by_role查找按钮
+        try:
+            finish_btn = cover_locator.get_by_role("button", name="完成").first
+            if await finish_btn.count():
+                await finish_btn.click()
+                douyin_logger.success(_msg("✅", "已点击'完成'按钮（方式2）"))
+                await page.wait_for_timeout(1000)
+                
+                # 处理可能出现的确认弹窗
+                await self._handle_confirmation_dialog(page)
+                return
+        except Exception as e:
+            douyin_logger.warning(_msg("⚠️", f"方式2点击'完成'按钮失败: {e}"))
+
+        # 方式3：查找包含"确定"文本的按钮（备用）
+        try:
+            confirm_btn = cover_locator.locator("button:has-text('确定')").first
+            if await confirm_btn.count():
+                await confirm_btn.click()
+                douyin_logger.success(_msg("✅", "已点击'确定'按钮"))
+                await page.wait_for_timeout(1000)
+                return
+        except Exception as e:
+            douyin_logger.warning(_msg("⚠️", f"方式3点击'确定'按钮失败: {e}"))
+
+        raise RuntimeError(f"未找到'完成'按钮，{cover_name}上传可能未完成")
+    
+    async def _handle_confirmation_dialog(self, page: Page):
+        """处理点击完成按钮后可能出现的确认弹窗"""
+        douyin_logger.info(_msg("🧍", "检查是否有确认弹窗需要处理"))
+        
+        # 等待一下让弹窗有时间出现
+        await page.wait_for_timeout(500)
+        
+        # 检查是否有新的弹窗出现
+        try:
+            # 查找可能的确认弹窗（通常包含"取消"按钮）
+            cancel_btn = page.locator("button:has-text('取消')").first
+            if await cancel_btn.count() and await cancel_btn.is_visible():
+                douyin_logger.info(_msg("👆", "发现确认弹窗，准备点击'取消'按钮"))
+                await cancel_btn.click()
+                douyin_logger.success(_msg("✅", "已点击'取消'按钮，关闭确认弹窗"))
                 await page.wait_for_timeout(500)
                 return
-            except Exception:
-                continue
-
-        if step_text == "设置竖封面":
-            return
-
-        raise RuntimeError(f"未找到封面步骤入口: {step_text}")
-
-    async def _upload_cover_image(self, page: Page, cover_locator: Locator, image_path: str, cover_name: str):
-        upload_container = cover_locator.locator("div.container-XzaV9h.upload-ZOJTUA").first
-        if await upload_container.count():
-            await upload_container.wait_for(state="visible", timeout=10000)
-        else:
-            upload_container = cover_locator.locator('div:has-text("上传封面")').first
-
-        upload_input = upload_container.locator("input[type='file']").first if await upload_container.count() else None
-        upload_drag_area = upload_container.locator("div.semi-upload-drag-area").first if await upload_container.count() else cover_locator.locator("div.semi-upload-drag-area").last
-        if upload_input and await upload_input.count():
-            await upload_input.set_input_files(image_path)
-        elif await upload_drag_area.count():
-            async with page.expect_file_chooser() as file_chooser_info:
-                await upload_drag_area.click()
-            file_chooser = await file_chooser_info.value
-            await file_chooser.set_files(image_path)
-        else:
-            raise RuntimeError(f"未找到{cover_name}上传控件")
-
-        await page.wait_for_timeout(2000)
-
-    async def _finish_cover_editor(self, cover_locator: Locator):
-        await cover_locator.locator('button:visible:has-text("完成")').click()
+        except Exception as e:
+            douyin_logger.debug(_msg("ℹ️", f"没有发现确认弹窗或处理失败: {e}"))
+        
+        # 检查是否有其他类型的确认弹窗
         try:
-            await cover_locator.wait_for(state="hidden", timeout=10000)
-        except Exception:
-            await cover_locator.wait_for(state="detached", timeout=10000)
+            # 查找包含"确定"或"确认"的弹窗
+            confirm_dialog = page.locator(".semi-modal-content, [role='dialog']").filter(
+                has_text="确定"
+            ).first
+            if await confirm_dialog.count() and await confirm_dialog.is_visible():
+                # 查找弹窗中的"取消"按钮
+                cancel_btn = confirm_dialog.locator("button:has-text('取消')").first
+                if await cancel_btn.count():
+                    douyin_logger.info(_msg("👆", "发现确认弹窗，准备点击'取消'按钮"))
+                    await cancel_btn.click()
+                    douyin_logger.success(_msg("✅", "已点击'取消'按钮，关闭确认弹窗"))
+                    await page.wait_for_timeout(500)
+                    return
+        except Exception as e:
+            douyin_logger.debug(_msg("ℹ️", f"没有发现其他确认弹窗: {e}"))
+        
+        douyin_logger.info(_msg("✅", "没有需要处理的确认弹窗"))
 
     async def _wait_for_cover_modal(self, page: Page) -> Locator:
-        cover_locator = page.locator("#dy-creator-content-modal-body").last
-        for _ in range(20):
-            try:
-                if await cover_locator.count() and await cover_locator.is_visible():
-                    has_upload_area = await cover_locator.locator("div.container-XzaV9h.upload-ZOJTUA").count()
-                    has_finish_button = await cover_locator.locator('button:has-text("完成")').count()
-                    if has_upload_area or has_finish_button:
-                        return cover_locator
-            except Exception:
-                pass
-            await asyncio.sleep(0.5)
+        """等待封面编辑弹窗出现"""
+        douyin_logger.info(_msg("🧍", "小人正在等待封面编辑弹窗出现"))
 
+        # 查找通用的模态框/对话框
         modal_groups = [
             page.locator(".semi-modal-content"),
             page.locator("[role='dialog']"),
@@ -608,10 +868,12 @@ class DouYinVideo(DouYinBaseUploader):
                     except Exception:
                         continue
 
-                    has_upload_drag_area = await modal.locator("div.semi-upload-drag-area").count()
-                    has_upload_input = await modal.locator("input[type='file']").count()
+                    # 检查是否有上传控件（semi-upload-drag-area）、文件输入框或完成按钮
+                    has_upload_area = await modal.locator("div.semi-upload-drag-area").count()
+                    has_file_input = await modal.locator("input[type='file']").count()
                     has_finish_button = await modal.locator('button:has-text("完成")').count()
-                    if has_upload_drag_area or has_upload_input or has_finish_button:
+                    if has_upload_area or has_file_input or has_finish_button:
+                        douyin_logger.success(_msg("✅", "封面编辑弹窗已找到"))
                         return modal
 
             await asyncio.sleep(0.5)
@@ -769,99 +1031,114 @@ class DouYinVideo(DouYinBaseUploader):
         )
         context = await set_init_script(context)
 
-        page = await context.new_page()
-        await page.goto("https://creator.douyin.com/creator-micro/content/upload")
-        douyin_logger.info(_msg("🏃", f"小人开始搬运视频: {self.title}.mp4"))
-        douyin_logger.info(_msg("🧭", "小人正在赶往上传主页"))
-        await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
-        await page.locator("div[class^='container'] input").set_input_files(self.file_path)
+        page = None
+        try:
+            page = await context.new_page()
+            await page.goto("https://creator.douyin.com/creator-micro/content/upload")
+            douyin_logger.info(_msg("🏃", f"小人开始搬运视频: {self.title}.mp4"))
+            douyin_logger.info(_msg("🧭", "小人正在赶往上传主页"))
+            await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
+            await page.locator("div[class^='container'] input").set_input_files(self.file_path)
 
-        while True:
-            try:
-                await page.wait_for_url(
-                    "https://creator.douyin.com/creator-micro/content/publish?enter_from=publish_page",
-                    timeout=3000,
-                )
-                douyin_logger.info(_msg("🥳", "已经进入 version_1 发布页面"))
-                break
-            except Exception:
+            while True:
                 try:
                     await page.wait_for_url(
-                        "https://creator.douyin.com/creator-micro/content/post/video?enter_from=publish_page",
+                        "https://creator.douyin.com/creator-micro/content/publish?enter_from=publish_page",
                         timeout=3000,
                     )
-                    douyin_logger.info(_msg("🥳", "已经进入 version_2 发布页面"))
+                    douyin_logger.info(_msg("🥳", "已经进入 version_1 发布页面"))
                     break
                 except Exception:
-                    douyin_logger.debug(_msg("🧍", "还没进到视频发布页面，小人继续等一会"))
+                    try:
+                        await page.wait_for_url(
+                            "https://creator.douyin.com/creator-micro/content/post/video?enter_from=publish_page",
+                            timeout=3000,
+                        )
+                        douyin_logger.info(_msg("🥳", "已经进入 version_2 发布页面"))
+                        break
+                    except Exception:
+                        douyin_logger.debug(_msg("🧍", "还没进到视频发布页面，小人继续等一会"))
+                        await asyncio.sleep(0.5)
+
+            await asyncio.sleep(1)
+            douyin_logger.info(_msg("✍️", "小人开始填标题、描述和话题"))
+            await self.fill_title_and_description(page, self.title, self.desc, self.tags)
+            douyin_logger.info(_msg("🏷️", f"小人一共贴了 {len(self.tags)} 个话题"))
+
+            while True:
+                try:
+                    number = await page.locator('[class^="long-card"] div:has-text("重新上传")').count()
+                    if number > 0:
+                        douyin_logger.success(_msg("🥳", "视频已经传完啦"))
+                        break
+                    douyin_logger.info(_msg("🏃", "小人正在努力上传视频"))
+                    await asyncio.sleep(2)
+                    if await page.locator('div.progress-div > div:has-text("上传失败")').count():
+                        douyin_logger.error(_msg("😵", "检测到上传失败，小人准备重试"))
+                        await self.handle_upload_error(page)
+                except Exception:
+                    douyin_logger.debug(_msg("🧍", "小人还在等视频上传完成"))
+                    await asyncio.sleep(2)
+
+            if self.productLink and self.productTitle:
+                douyin_logger.info(_msg("🛒", "小人正在设置商品链接"))
+                douyin_logger.debug(_msg("🧍", "先等一下页面把商品弹窗相关控件准备好"))
+                await page.wait_for_timeout(3000)
+                await self.set_product_link(page, self.productLink, self.productTitle)
+                douyin_logger.info(_msg("🥳", "商品链接设置完成"))
+
+            await self.set_thumbnail(page)
+
+            # 设置自主声明（必选项）
+            declaration_type = "内容为个人观点或见解"  # 默认值
+            if self.declaration_info and self.declaration_info.get("declaration_type"):
+                declaration_type = self.declaration_info.get("declaration_type")
+            await self.set_self_declaration(page, declaration_type)
+
+            # 设置合集
+            if self.collection:
+                douyin_logger.info(_msg("📚", f"小人正在设置合集：{self.collection}"))
+                await page.wait_for_timeout(1000)  # 等待页面渲染合集下拉框
+                await self.set_collection(page, self.collection)
+                douyin_logger.info(_msg("🥳", "合集设置完成"))
+
+            third_part_element = '[class^="info"] > [class^="first-part"] div div.semi-switch'
+            if await page.locator(third_part_element).count():
+                if "semi-switch-checked" not in await page.eval_on_selector(third_part_element, "div => div.className"):
+                    await page.locator(third_part_element).locator("input.semi-switch-native-control").click()
+
+            if self.publish_strategy == DOUYIN_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
+                await self.set_schedule_time_douyin(page, self.publish_date)
+
+            while True:
+                try:
+                    publish_button = page.get_by_role("button", name="发布", exact=True)
+                    if await publish_button.count():
+                        await publish_button.click()
+                    await page.wait_for_url(
+                        "https://creator.douyin.com/creator-micro/content/manage**",
+                        timeout=3000,
+                    )
+                    douyin_logger.success(_msg("🥳", "视频发布成功，小人开心收工"))
+                    break
+                except Exception:
+                    await self.handle_auto_video_cover(page)
+                    douyin_logger.info(_msg("🏃", "小人正在冲刺发布视频"))
+                    if self.debug and self.screenshot_manager:
+                        await self.screenshot_manager.take_screenshot(page, "发布重试")
                     await asyncio.sleep(0.5)
 
-        await asyncio.sleep(1)
-        douyin_logger.info(_msg("✍️", "小人开始填标题、描述和话题"))
-        await self.fill_title_and_description(page, self.title, self.desc, self.tags)
-        douyin_logger.info(_msg("🏷️", f"小人一共贴了 {len(self.tags)} 个话题"))
-
-        while True:
-            try:
-                number = await page.locator('[class^="long-card"] div:has-text("重新上传")').count()
-                if number > 0:
-                    douyin_logger.success(_msg("🥳", "视频已经传完啦"))
-                    break
-                douyin_logger.info(_msg("🏃", "小人正在努力上传视频"))
-                await asyncio.sleep(2)
-                if await page.locator('div.progress-div > div:has-text("上传失败")').count():
-                    douyin_logger.error(_msg("😵", "检测到上传失败，小人准备重试"))
-                    await self.handle_upload_error(page)
-            except Exception:
-                douyin_logger.debug(_msg("🧍", "小人还在等视频上传完成"))
-                await asyncio.sleep(2)
-
-        if self.productLink and self.productTitle:
-            douyin_logger.info(_msg("🛒", "小人正在设置商品链接"))
-            douyin_logger.debug(_msg("🧍", "先等一下页面把商品弹窗相关控件准备好"))
-            await page.wait_for_timeout(3000)
-            await self.set_product_link(page, self.productLink, self.productTitle)
-            douyin_logger.info(_msg("🥳", "商品链接设置完成"))
-
-        await self.set_thumbnail(page)
-
-        await self.set_self_declaration(page)
-
-        third_part_element = '[class^="info"] > [class^="first-part"] div div.semi-switch'
-        if await page.locator(third_part_element).count():
-            if "semi-switch-checked" not in await page.eval_on_selector(third_part_element, "div => div.className"):
-                await page.locator(third_part_element).locator("input.semi-switch-native-control").click()
-
-        if self.declaration_info:
-            douyin_logger.info(f"[+] 开始设置自主声明: {self.declaration_info}")
-            await self.set_declaration(page, self.declaration_info)
-
-        if self.publish_strategy == DOUYIN_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
-            await self.set_schedule_time_douyin(page, self.publish_date)
-
-        while True:
-            try:
-                publish_button = page.get_by_role("button", name="发布", exact=True)
-                if await publish_button.count():
-                    await publish_button.click()
-                await page.wait_for_url(
-                    "https://creator.douyin.com/creator-micro/content/manage**",
-                    timeout=3000,
-                )
-                douyin_logger.success(_msg("🥳", "视频发布成功，小人开心收工"))
-                break
-            except Exception:
-                await self.handle_auto_video_cover(page)
-                douyin_logger.info(_msg("🏃", "小人正在冲刺发布视频"))
-                if self.debug:
-                    await page.screenshot(full_page=True)
-                await asyncio.sleep(0.5)
-
-        await context.storage_state(path=self.account_file)
-        douyin_logger.success(_msg("🥳", "cookie 更新完毕"))
-        await asyncio.sleep(2)
-        await context.close()
-        await browser.close()
+            await context.storage_state(path=self.account_file)
+            douyin_logger.success(_msg("🥳", "cookie 更新完毕"))
+        except Exception as e:
+            douyin_logger.error(_msg("❌", f"上传过程中发生错误: {e}"))
+            if page and self.screenshot_manager:
+                await self._take_error_screenshot(page, str(e))
+            raise
+        finally:
+            await asyncio.sleep(2)
+            await context.close()
+            await browser.close()
 
     async def douyin_upload_video(self):
         async with async_playwright() as playwright:

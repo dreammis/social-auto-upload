@@ -12,6 +12,7 @@ from patchright.async_api import Playwright
 from patchright.async_api import async_playwright
 
 from conf import DEBUG_MODE, LOCAL_CHROME_PATH
+from myUtils.screenshot_manager import ScreenshotManager
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
 from utils.login_qrcode import build_login_qrcode_path
@@ -394,13 +395,50 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
         if not getattr(self, "desc", ""):
             return
 
-        desc = page.locator('p[data-placeholder*="输入正文描述"]')
-        await desc.click()
-        await page.keyboard.press("Backspace")
-        await page.keyboard.press("Control+KeyA")
-        await page.keyboard.press("Delete")
-        await page.keyboard.type(self.desc)
-        await page.keyboard.press("Enter")
+        xiaohongshu_logger.info(_msg("✍️", f"小人正在填写描述: {self.desc[:50]}..."))
+
+        # 定位描述框：用 contenteditable 的 div（Tiptap 编辑器）
+        desc_box = page.locator('div.tiptap[contenteditable="true"]')
+        if await desc_box.count() == 0:
+            desc_box = page.locator('div[contenteditable="true"][role="textbox"]')
+        if await desc_box.count() == 0:
+            # 降级方案：使用旧的定位方式
+            desc_box = page.locator('p[data-placeholder*="输入正文描述"]')
+
+        if await desc_box.count() == 0:
+            xiaohongshu_logger.warning(_msg("⚠️", "未找到描述输入框，跳过"))
+            return
+
+        # 先点击聚焦
+        await desc_box.click()
+        await asyncio.sleep(0.3)
+
+        # 尝试使用 evaluate 直接设置内容（适用于 contenteditable 的 div）
+        try:
+            desc_text = self.desc
+            await page.evaluate(
+                """([selector, text]) => {
+                    const el = document.querySelector(selector);
+                    if (el) {
+                        el.innerText = text;
+                        el.focus();
+                        // 触发 input 事件让编辑器感知到内容变化
+                        const event = new Event('input', { bubbles: true });
+                        el.dispatchEvent(event);
+                    }
+                }""",
+                ['div.tiptap[contenteditable="true"], div[contenteditable="true"][role="textbox"], p[data-placeholder*="输入正文描述"]', desc_text]
+            )
+            xiaohongshu_logger.success(_msg("✅", f"描述已填写完成: {desc_text[:30]}..."))
+        except Exception as e:
+            # 降级方案：使用键盘输入
+            xiaohongshu_logger.warning(_msg("⚠️", f"evaluate方式失败，使用键盘输入: {e}"))
+            await page.keyboard.press("Backspace")
+            await page.keyboard.press("Control+KeyA")
+            await page.keyboard.press("Delete")
+            await page.keyboard.type(self.desc)
+            await page.keyboard.press("Enter")
+            xiaohongshu_logger.success(_msg("✅", f"描述已填写完成（键盘方式）"))
 
     async def fill_tags(self, page: Page) -> None:
         if not getattr(self, "tags", None):
@@ -444,26 +482,198 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
         await self.fill_desc(page)
         await self.fill_tags(page)
 
-    async def check_original_declaration(self, page: Page) -> None:
-        """勾选原创声明（如果页面上有的话）"""
+    async def set_original_declaration(self, page: Page) -> None:
+        """开启原创声明开关
+
+        根据category参数决定是否声明原创：
+        - category为None或0: 不声明原创
+        - category为其他值: 声明原创
+
+        HTML结构: div.custom-switch-wrapper 包含"原创声明"文字和 d-switch 开关
+        """
+        # 检查是否需要声明原创
+        if not self.category:
+            xiaohongshu_logger.info(_msg("🧾", "未勾选声明原创，跳过"))
+            return
+
         try:
-            # 小红书的原创声明通常是 checkbox 或 switch 组件
-            original_checkbox = page.locator('div.original-declaration checkbox, div.original-declaration input[type="checkbox"], label:has-text("原创") input[type="checkbox"]').first
-            if await original_checkbox.count() and not await original_checkbox.is_checked():
-                await original_checkbox.check()
-                xiaohongshu_logger.success(_msg("✅", "原创声明已勾选"))
+            xiaohongshu_logger.info(_msg("🛡️", "小人正在开启原创声明"))
+            # 定位原创声明区域的 switch 开关
+            original_switch = page.locator('div.custom-switch-wrapper').filter(has_text="原创声明").locator('span.d-switch-simulator').first
+            if not await original_switch.count():
+                xiaohongshu_logger.warning(_msg("⚠️", "未找到原创声明开关，跳过"))
                 return
 
-            # 尝试通过文本匹配找到原创声明区域并点击
-            original_text = page.locator('div:has-text("原创声明"), span:has-text("原创声明"), div:has-text("原创"), label:has-text("原创")').first
-            if await original_text.count():
-                await original_text.click()
-                xiaohongshu_logger.success(_msg("✅", "原创声明已勾选"))
+            # 检查开关是否可用
+            is_disabled = await original_switch.evaluate('el => el.classList.contains("disabled") || el.closest(".d-switch-disabled") !== null')
+            if is_disabled:
+                xiaohongshu_logger.warning(_msg("⚠️", "原创声明开关当前处于禁用状态（可能视频尚未上传完成），跳过"))
                 return
 
-            xiaohongshu_logger.info(_msg("🧾", "未发现原创声明选项，跳过"))
+            # 检查是否已经开启
+            is_checked = await original_switch.evaluate('el => el.classList.contains("checked")')
+            if is_checked:
+                xiaohongshu_logger.info(_msg("ℹ️", "原创声明已经处于开启状态"))
+            else:
+                await original_switch.click()
+                xiaohongshu_logger.success(_msg("✅", "已开启原创声明"))
+
+            # 处理原创声明弹窗：勾选同意条款并点击声明原创按钮
+            try:
+                await page.locator('div.d-modal:visible').wait_for(state="visible", timeout=3000)
+                xiaohongshu_logger.info(_msg("📝", "小人正在勾选原创声明须知"))
+                checkbox = page.locator('div.d-modal:visible input[type="checkbox"], div.d-modal:visible span.d-checkbox-simulator').first
+                if await checkbox.count():
+                    await checkbox.click()
+                # 点击"声明原创"按钮
+                confirm_btn = page.locator('button:has-text("声明原创")')
+                if await confirm_btn.count():
+                    await confirm_btn.click()
+                    xiaohongshu_logger.success(_msg("✅", "已确认声明原创"))
+                else:
+                    xiaohongshu_logger.warning(_msg("⚠️", "未找到声明原创确认按钮"))
+            except Exception:
+                # 没有弹窗，说明不需要确认
+                pass
+
         except Exception as exc:
             xiaohongshu_logger.warning(_msg("⚠️", f"勾选原创声明时出错，跳过: {exc}"))
+
+    async def set_declaration(self, page: Page) -> None:
+        """设置小红书声明（如"笔记含AI合成内容"等下拉列表声明）
+
+        通过 declaration_info 参数控制：
+        - declaration_info 为 None 或无 declaration_type: 不设置声明
+        - declaration_type 如 "笔记含AI合成内容": 在下拉列表中选择对应选项
+
+        定位方式参考：用 div.d-select-wrapper + filter(has_text="添加内容类型声明") 定位下拉框
+        用 page.get_by_text(exact=True) 精确匹配选项
+        """
+        declaration_info = getattr(self, 'declaration_info', None)
+        declaration_type = declaration_info.get("declaration_type") if declaration_info else None
+
+        if not declaration_type:
+            xiaohongshu_logger.debug(_msg("📝", "未指定声明类型，跳过声明设置"))
+            return
+
+        try:
+            xiaohongshu_logger.info(_msg("🤖", f"小人正在设置声明: {declaration_type}"))
+
+            # 定位下拉框：用 filter(has_text) 匹配"添加内容类型声明"
+            dropdown = page.locator('div.d-select-wrapper').filter(has_text="添加内容类型声明")
+            if await dropdown.count() == 0:
+                dropdown = page.locator('div.d-select-main').filter(has_text="添加内容类型声明")
+            if await dropdown.count() == 0:
+                xiaohongshu_logger.warning(_msg("📝", "未找到声明下拉框，跳过声明设置"))
+                return
+
+            await dropdown.click()
+            xiaohongshu_logger.debug(_msg("📝", "已点击声明下拉框，等待选项出现"))
+
+            # 等待弹出层出现后，用文本精确匹配选项
+            try:
+                option = page.get_by_text(declaration_type, exact=True).first
+                await option.wait_for(state="visible", timeout=3000)
+                await option.click()
+                xiaohongshu_logger.success(_msg("✅", f"声明已设置为: {declaration_type}"))
+                await asyncio.sleep(0.3)
+            except Exception:
+                xiaohongshu_logger.warning(_msg("📝", f"未找到声明选项「{declaration_type}」"))
+                await page.keyboard.press("Escape")
+
+        except Exception as exc:
+            xiaohongshu_logger.warning(_msg("⚠️", f"设置声明时出错，跳过: {exc}"))
+
+    async def set_collection(self, page: Page, collection_name: str) -> None:
+        """小红书「合集」选择：点击合集按钮 → 展开下拉列表 → 模糊匹配选择包含关键字的选项。
+
+        Args:
+            page: Playwright页面对象
+            collection_name: 合集名称关键字（如"大学篇"），会模糊匹配包含该文字的选项
+        """
+        if not collection_name:
+            xiaohongshu_logger.debug(_msg("📚", "未指定合集名称，跳过合集选择"))
+            return
+
+        try:
+            # 定位合集插件容器
+            collection_wrapper = page.locator('.collection-plugin-wrapper').first
+            if not await collection_wrapper.count():
+                xiaohongshu_logger.warning(_msg("📚", "未找到合集插件容器，跳过合集选择"))
+                return
+
+            # 等待合集容器可见
+            await collection_wrapper.wait_for(state="visible", timeout=6000)
+
+            # 点击合集选择按钮（.collection-plugin-button）来展开下拉列表
+            collection_button = collection_wrapper.locator('.collection-plugin-button').first
+            if not await collection_button.count():
+                # 备用：尝试旧选择器
+                collection_button = collection_wrapper.locator('.collection-plugin-choose').first
+
+            if not await collection_button.count():
+                xiaohongshu_logger.warning(_msg("📚", "未找到合集选择按钮，跳过合集选择"))
+                return
+
+            await collection_button.click()
+            xiaohongshu_logger.debug(_msg("📚", "已点击合集选择按钮，等待下拉列表出现"))
+
+            # 等待下拉列表出现
+            await asyncio.sleep(1)
+
+            # 小红书合集下拉列表通常是 d-popover 或 d-select-dropdown
+            # 尝试多种选择器定位下拉选项
+            option_found = False
+
+            # 方案1：通过 d-select-dropdown 查找选项
+            dropdown_selectors = [
+                '.d-select-dropdown:visible',
+                '.d-popover:visible',
+                'div[role="listbox"]:visible',
+            ]
+
+            for selector in dropdown_selectors:
+                dropdown = page.locator(selector).first
+                if not await dropdown.count():
+                    continue
+
+                # 在下拉菜单中查找包含关键字的选项
+                items = dropdown.locator('.d-select-option, [role="option"], li, .collection-item')
+                item_count = await items.count()
+
+                for i in range(item_count):
+                    item = items.nth(i)
+                    try:
+                        item_text = await item.text_content()
+                        if item_text and collection_name in item_text:
+                            await item.click()
+                            xiaohongshu_logger.info(_msg("📚", f"已选择合集：{item_text.strip()}"))
+                            option_found = True
+                            break
+                    except Exception:
+                        continue
+
+                if option_found:
+                    break
+
+            # 方案2：通过文本内容直接定位
+            if not option_found:
+                xiaohongshu_logger.debug(_msg("📚", "尝试通过可见文本定位合集选项"))
+                try:
+                    text_option = page.get_by_text(collection_name, exact=False).first
+                    if await text_option.count() and await text_option.is_visible():
+                        await text_option.click()
+                        xiaohongshu_logger.info(_msg("📚", f"已选择合集（文本匹配）"))
+                        option_found = True
+                except Exception:
+                    pass
+
+            if not option_found:
+                xiaohongshu_logger.warning(_msg("📚", f"未找到包含「{collection_name}」的合集选项，关闭下拉菜单"))
+                await page.keyboard.press("Escape")
+
+        except Exception as exc:
+            xiaohongshu_logger.warning(_msg("📚", f"合集设置失败，跳过该步骤继续发布：{exc}"))
 
 
 class XiaoHongShuVideo(XiaoHongShuBaseUploader):
@@ -478,9 +688,13 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         account_file,
         thumbnail_path=None,
         desc: str | None = None,
+        category=None,
         publish_strategy: str = XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool | None = None,
+        collection: str | None = None,  # 合集名称
+        declaration_info: dict | None = None,  # 声明信息（如AI合成内容声明）
+        screenshot_manager: ScreenshotManager | None = None,  # 截图管理器（无头模式调试）
     ):
         super().__init__(
             publish_date=publish_date,
@@ -494,6 +708,20 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         self.tags = tags or []
         self.thumbnail_path = thumbnail_path
         self.desc = desc or ""
+        self.category = category
+        self.collection = collection  # 合集名称
+        self.declaration_info = declaration_info
+        self.screenshot_manager = screenshot_manager  # 截图管理器
+
+    async def _take_screenshot(self, page: Page, step_name: str, full_page: bool = False) -> None:
+        """辅助方法：在关键步骤截图"""
+        if self.screenshot_manager:
+            await self.screenshot_manager.take_screenshot(page, step_name, full_page)
+
+    async def _take_error_screenshot(self, page: Page, error_msg: str = None) -> None:
+        """辅助方法：错误时截图"""
+        if self.screenshot_manager:
+            await self.screenshot_manager.take_error_screenshot(page, error_msg)
 
     async def validate_upload_args(self):
         await self.validate_base_args()
@@ -514,25 +742,58 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
 
         xiaohongshu_logger.info(_msg("🖼️", "小人准备设置封面"))
 
-        cover_plugin_title = page.locator("div.cover-plugin-title").filter(has_text="设置封面")
-        cover_upload_dialog = cover_plugin_title.locator(
-            "xpath=ancestor::div[contains(@class, 'cover-plugin-preview')]"
-        ).locator("div.cover > div.default:visible")
-        await cover_upload_dialog.wait_for(state="visible", timeout=30000)
+        # 点击封面预览元素
+        try:
+            cover_preview = page.locator('div.default.column[style*="background-image"]').first
+            await cover_preview.wait_for(state="visible", timeout=5000)
+            await cover_preview.click(force=True)
+            xiaohongshu_logger.success(_msg("✅", "已点击封面修改"))
+        except Exception as e:
+            xiaohongshu_logger.error(_msg("❌", f"未找到封面预览元素，尝试备用方案: {e}"))
+            # 备用方案：使用旧的定位方式
+            try:
+                cover_plugin_title = page.locator("div.cover-plugin-title").filter(has_text="设置封面")
+                cover_upload_dialog = cover_plugin_title.locator(
+                    "xpath=ancestor::div[contains(@class, 'cover-plugin-preview')]"
+                ).locator("div.cover > div.default:visible")
+                await cover_upload_dialog.wait_for(state="visible", timeout=30000)
+                await cover_upload_dialog.click(force=True)
+                xiaohongshu_logger.success(_msg("✅", "已点击封面上传对话框（备用方案）"))
+            except Exception as e2:
+                xiaohongshu_logger.error(_msg("❌", f"备用方案也失败: {e2}"))
+                return
 
-        await cover_upload_dialog.click(force=True)
-
+        # 等待封面上传弹窗出现
         modal = page.locator("div.d-modal.cover-modal")
         await modal.wait_for(state="visible", timeout=30000)
+        xiaohongshu_logger.info(_msg("✅", "封面编辑弹窗已打开"))
 
+        # 点击"上传图片"按钮
+        try:
+            # 等待一下让弹窗内容加载完成
+            await page.wait_for_timeout(1000)
+            
+            upload_btn = modal.locator('div.upload-btn').first
+            await upload_btn.wait_for(state="visible", timeout=5000)
+            await upload_btn.click()
+            xiaohongshu_logger.success(_msg("✅", "已点击上传图片按钮"))
+        except Exception as e:
+            xiaohongshu_logger.warning(_msg("⚠️", f"点击上传图片按钮失败，尝试直接上传: {e}"))
+
+        await page.wait_for_timeout(500)
+
+        # 上传封面图片
         file_input = modal.locator('input[type="file"][accept*="image"]').first
         await file_input.wait_for(state="attached", timeout=10000)
         await file_input.set_input_files(thumbnail_path)
         await page.wait_for_timeout(2000)
+        xiaohongshu_logger.info(_msg("📤", "封面图片已上传"))
 
+        # 点击确定按钮
         confirm_button = modal.locator("button.mojito-button").filter(has_text="确定").first
         await confirm_button.wait_for(state="visible", timeout=10000)
         await confirm_button.click()
+        xiaohongshu_logger.info(_msg("✅", "已点击确定按钮"))
 
         await modal.wait_for(state="hidden", timeout=30000)
         xiaohongshu_logger.success(_msg("🥳", "封面已经设置完成"))
@@ -542,6 +803,8 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         xiaohongshu_logger.info(_msg("🧭", "小人正在赶往视频发布页"))
         await page.goto(XHS_PUBLISH_VIDEO_URL)
         await page.wait_for_url(XHS_PUBLISH_VIDEO_URL)
+
+        xiaohongshu_logger.info(_msg("📤", "小人正在上传视频文件"))
         await page.locator("div[class^='upload-content'] input[class='upload-input']").set_input_files(self.file_path)
 
         while True:
@@ -553,7 +816,7 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
                     # 获取整个预览区域的文本，更鲁棒地判断上传状态
                     all_text = await preview_new.inner_text()
                     upload_success = any(keyword in all_text for keyword in ['上传成功', '分辨率', '重新上传', '编辑封面', '已上传', '已选择', '100%'])
-                    
+
                     if not upload_success:
                         # 检查是否有特定的状态码或百分比
                         stage_elements = await preview_new.query_selector_all('div.stage')
@@ -562,11 +825,11 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
                             if '上传成功' in text_content or '分辨率' in text_content:
                                 upload_success = True
                                 break
-                    
+
                     if upload_success:
                         xiaohongshu_logger.success(_msg("🥳", "视频已经传完啦"))
                         break
-                    
+
                     if self.debug:
                         normalized_text = all_text.strip().replace("\n", " ")
                         xiaohongshu_logger.debug(_msg("🧍", f"预览区域内容: {normalized_text}"))
@@ -585,15 +848,30 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         xiaohongshu_logger.info(_msg("✍️", "小人开始填标题、描述和话题"))
         await self.fill_meta(page)
 
+        xiaohongshu_logger.info(_msg("🖼️", "小人准备设置封面"))
         await self.set_thumbnail(page, self.thumbnail_path)
 
         # await self.set_location(page, "青岛市")
 
-        await self.check_original_declaration(page)
+        xiaohongshu_logger.info(_msg("🧾", "小人正在设置原创声明"))
+        await self.set_original_declaration(page)
+
+        # 设置声明（如AI合成内容声明）
+        xiaohongshu_logger.info(_msg("📝", "小人正在设置声明类型"))
+        await self.set_declaration(page)
+
+        # 设置合集
+        if self.collection:
+            xiaohongshu_logger.info(_msg("📚", f"小人正在设置合集：{self.collection}"))
+            await asyncio.sleep(1)  # 等待页面渲染合集插件
+            await self.set_collection(page, self.collection)
+            xiaohongshu_logger.info(_msg("🥳", "合集设置完成"))
 
         if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
+            xiaohongshu_logger.info(_msg("⏰", "小人正在设置定时发布"))
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)
 
+        xiaohongshu_logger.info(_msg("🚀", "小人正在点击发布按钮"))
         while True:
             try:
                 if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED:
@@ -606,10 +884,10 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
                 )
                 xiaohongshu_logger.success(_msg("🥳", "视频发布成功，小人开心收工"))
                 break
-            except Exception:
-                xiaohongshu_logger.info(_msg("🏃", "小人正在冲刺发布视频"))
-                if self.debug:
-                    await page.screenshot(full_page=True)
+            except Exception as e:
+                xiaohongshu_logger.info(_msg("🏃", f"小人正在冲刺发布视频，可能按钮还没准备好: {e}"))
+                if self.debug and self.screenshot_manager:
+                    await self.screenshot_manager.take_screenshot(page, "发布重试")
                 await asyncio.sleep(0.5)
 
     async def upload(self, playwright: Playwright) -> None:
@@ -622,12 +900,18 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
             storage_state=self.account_file,
         )
         context = await set_init_script(context)
+        page = None
 
         try:
             page = await context.new_page()
             await self.upload_video_content(page)
             await context.storage_state(path=self.account_file)
             xiaohongshu_logger.success(_msg("🥳", "cookie 更新完毕"))
+        except Exception as e:
+            xiaohongshu_logger.error(_msg("❌", f"上传过程中发生错误: {e}"))
+            if page and self.screenshot_manager:
+                await self._take_error_screenshot(page, str(e))
+            raise
         finally:
             await context.close()
             await browser.close()
@@ -709,7 +993,10 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
         xiaohongshu_logger.info(_msg("✍️", "小人开始填标题、描述和话题"))
         await self.fill_meta(page)
 
-        await self.check_original_declaration(page)
+        await self.set_original_declaration(page)
+
+        # 设置声明（如AI合成内容声明）
+        await self.set_declaration(page)
 
         if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)
@@ -728,8 +1015,8 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
                 break
             except Exception:
                 xiaohongshu_logger.info(_msg("🏃", "小人正在冲刺发布图文"))
-                if self.debug:
-                    await page.screenshot(full_page=True)
+                if self.debug and self.screenshot_manager:
+                    await self.screenshot_manager.take_screenshot(page, "图文发布重试")
                 await asyncio.sleep(0.5)
 
     async def upload(self, playwright: Playwright) -> None:

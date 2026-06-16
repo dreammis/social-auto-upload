@@ -64,7 +64,9 @@ async def baijiahao_setup(account_file, handle=False):
     return True
 
 class BaiJiaHaoVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, proxy_setting=None):
+    upload_page = "https://baijiahao.baidu.com/builder/rc/edit?type=videoV2"
+
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, proxy_setting=None, category=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -74,6 +76,24 @@ class BaiJiaHaoVideo(object):
         self.local_executable_path = LOCAL_CHROME_PATH
         self.headless = get_local_chrome_headless()
         self.proxy_setting = proxy_setting
+        self.category = category
+
+    async def set_original_declaration(self, page):
+        """百家号「声明原创」功能。
+
+        根据category参数决定是否声明原创：
+        - category为None或0: 不声明原创
+        - category为其他值: 声明原创
+
+        TODO: 需要调研百家号创作者中心是否有「声明原创」入口及具体实现方式
+        """
+        # 检查是否需要声明原创
+        if not self.category:
+            baijiahao_logger.info("[+] 未勾选声明原创，跳过")
+            return
+
+        # TODO: 百家号平台暂未实现声明原创功能，需要调研页面元素
+        baijiahao_logger.info("[+] 百家号平台暂不支持声明原创功能")
 
     async def set_schedule_time(self, page, publish_date):
         """
@@ -169,6 +189,9 @@ class BaiJiaHaoVideo(object):
             else:
                 baijiahao_logger.info("等待封面生成...")
                 await asyncio.sleep(3)
+
+        # 设置原创声明（可选项，根据category参数决定）
+        await self.set_original_declaration(page)
 
         await self.publish_video(page, self.publish_date)
         await page.wait_for_timeout(2000)

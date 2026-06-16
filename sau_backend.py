@@ -13,12 +13,31 @@ from myUtils.auth import check_cookie
 from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 from werkzeug.utils import secure_filename
 from conf import BASE_DIR, LOCAL_CHROME_PATH
-from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
-from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs
+from myUtils.login import (
+    get_tencent_cookie,
+    douyin_cookie_gen,
+    get_ks_cookie,
+    xiaohongshu_cookie_gen,
+    baijiahao_cookie_gen,
+    tiktok_cookie_gen,
+    bilibili_cookie_gen
+)
+from myUtils.postVideo import (
+    post_video_tencent,
+    post_video_DouYin,
+    post_video_ks,
+    post_video_xhs,
+    post_video_baijiahao,
+    post_video_tiktok,
+    post_video_bilibili
+)
 from uploader.douyin_uploader.main import DouYinVideo
 from uploader.ks_uploader.main import KSVideo
 from uploader.tencent_uploader.main import TencentVideo
 from uploader.xiaohongshu_uploader.main import XiaoHongShuVideo
+from uploader.bilibili_uploader.runtime import run_biliup_command
+from uploader.tk_uploader.main import TiktokVideo
+from uploader.baijiahao_uploader.main import BaiJiaHaoVideo
 from utils.base_social_media import set_init_script
 from utils.runtime_config import get_runtime_config, update_runtime_config
 
@@ -58,7 +77,10 @@ UPLOAD_PAGE_CLASS_MAP = {
     1: XiaoHongShuVideo,
     2: TencentVideo,
     3: DouYinVideo,
-    4: KSVideo
+    4: KSVideo,
+    # 5: Bilibili — 已改用 biliup CLI，不再支持 Playwright 打开上传页
+    6: TiktokVideo,
+    7: BaiJiaHaoVideo
 }
 
 #允许所有来源跨域访问
@@ -136,35 +158,54 @@ def get_file():
 
 
 def sync_video_file_records(conn):
+    """同步 videoFile 目录与数据库记录
+    
+    1. 将目录中存在但数据库中不存在的文件添加到数据库
+    2. 删除数据库中存在但目录中不存在的记录
+    """
     video_dir = Path(BASE_DIR / "videoFile")
     video_dir.mkdir(parents=True, exist_ok=True)
 
     cursor = conn.cursor()
-    cursor.execute("SELECT file_path FROM file_records WHERE file_path IS NOT NULL")
-    existing_paths = {row[0] for row in cursor.fetchall()}
-
-    synced_count = 0
+    
+    # 获取数据库中的所有记录
+    cursor.execute("SELECT id, file_path FROM file_records WHERE file_path IS NOT NULL")
+    db_records = cursor.fetchall()  # [(id, file_path), ...]
+    db_paths = {row[1] for row in db_records}  # {file_path1, file_path2, ...}
+    
+    # 获取目录中的所有实际文件
+    actual_files = set()
     for video_path in video_dir.iterdir():
-        if not video_path.is_file():
-            continue
-
-        relative_path = video_path.name
-        if relative_path in existing_paths:
-            continue
-
-        cursor.execute(
-            '''
-            INSERT INTO file_records (filename, filesize, file_path)
-            VALUES (?, ?, ?)
-            ''',
-            ("未命名", round(video_path.stat().st_size / (1024 * 1024), 2), relative_path)
-        )
-        existing_paths.add(relative_path)
-        synced_count += 1
-
-    if synced_count:
+        if video_path.is_file():
+            actual_files.add(video_path.name)
+    
+    # 添加目录中存在但数据库中不存在的文件
+    added_count = 0
+    for file_name in actual_files:
+        if file_name not in db_paths:
+            file_path = video_dir / file_name
+            cursor.execute(
+                '''
+                INSERT INTO file_records (filename, filesize, file_path)
+                VALUES (?, ?, ?)
+                ''',
+                ("未命名", round(file_path.stat().st_size / (1024 * 1024), 2), file_name)
+            )
+            added_count += 1
+    
+    # 删除数据库中存在但目录中不存在的记录
+    removed_count = 0
+    for record_id, file_path in db_records:
+        if file_path not in actual_files:
+            cursor.execute("DELETE FROM file_records WHERE id = ?", (record_id,))
+            removed_count += 1
+    
+    if added_count or removed_count:
         conn.commit()
-        print(f"✅ 已补录 {synced_count} 个 videoFile 文件到数据库")
+        if added_count:
+            print(f"✅ 已补录 {added_count} 个 videoFile 文件到数据库")
+        if removed_count:
+            print(f"🗑️ 已清理 {removed_count} 个不存在文件的数据库记录")
 
 
 @app.route('/uploadSave', methods=['POST'])
@@ -186,10 +227,38 @@ def upload_save():
 
     # 获取表单中的自定义文件名（可选）
     custom_filename = request.form.get('filename', None)
+    original_filename = file.filename
+    # 获取文件扩展名（在 secure_filename 处理之前）
+    file_ext = ''
+    if '.' in original_filename:
+        file_ext = '.' + original_filename.rsplit('.', 1)[-1]
+    
+    # 处理文件名
     if custom_filename:
-        filename = secure_filename(custom_filename + "." + file.filename.split('.')[-1])
+        # 用户自定义文件名，使用 secure_filename 处理
+        safe_custom = secure_filename(custom_filename)
+        if safe_custom and '.' in safe_custom:
+            # secure_filename 保留了文件名和扩展名
+            filename = safe_custom
+        else:
+            # 自定义文件名包含非ASCII字符，使用 UUID
+            import uuid as uuid_module
+            filename = f"{uuid_module.uuid4().hex}{file_ext}"
     else:
-        filename = secure_filename(file.filename)
+        # 使用原始文件名
+        safe_filename_result = secure_filename(original_filename)
+        # secure_filename 对中文文件名的处理结果是只有扩展名（不包含点号）
+        # 例如：'横的.jpg' -> 'jpg'
+        # 检查是否是这种情况：结果不包含点号，且与扩展名相同（去掉点号后）
+        if safe_filename_result and '.' in safe_filename_result:
+            # secure_filename 保留了文件名和扩展名（如 'test.jpg'）
+            filename = safe_filename_result
+        else:
+            # 文件名包含非ASCII字符（如中文），secure_filename 只返回了扩展名
+            # 使用 UUID 作为文件名
+            import uuid as uuid_module
+            filename = f"{uuid_module.uuid4().hex}{file_ext}"
+    
     if not filename:
         return jsonify({"code": 400, "data": None, "msg": "Invalid filename"}), 400
 
@@ -618,6 +687,22 @@ def postVideo():
     daily_times = data.get('dailyTimes')
     start_days = data.get('startDays')
 
+    # 快手特有参数
+    kuaishou_declaration = data.get('kuaishouDeclaration', '内容为AI生成')
+    xiaohongshu_declaration = data.get('xiaohongshuDeclaration', '')
+    allow_duet = data.get('allowDuet', True)
+    allow_download = data.get('allowDownload', True)
+    show_in_city = data.get('showInCity', True)
+
+    # B站特有参数
+    bilibili_tid = data.get('bilibiliTid', 218)  # B站分区ID，默认218（动物圈）
+    bilibili_is_original = data.get('declareOriginal', False)  # B站原创声明：默认不声明
+    bilibili_ai_declaration = data.get('bilibiliAiDeclaration', False)  # B站创作声明：含AI生成内容
+    bilibili_no_reprint = data.get('noReprint', 1 if bilibili_is_original else 0)  # 禁止转载
+
+    # 合集参数
+    collection = data.get('collection', None)  # 合集名称
+
     # 参数校验
     if not file_list:
         return jsonify({"code": 400, "msg": "文件列表不能为空", "data": None}), 400
@@ -637,19 +722,40 @@ def postVideo():
 
     thumbnail_path = data.get('thumbnail', '') or thumbnail_landscape or thumbnail_portrait
 
+    # 封面参数（B站使用单封面）- 复用 thumbnail 字段
+    bilibili_cover = thumbnail_path  # B站封面路径
+
     try:
         match type:
             case 1:
-                post_video_xhs(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                                   start_days)
+                declare_original = data.get('declareOriginal', False)
+                xhs_category = category if category else (1 if declare_original else None)
+                xhs_declaration_info = {"declaration_type": xiaohongshu_declaration} if xiaohongshu_declaration else None
+                print(f"[小红书] declareOriginal={declare_original}, xhs_category={xhs_category}, xiaohongshu_declaration={xiaohongshu_declaration}, declaration_info={xhs_declaration_info}")
+                post_video_xhs(title, file_list, tags, account_list, xhs_category, enableTimer, videos_per_day, daily_times,
+                                   start_days, desc, thumbnail_path, collection=collection, declaration_info=xhs_declaration_info)
             case 2:
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                                   start_days, is_draft, thumbnail_path)
+                                   start_days, is_draft, thumbnail_path, desc, collection=collection)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_landscape, thumbnail_portrait, productLink, productTitle, declaration_info, desc)
+                          start_days, thumbnail_landscape, thumbnail_portrait, productLink, productTitle, declaration_info, desc,
+                          collection=collection)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days, desc, thumbnail_path, kuaishou_declaration, allow_duet, allow_download, show_in_city,
+                          collection=collection)
+            case 5:
+                post_video_bilibili(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days, tid=bilibili_tid, desc=desc,
+                          copyright_type=1 if bilibili_is_original else 2,
+                          cover_path=bilibili_cover, collection=collection,
+                          ai_declaration=bilibili_ai_declaration)
+            case 6:
+                post_video_tiktok(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days)
+            case 7:
+                post_video_baijiahao(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
             case _:
                 return jsonify({"code": 400, "msg": f"不支持的平台类型: {type}", "data": None}), 400
@@ -736,22 +842,56 @@ def postVideoBatch():
         # 打印获取到的数据（仅作为示例）
         print("File List:", file_list)
         print("Account List:", account_list)
+
+        # 平台特有参数
+        thumbnail_landscape = data.get('thumbnailLandscape', '')
+        thumbnail_portrait = data.get('thumbnailPortrait', '')
         thumbnail_path = data.get('thumbnail', '') or thumbnail_landscape or thumbnail_portrait
+        bilibili_tid = data.get('bilibiliTid', 218)
+        kuaishou_declaration = data.get('kuaishouDeclaration', None)
+        xiaohongshu_declaration = data.get('xiaohongshuDeclaration', '')
+        allow_duet = data.get('allowDuet', True)
+        allow_download = data.get('allowDownload', True)
+        show_in_city = data.get('showInCity', True)
+
+        # B站特有参数（批量发布）
+        bilibili_is_original = data.get('declareOriginal', False)  # B站原创声明：默认不声明
+        bilibili_ai_declaration = data.get('bilibiliAiDeclaration', False)  # B站创作声明：含AI生成内容
+        bilibili_no_reprint = data.get('noReprint', 1 if bilibili_is_original else 0)  # 禁止转载
+        bilibili_cover = thumbnail_path  # B站封面
+
+        collection = data.get('collection', None)  # 合集名称
 
         match type:
             case 1:
-                post_video_xhs(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                               start_days)
+                declare_original = data.get('declareOriginal', False)
+                xhs_category = category if category else (1 if declare_original else None)
+                xhs_declaration_info = {"declaration_type": xiaohongshu_declaration} if xiaohongshu_declaration else None
+                print(f"[小红书] declareOriginal={declare_original}, xhs_category={xhs_category}, xiaohongshu_declaration={xiaohongshu_declaration}, declaration_info={xhs_declaration_info}")
+                post_video_xhs(title, file_list, tags, account_list, xhs_category, enableTimer, videos_per_day, daily_times,
+                               start_days, desc, thumbnail_path, collection=collection, declaration_info=xhs_declaration_info)
             case 2:
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                                   start_days, is_draft, thumbnail_path)
+                                   start_days, is_draft, thumbnail_path, desc, collection=collection)
             case 3:
-                thumbnail_landscape = data.get('thumbnailLandscape', thumbnail_path)
-                thumbnail_portrait = data.get('thumbnailPortrait', '')
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_landscape, thumbnail_portrait, productLink, productTitle, declaration_info, desc)
+                          start_days, thumbnail_landscape, thumbnail_portrait, productLink, productTitle, declaration_info, desc,
+                          collection=collection)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days, desc, thumbnail_path, kuaishou_declaration, allow_duet, allow_download, show_in_city,
+                          collection=collection)
+            case 5:
+                post_video_bilibili(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days, tid=bilibili_tid, desc=desc,
+                          copyright_type=1 if bilibili_is_original else 2,
+                          cover_path=bilibili_cover, collection=collection,
+                          ai_declaration=bilibili_ai_declaration)
+            case 6:
+                post_video_tiktok(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days)
+            case 7:
+                post_video_baijiahao(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
     # 返回响应给客户端
     return jsonify(
@@ -942,9 +1082,12 @@ def open_upload_page():
                 "data": None
             }), 404
 
+        # B站使用 biliup CLI，不支持 Playwright 打开上传页
+        actual_cookie_path = str(cookie_file_path)
+
         thread = threading.Thread(
             target=run_open_upload_page,
-            args=(str(cookie_file_path), uploader_cls.upload_page, account['userName']),
+            args=(actual_cookie_path, uploader_cls.upload_page, account['userName']),
             daemon=True
         )
         thread.start()
@@ -988,6 +1131,24 @@ def run_async_function(type, id, status_queue, account_id=None, existing_file_pa
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(get_ks_cookie(id, status_queue, account_id, existing_file_path))
+            loop.close()
+        case '5':
+            # B站登录（使用biliup工具）
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(bilibili_cookie_gen(id, status_queue, account_id, existing_file_path))
+            loop.close()
+        case '6':
+            # TikTok登录（复用抖音登录逻辑）
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(tiktok_cookie_gen(id, status_queue, account_id, existing_file_path))
+            loop.close()
+        case '7':
+            # 百家号登录（复用抖音登录逻辑）
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(baijiahao_cookie_gen(id, status_queue, account_id, existing_file_path))
             loop.close()
 
 
@@ -1084,6 +1245,199 @@ def submit_verification():
             "msg": f"提交验证码失败: {str(e)}",
             "data": None
         }), 500
+
+
+# ==================== 截图管理接口 ====================
+
+import os
+from pathlib import Path
+
+SCREENSHOTS_DIR = Path("screenshots")
+SCREENSHOTS_DIR.mkdir(exist_ok=True)
+
+
+@app.route('/screenshots/list', methods=['GET'])
+def list_screenshots():
+    """获取截图列表
+
+    Query params:
+        platform: 平台名称（可选，如 'douyin', 'xiaohongshu'）
+        limit: 返回数量限制（默认20）
+    """
+    platform = request.args.get('platform')
+    limit = int(request.args.get('limit', 20))
+
+    screenshots = []
+
+    try:
+        if platform:
+            # 指定平台的截图
+            platform_dir = SCREENSHOTS_DIR / platform
+            if platform_dir.exists():
+                for session_dir in sorted(platform_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)[:limit]:
+                    for screenshot in sorted(session_dir.glob("*.png")):
+                        screenshots.append({
+                            "path": str(screenshot),
+                            "platform": platform,
+                            "session": session_dir.name,
+                            "filename": screenshot.name,
+                            "mtime": screenshot.stat().st_mtime
+                        })
+        else:
+            # 所有平台的截图
+            for platform_dir in SCREENSHOTS_DIR.iterdir():
+                if platform_dir.is_dir():
+                    for session_dir in sorted(platform_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)[:limit]:
+                        for screenshot in sorted(session_dir.glob("*.png")):
+                            screenshots.append({
+                                "path": str(screenshot),
+                                "platform": platform_dir.name,
+                                "session": session_dir.name,
+                                "filename": screenshot.name,
+                                "mtime": screenshot.stat().st_mtime
+                            })
+
+        # 按时间排序
+        screenshots.sort(key=lambda x: x['mtime'], reverse=True)
+        screenshots = screenshots[:limit]
+
+        return jsonify({
+            "code": 200,
+            "msg": "获取截图列表成功",
+            "data": screenshots
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "code": 500,
+            "msg": f"获取截图列表失败: {str(e)}",
+            "data": []
+        }), 500
+
+
+@app.route('/screenshots/view/<platform>/<session>/<filename>', methods=['GET'])
+def view_screenshot(platform, session, filename):
+    """查看单个截图
+
+    Args:
+        platform: 平台名称
+        session: 会话目录名
+        filename: 截图文件名
+    """
+    try:
+        screenshot_path = SCREENSHOTS_DIR / platform / session / filename
+
+        if not screenshot_path.exists():
+            return jsonify({
+                "code": 404,
+                "msg": "截图文件不存在",
+                "data": None
+            }), 404
+
+        return send_from_directory(
+            str(SCREENSHOTS_DIR / platform / session),
+            filename,
+            mimetype='image/png'
+        )
+
+    except Exception as e:
+        return jsonify({
+            "code": 500,
+            "msg": f"查看截图失败: {str(e)}",
+            "data": None
+        }), 500
+
+
+@app.route('/screenshots/latest', methods=['GET'])
+def get_latest_screenshots():
+    """获取最新上传的截图目录
+
+    Query params:
+        platform: 平台名称（可选）
+    """
+    platform = request.args.get('platform')
+
+    try:
+        latest_sessions = []
+
+        if platform:
+            platform_dir = SCREENSHOTS_DIR / platform
+            if platform_dir.exists():
+                sessions = sorted(platform_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)[:5]
+                for session in sessions:
+                    screenshots = [s.name for s in sorted(session.glob("*.png"))]
+                    latest_sessions.append({
+                        "platform": platform,
+                        "session": session.name,
+                        "screenshots": screenshots,
+                        "mtime": session.stat().st_mtime
+                    })
+        else:
+            for platform_dir in SCREENSHOTS_DIR.iterdir():
+                if platform_dir.is_dir():
+                    sessions = sorted(platform_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)[:2]
+                    for session in sessions:
+                        screenshots = [s.name for s in sorted(session.glob("*.png"))]
+                        latest_sessions.append({
+                            "platform": platform_dir.name,
+                            "session": session.name,
+                            "screenshots": screenshots,
+                            "mtime": session.stat().st_mtime
+                        })
+
+        latest_sessions.sort(key=lambda x: x['mtime'], reverse=True)
+
+        return jsonify({
+            "code": 200,
+            "msg": "获取最新截图成功",
+            "data": latest_sessions
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "code": 500,
+            "msg": f"获取最新截图失败: {str(e)}",
+            "data": []
+        }), 500
+
+
+@app.route('/screenshots/cleanup', methods=['POST'])
+def cleanup_screenshots():
+    """清理旧截图
+
+    Body params:
+        days: 保留天数（默认7天）
+    """
+    days = request.json.get('days', 7)
+
+    try:
+        cutoff_time = time.time() - (days * 24 * 60 * 60)
+        deleted_count = 0
+
+        for platform_dir in SCREENSHOTS_DIR.iterdir():
+            if platform_dir.is_dir():
+                for session_dir in platform_dir.iterdir():
+                    if session_dir.is_dir():
+                        dir_time = session_dir.stat().st_mtime
+                        if dir_time < cutoff_time:
+                            for file in session_dir.glob("*"):
+                                file.unlink()
+                            session_dir.rmdir()
+                            deleted_count += 1
+
+        return jsonify({
+            "code": 200,
+            "msg": f"清理完成，删除了 {deleted_count} 个旧截图目录",
+            "data": {"deleted_count": deleted_count}
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "code": 500,
+            "msg": f"清理截图失败: {str(e)}",
+            "data": None
+        }), 500
+
 
 if __name__ == '__main__':
     threading.Thread(target=nightly_account_status_checker, daemon=True).start()

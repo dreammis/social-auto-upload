@@ -12,6 +12,7 @@ from patchright.async_api import Playwright
 from patchright.async_api import async_playwright
 
 from conf import BASE_DIR, DEBUG_MODE, LOCAL_CHROME_PATH
+from myUtils.screenshot_manager import ScreenshotManager
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
 from utils.log import tencent_logger
@@ -514,31 +515,107 @@ class TencentBaseUploader(BaseVideoUploader):
         if await short_title_element.count():
             await short_title_element.fill(short_title or format_str_for_short_title(title))
 
-    async def fill_title_and_tags(self, page: Page) -> None:
+    async def fill_title_and_description(self, page: Page) -> None:
+        """视频号"视频描述"统一填写：标题 + 换行 + 描述"""
         await page.locator("div.input-editor").click()
         await page.keyboard.type(self.title)
+        if self.desc:
+            await page.keyboard.press("Enter")
+            await page.keyboard.type(self.desc)
         await page.keyboard.press("Enter")
         for tag in self.tags:
             await page.keyboard.type("#" + tag)
             await page.keyboard.press("Space")
-        tencent_logger.info(_msg("🏷️", f"成功添加 hashtag: {len(self.tags)}"))
+        tencent_logger.info(_msg("🏷️", f"成功添加视频描述(标题+描述+话题): 标题={len(self.title)}, 描述={len(self.desc)}, 话题={len(self.tags)}"))
 
     async def fill_description(self, page: Page) -> None:
-        await page.keyboard.press("Enter")
-        await page.keyboard.type(self.desc)
-        tencent_logger.info(_msg("🏷️", f"成功添加 desc: {len(self.desc)}"))
+        pass
 
     async def apply_collection(self, page: Page) -> None:
-        collection_elements = (
-            page.get_by_text("添加到合集")
-            .locator("xpath=following-sibling::div")
-            .locator(".option-list-wrap > div")
-        )
-        if await collection_elements.count() > 1:
-            await page.get_by_text("添加到合集").locator("xpath=following-sibling::div").click()
-            await collection_elements.first.click()
+        """视频号「合集」选择：点击"选择合集"区域 → 展开选项列表 → 模糊匹配选择包含关键字的选项。
 
-    async def apply_original_statement(self, page: Page) -> None:
+        如果self.collection为None或空字符串，则跳过合集选择。
+        """
+        collection_name = getattr(self, 'collection', None)
+        if not collection_name:
+            tencent_logger.debug(_msg("📚", "未指定合集名称，跳过合集选择"))
+            return
+
+        try:
+            # 定位"添加到合集"区域（使用用户提供的HTML结构）
+            # 外层容器: div.form-item.cell-center
+            # label: div.label 文本为"添加到合集"
+            # 显示区域: div.post-album-display > div.post-album-display-wrap > div.display-text "选择合集"
+            collection_label = page.locator("div.label").filter(has_text="添加到合集").first
+            if not await collection_label.count():
+                tencent_logger.warning(_msg("📚", "未找到「添加到合集」标签，跳过合集选择"))
+                return
+
+            # 从label向上找到form-item容器，再定位post-album-display区域
+            form_item = collection_label.locator("xpath=ancestor::div[contains(@class, 'form-item')]").first
+            album_display = form_item.locator(".post-album-display").first
+
+            if not await album_display.count():
+                tencent_logger.warning(_msg("📚", "未找到合集显示区域，跳过合集选择"))
+                return
+
+            await album_display.wait_for(state="visible", timeout=6000)
+
+            # 点击显示区域展开下拉列表
+            await album_display.click()
+            tencent_logger.debug(_msg("📚", "已点击合集显示区域，等待选项列表出现"))
+            await asyncio.sleep(1)  # 等待下拉列表渲染
+
+            # 查找选项列表容器（使用用户提供的HTML结构）
+            # 选项列表: div.option-list-wrap > div.option-item > div.item > div.name
+            option_list = page.locator(".option-list-wrap").first
+            if not await option_list.count() or not await option_list.is_visible():
+                tencent_logger.warning(_msg("📚", "未找到合集选项列表，可能已收起"))
+                return
+
+            # 查找所有选项项
+            options = option_list.locator("> .option-item")
+            option_count = await options.count()
+
+            if option_count == 0:
+                tencent_logger.warning(_msg("📚", "合集选项列表为空"))
+                return
+
+            # 遍历选项查找包含关键字的项
+            found = False
+            for i in range(option_count):
+                option = options.nth(i)
+                # 获取选项名称（从 div.name 元素）
+                name_element = option.locator(".name").first
+                if not await name_element.count():
+                    continue
+
+                option_text = await name_element.text_content()
+                if option_text and collection_name in option_text:
+                    await option.click()
+                    tencent_logger.info(_msg("📚", f"已选择合集：{option_text}"))
+                    found = True
+                    break
+
+            if not found:
+                tencent_logger.warning(_msg("📚", f"未找到包含「{collection_name}」的合集选项"))
+
+        except Exception as exc:
+            tencent_logger.warning(_msg("📚", f"合集设置失败，跳过该步骤继续发布：{exc}"))
+
+    async def set_original_declaration(self, page: Page) -> None:
+        """视频号「声明原创」功能。
+
+        根据category参数决定是否声明原创：
+        - category为None或0: 不声明原创
+        - category为其他值: 声明原创
+        """
+        # 检查是否需要声明原创
+        category = getattr(self, "category", None)
+        if not category:
+            tencent_logger.info(_msg("🧾", "未勾选声明原创，跳过"))
+            return
+
         original_set = False
         if await page.get_by_label("视频为原创").count():
             await page.get_by_label("视频为原创").check()
@@ -573,7 +650,6 @@ class TencentBaseUploader(BaseVideoUploader):
 
             original_type_form = page.locator('div.original-type-form > div.form-label:has-text("原创类型"):visible')
             if await original_type_form.count():
-                category = getattr(self, "category", None)
                 await page.locator("div.form-content:visible").click()
                 option = None
                 if category:
@@ -627,14 +703,14 @@ class TencentBaseUploader(BaseVideoUploader):
 
         if not original_set:
             try:
-                diagnostic_path = Path(BASE_DIR) / "debug_tencent_original_missing.png"
-                await page.screenshot(path=str(diagnostic_path), full_page=True)
+                # 使用统一的截图管理器（如果有）
+                if hasattr(self, 'screenshot_manager') and self.screenshot_manager:
+                    await self.screenshot_manager.take_error_screenshot(page, "未确认声明原创")
+                    tencent_logger.warning(_msg("😵", "未确认声明原创，已截图保存"))
                 visible_text = (await page.locator("body").first.inner_text())[-4000:]
-                tencent_logger.warning(_msg("😵", f"未确认声明原创，诊断截图: {diagnostic_path}"))
                 tencent_logger.warning(_msg("🧾", f"页面末尾文本: {visible_text}"))
             except Exception as exc:
                 tencent_logger.warning(_msg("😵", f"生成原创声明诊断信息失败: {exc}"))
-            # 视频号「声明原创」为可选项：页面无对应入口时跳过并继续发布，而非中止。
             tencent_logger.warning(_msg("📭", "本视频未声明原创（页面无入口或为可选项），跳过并继续发布"))
 
     async def set_location(self, page: Page, location_name: str = "不显示位置") -> None:
@@ -712,6 +788,8 @@ class TencentBaseUploader(BaseVideoUploader):
 
 
 class TencentVideo(TencentBaseUploader):
+    upload_page = "https://channels.weixin.qq.com/platform/post/create"
+
     def __init__(
         self,
         title,
@@ -729,6 +807,8 @@ class TencentVideo(TencentBaseUploader):
         publish_strategy: str = TENCENT_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool | None = None,
+        collection: str | None = None,  # 合集名称
+        screenshot_manager: ScreenshotManager | None = None,  # 截图管理器（异常诊断）
     ):
         super().__init__(
             publish_date=publish_date,
@@ -747,6 +827,13 @@ class TencentVideo(TencentBaseUploader):
         self.thumbnail_landscape_path = thumbnail_landscape_path
         self.thumbnail_portrait_path = thumbnail_portrait_path or thumbnail_path
         self.short_title = short_title
+        self.collection = collection  # 合集名称
+        self.screenshot_manager = screenshot_manager  # 截图管理器
+
+    async def _take_error_screenshot(self, page: Page, error_msg: str = None) -> None:
+        """辅助方法：错误时截图"""
+        if self.screenshot_manager:
+            await self.screenshot_manager.take_error_screenshot(page, error_msg)
 
     async def validate_upload_args(self):
         await self.validate_base_args()
@@ -869,8 +956,7 @@ class TencentVideo(TencentBaseUploader):
             )
 
     async def prepare_video_for_publish(self, page: Page) -> None:
-        await self.fill_title_and_tags(page)
-        await self.fill_description(page)
+        await self.fill_title_and_description(page)
         await self.apply_collection(page)
 
     async def upload(self, playwright: Playwright) -> None:
@@ -881,6 +967,7 @@ class TencentVideo(TencentBaseUploader):
         browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=self.headless))
         context = await browser.new_context(storage_state=self.account_file)
 
+        page = None
         try:
             page = await context.new_page()
             await self.open_upload_page(page)
@@ -890,7 +977,15 @@ class TencentVideo(TencentBaseUploader):
             await self.prepare_video_for_publish(page)
             await self.wait_for_upload_complete(page)
             await self.set_location(page)
-            await self.apply_original_statement(page)
+            await self.set_original_declaration(page)
+
+            # 设置合集
+            if self.collection:
+                tencent_logger.info(_msg("📚", f"小人正在设置合集：{self.collection}"))
+                await asyncio.sleep(1)  # 等待页面渲染合集组件
+                await self.apply_collection(page)
+                tencent_logger.info(_msg("🥳", "合集设置完成"))
+
             await self.set_thumbnail(page)
 
             if self.publish_strategy == TENCENT_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
@@ -901,6 +996,11 @@ class TencentVideo(TencentBaseUploader):
 
             await context.storage_state(path=self.account_file)
             tencent_logger.success(_msg("🥳", "cookie 更新完毕"))
+        except Exception as e:
+            tencent_logger.error(_msg("❌", f"上传过程中发生错误: {e}"))
+            if page and self.screenshot_manager:
+                await self._take_error_screenshot(page, str(e))
+            raise
         finally:
             await context.close()
             await browser.close()

@@ -70,15 +70,33 @@ async def get_tiktok_cookie(account_file):
 
 
 class TiktokVideo(object):
-    def __init__(self, title, file_path, tags, publish_date, account_file):
+    upload_page = "https://www.tiktok.com/creator-center/upload"
+
+    def __init__(self, title, file_path, tags, publish_date, account_file, category=None):
         self.title = title
         self.file_path = file_path
         self.tags = tags
         self.publish_date = publish_date
         self.account_file = account_file
         self.headless = get_local_chrome_headless()
-        self.locator_base = None
+        self.category = category
 
+    async def set_original_declaration(self, page):
+        """TikTok「声明原创」功能。
+
+        根据category参数决定是否声明原创：
+        - category为None或0: 不声明原创
+        - category为其他值: 声明原创
+
+        TODO: 需要调研TikTok创作者中心是否有「声明原创」入口及具体实现方式
+        """
+        # 检查是否需要声明原创
+        if not self.category:
+            tiktok_logger.info("[+] 未勾选声明原创，跳过")
+            return
+
+        # TODO: TikTok平台暂未实现声明原创功能，需要调研页面元素
+        tiktok_logger.info("[+] TikTok平台暂不支持声明原创功能")
 
     async def set_schedule_time(self, page, publish_date):
         schedule_input_element = self.locator_base.get_by_label('Schedule')
@@ -172,6 +190,10 @@ class TiktokVideo(object):
         await self.add_title_tags(page)
         # detact upload status
         await self.detect_upload_status(page)
+
+        # 设置原创声明（可选项，根据category参数决定）
+        await self.set_original_declaration(page)
+
         if self.publish_date != 0:
             await self.set_schedule_time(page, self.publish_date)
 

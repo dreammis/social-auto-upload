@@ -186,13 +186,15 @@
               </div>
             </template>
           </el-dialog>
-
-          <div v-if="tab.selectedPlatform === 2" class="cover-section">
+          
+          <!-- 封面部分：根据平台配置动态显示 -->
+          <div v-if="getPlatformConfig(tab.selectedPlatform).features.cover !== 'none'" class="cover-section">
             <h3>封面</h3>
             <div class="cover-grid">
-              <div class="cover-card">
+              <!-- 单封面模式：小红书、视频号、快手 -->
+              <div v-if="getPlatformConfig(tab.selectedPlatform).features.cover === 'single'" class="cover-card">
                 <div class="cover-card-header">
-                  <span>视频号封面</span>
+                  <span>{{ getPlatformConfig(tab.selectedPlatform).name }}封面{{ tab.selectedPlatform === 2 ? ' 4:3' : '' }}</span>
                   <el-button size="small" type="primary" plain @click="showUploadOptions(tab, UPLOAD_TARGETS.COVER_SINGLE)">
                     选择封面
                   </el-button>
@@ -204,41 +206,39 @@
                 </div>
                 <div v-else class="cover-empty">未选择封面</div>
               </div>
-            </div>
-          </div>
 
-          <div v-if="tab.selectedPlatform === 3" class="cover-section">
-            <h3>封面</h3>
-            <div class="cover-grid">
-              <div class="cover-card">
-                <div class="cover-card-header">
-                  <span>竖封面 3:4</span>
-                  <el-button size="small" type="primary" plain @click="showUploadOptions(tab, UPLOAD_TARGETS.COVER_PORTRAIT)">
-                    选择封面
-                  </el-button>
+              <!-- 双封面模式：抖音（竖封面 + 横封面） -->
+              <template v-if="getPlatformConfig(tab.selectedPlatform).features.cover === 'double'">
+                <div class="cover-card">
+                  <div class="cover-card-header">
+                    <span>竖封面 3:4</span>
+                    <el-button size="small" type="primary" plain @click="showUploadOptions(tab, UPLOAD_TARGETS.COVER_PORTRAIT)">
+                      选择封面
+                    </el-button>
+                  </div>
+                  <div v-if="tab.coverPortrait" class="cover-file-item">
+                    <el-link :href="tab.coverPortrait.url" target="_blank" type="primary">{{ tab.coverPortrait.name }}</el-link>
+                    <span class="file-size">{{ (tab.coverPortrait.size / 1024 / 1024).toFixed(2) }}MB</span>
+                    <el-button type="danger" size="small" @click="removeCover(tab, UPLOAD_TARGETS.COVER_PORTRAIT)">删除</el-button>
+                  </div>
+                  <div v-else class="cover-empty">未选择竖封面</div>
                 </div>
-                <div v-if="tab.coverPortrait" class="cover-file-item">
-                  <el-link :href="tab.coverPortrait.url" target="_blank" type="primary">{{ tab.coverPortrait.name }}</el-link>
-                  <span class="file-size">{{ (tab.coverPortrait.size / 1024 / 1024).toFixed(2) }}MB</span>
-                  <el-button type="danger" size="small" @click="removeCover(tab, UPLOAD_TARGETS.COVER_PORTRAIT)">删除</el-button>
-                </div>
-                <div v-else class="cover-empty">未选择竖封面</div>
-              </div>
 
-              <div class="cover-card">
-                <div class="cover-card-header">
-                  <span>横封面 4:3</span>
-                  <el-button size="small" type="primary" plain @click="showUploadOptions(tab, UPLOAD_TARGETS.COVER_LANDSCAPE)">
-                    选择封面
-                  </el-button>
+                <div class="cover-card">
+                  <div class="cover-card-header">
+                    <span>横封面 4:3</span>
+                    <el-button size="small" type="primary" plain @click="showUploadOptions(tab, UPLOAD_TARGETS.COVER_LANDSCAPE)">
+                      选择封面
+                    </el-button>
+                  </div>
+                  <div v-if="tab.coverLandscape" class="cover-file-item">
+                    <el-link :href="tab.coverLandscape.url" target="_blank" type="primary">{{ tab.coverLandscape.name }}</el-link>
+                    <span class="file-size">{{ (tab.coverLandscape.size / 1024 / 1024).toFixed(2) }}MB</span>
+                    <el-button type="danger" size="small" @click="removeCover(tab, UPLOAD_TARGETS.COVER_LANDSCAPE)">删除</el-button>
+                  </div>
+                  <div v-else class="cover-empty">未选择横封面</div>
                 </div>
-                <div v-if="tab.coverLandscape" class="cover-file-item">
-                  <el-link :href="tab.coverLandscape.url" target="_blank" type="primary">{{ tab.coverLandscape.name }}</el-link>
-                  <span class="file-size">{{ (tab.coverLandscape.size / 1024 / 1024).toFixed(2) }}MB</span>
-                  <el-button type="danger" size="small" @click="removeCover(tab, UPLOAD_TARGETS.COVER_LANDSCAPE)">删除</el-button>
-                </div>
-                <div v-else class="cover-empty">未选择横封面</div>
-              </div>
+              </template>
             </div>
           </div>
 
@@ -352,44 +352,48 @@
             </el-radio-group>
           </div>
 
-          <!-- 原创声明 -->
-          <div class="original-section">
-            <el-checkbox
-              v-model="tab.isOriginal"
-              label="声明原创"
-              class="original-checkbox"
-            />
-          </div>
-
-          <!-- 草稿选项 (仅在视频号可见) -->
-          <div v-if="tab.selectedPlatform === 2" class="draft-section">
+          <!-- 平台特殊功能：草稿选项（视频号） -->
+          <div v-if="getPlatformConfig(tab.selectedPlatform).features.channelsDraft" class="channelsDraft-section">
             <el-checkbox
               v-model="tab.isDraft"
               label="视频号仅保存草稿(用手机发布)"
-              class="draft-checkbox"
+              class="channelsDraft-checkbox"
             />
           </div>
 
-          <!-- 标签 (仅在抖音可见) -->
-          <div v-if="tab.selectedPlatform === 3" class="product-section">
+          <!-- 平台特殊功能：原创声明（视频号、小红书） -->
+          <div v-if="getPlatformConfig(tab.selectedPlatform).features.declareOriginal" class="declareOriginal-section">
+            <el-checkbox
+              v-model="tab.isOriginal"
+              label="声明原创"
+              class="declareOriginal-checkbox"
+            />
+          </div>
+
+          <!-- 平台特殊功能：商品链接和声明类型（抖音） -->
+          <div v-if="getPlatformConfig(tab.selectedPlatform).features.douyinProduct" class="douyinProduct-section">
             <h3>商品链接</h3>
             <el-input
-              v-model="tab.productTitle"
+              v-model="tab.douyinProductTitle"
               type="text"
               :rows="1"
               placeholder="请输入商品名称"
               maxlength="200"
-              class="product-name-input"
+              class="douyinProduct-name-input"
             />
             <el-input
-              v-model="tab.productLink"
+              v-model="tab.douyinProductLink"
               type="text"
               :rows="1"
               placeholder="请输入商品链接"
               maxlength="200"
-              class="product-link-input"
+              class="douyinProduct-link-input"
             />
-            <h3 style="margin-top: 10px;">请选择声明类型（单选）</h3>
+          </div>
+
+          <!-- 平台特殊功能：声明类型（抖音） -->
+          <div v-if="getPlatformConfig(tab.selectedPlatform).features.douyinDeclaration" class="douyinDeclaration-section">
+            <h3>请选择声明类型（单选）</h3>
             <el-radio-group v-model="tab.declaration_type" @change="onDeclarationTypeChange(tab)">
               <el-radio label="内容自行拍摄" disabled>内容自行拍摄</el-radio> <!-- TODO: 暂时选择不了地区，后续有时间再优化 -->
               <el-radio label="内容取材网络">内容取材网络</el-radio>
@@ -423,6 +427,91 @@
             </div>
           </div>
 
+          <!-- 平台特殊功能：声明类型（小红书） -->
+          <div v-if="getPlatformConfig(tab.selectedPlatform).features.xiaohongshuDeclaration" class="xiaohongshu-declaration-section">
+            <h3>声明类型</h3>
+            <el-select
+              v-model="tab.xiaohongshu_declaration"
+              placeholder="请选择声明类型"
+              style="width: 100%"
+              clearable
+            >
+              <el-option label="笔记含AI合成内容" value="笔记含AI合成内容" />
+              <el-option label="内容自行拍摄" value="内容自行拍摄" />
+              <el-option label="内容取材网络" value="内容取材网络" />
+              <el-option label="可能引人不适" value="可能引人不适" />
+              <el-option label="虚构演绎，仅供娱乐" value="虚构演绎，仅供娱乐" />
+              <el-option label="危险行为，请勿模仿" value="危险行为，请勿模仿" />
+            </el-select>
+          </div>
+
+          <!-- 平台特殊功能：作者声明（快手） -->
+          <div v-if="getPlatformConfig(tab.selectedPlatform).features.kuaishouDeclaration" class="kuaishou-declaration-section">
+            <h3>作者声明</h3>
+            <el-select
+              v-model="tab.kuaishou_declaration"
+              placeholder="请选择作者声明类型"
+              style="width: 100%"
+            >
+              <el-option label="内容为AI生成" value="内容为AI生成" />
+              <el-option label="内容自行拍摄" value="内容自行拍摄" />
+              <el-option label="内容取材网络" value="内容取材网络" />
+              <el-option label="可能引人不适" value="可能引人不适" />
+              <el-option label="虚构演绎，仅供娱乐" value="虚构演绎，仅供娱乐" />
+              <el-option label="危险行为，请勿模仿" value="危险行为，请勿模仿" />
+            </el-select>
+          </div>
+
+          <!-- 平台特殊功能：B站分区选择 -->
+          <div v-if="getPlatformConfig(tab.selectedPlatform).features.bilibiliZone" class="bilibili-zone-section">
+            <h3>分区选择</h3>
+            <el-select
+              v-model="tab.bilibiliTid"
+              placeholder="请选择分区"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="zone in BILIBILI_ZONES"
+                :key="zone.value"
+                :label="zone.label"
+                :value="zone.value"
+              />
+            </el-select>
+          </div>
+
+          <!-- 平台特殊功能：B站创作声明 -->
+          <div v-if="getPlatformConfig(tab.selectedPlatform).features.bilibiliDeclaration" class="bilibili-declaration-section">
+            <h3>创作声明</h3>
+            <el-checkbox
+              v-model="tab.bilibiliAiDeclaration"
+              label="含AI生成内容"
+              class="bilibili-declaration-checkbox"
+            />
+          </div>
+
+          <!-- 合集选择 -->
+          <div v-if="getPlatformConfig(tab.selectedPlatform).features.collection" class="collection-section">
+            <h3>合集</h3>
+            <el-select
+              v-model="tab.collection"
+              placeholder="请选择或搜索合集（支持模糊匹配）"
+              style="width: 100%"
+              filterable
+              allow-create
+              default-first-option
+            >
+              <el-option
+                v-for="item in COLLECTION_OPTIONS"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+            <div style="margin-top: 5px; color: #909399; font-size: 12px;">
+              可输入关键字搜索合集，如输入"大学"可匹配"大学篇"
+            </div>
+          </div>
+
           <!-- 标题输入 -->
           <div class="title-section">
             <h3>标题</h3>
@@ -437,7 +526,8 @@
             />
           </div>
 
-          <div v-if="tab.selectedPlatform === 3" class="description-section">
+          <!-- 描述输入：根据平台配置动态显示 -->
+          <div v-if="getPlatformConfig(tab.selectedPlatform).features.description" class="description-section">
             <h3>描述</h3>
             <el-input
               v-model="tab.desc"
@@ -645,12 +735,129 @@ const batchPublishing = ref(false)
 const batchPublishMessage = ref('')
 const batchPublishType = ref('info')
 
+// ==================== 平台配置 ====================
+// 定义每个平台的特性，统一管理平台差异
+const PLATFORM_CONFIG = {
+  1: { // 小红书
+    name: '小红书',
+    features: {
+      cover: 'single',        // 单封面
+      description: true,      // 支持描述
+      channelsDraft: false,           // 不支持草稿
+      douyinProduct: false,         // 不支持商品
+      douyinDeclaration: false,     // 不支持抖音声明类型
+      xiaohongshuDeclaration: true, // 支持小红书声明类型（下拉列表）
+      declareOriginal: true,          // 支持原创声明
+      bilibiliZone: false,    // 不支持B站分区
+      collection: true         // 支持合集
+    }
+  },
+  2: { // 视频号
+    name: '视频号',
+    features: {
+      cover: 'single',
+      description: true,
+      channelsDraft: true,            // 支持草稿
+      douyinProduct: false,
+      douyinDeclaration: false,
+      declareOriginal: true,          // 支持原创声明
+      bilibiliZone: false,
+      collection: true               // 支持合集
+    }
+  },
+  3: { // 抖音
+    name: '抖音',
+    features: {
+      cover: 'double',        // 双封面（竖+横）
+      description: true,
+      channelsDraft: false,
+      douyinProduct: true,          // 支持商品
+      douyinDeclaration: true,      // 支持声明类型
+      declareOriginal: false,        // 不支持原创声明
+      bilibiliZone: false,
+      collection: true              // 支持合集
+    }
+  },
+  4: { // 快手
+    name: '快手',
+    features: {
+      cover: 'single',
+      description: true,
+      channelsDraft: false,
+      douyinProduct: false,
+      douyinDeclaration: false,      // 不支持抖音声明类型（单选框）
+      kuaishouDeclaration: true, // 快手作者声明（下拉列表）
+      declareOriginal: false,        // 不支持原创声明
+      bilibiliZone: false,
+      collection: true              // 支持合集
+    }
+  },
+  5: { // B站
+    name: 'B站',
+    features: {
+      cover: 'single',              // 支持单封面
+      description: true,
+      channelsDraft: false,
+      douyinProduct: false,
+      douyinDeclaration: false,
+      declareOriginal: true,         // 支持原创声明（声明原创 = 自制 + 禁止转载）
+      bilibiliZone: true,            // 支持B站分区
+      bilibiliDeclaration: true,     // 支持B站创作声明（含AI生成内容）
+      collection: true               // 支持合集
+    }
+  },
+  6: { // TikTok
+    name: 'TikTok',
+    features: {
+      cover: 'none',
+      description: false,
+      channelsDraft: false,
+      douyinProduct: false,
+      douyinDeclaration: false,
+      declareOriginal: false,        // 不支持原创声明
+      bilibiliZone: false,
+      collection: true              // 支持合集
+    }
+  },
+  7: { // 百家号
+    name: '百家号',
+    features: {
+      cover: 'none',
+      description: false,
+      channelsDraft: false,
+      douyinProduct: false,
+      douyinDeclaration: false,
+      declareOriginal: false,        // 不支持原创声明
+      bilibiliZone: false,
+      collection: true              // 支持合集
+    }
+  }
+}
+
+// B站分区
+const BILIBILI_ZONES = [
+  { value: 218, label: '动物' }
+]
+
+// 合集选项
+const COLLECTION_OPTIONS = [
+  { value: '大学篇', label: '大学篇' }
+]
+
+// 获取平台配置的辅助函数
+const getPlatformConfig = (platformId) => {
+  return PLATFORM_CONFIG[platformId] || PLATFORM_CONFIG[1]
+}
+
 // 平台列表 - 对应后端type字段
 const platforms = [
   { key: 3, name: '抖音' },
   { key: 4, name: '快手' },
   { key: 2, name: '视频号' },
-  { key: 1, name: '小红书' }
+  { key: 1, name: '小红书' },
+  { key: 5, name: 'B站' },
+  { key: 7, name: '百家号' },
+  { key: 6, name: 'TikTok' },
 ]
 
 const defaultTabInit = {
@@ -665,8 +872,8 @@ const defaultTabInit = {
   selectedPlatform: 1, // 选中的平台（单选）
   title: '',
   desc: '',
-  productLink: '', // 商品链接
-  productTitle: '', // 商品名称
+  douyinProductLink: '', // 商品链接
+  douyinProductTitle: '', // 商品名称
   declaration_type: '', // 自主声明类型（与抖音页面选项文字一致）
   declaration_location: [], // 拍摄地点
   declaration_date: '', // 拍摄日期
@@ -679,7 +886,13 @@ const defaultTabInit = {
   publishStatus: null, // 发布状态，包含message和type
   publishing: false, // 发布状态，用于控制按钮loading效果
   isDraft: false, // 是否保存为草稿，仅视频号平台可见
-  isOriginal: false // 是否标记为原创
+  isOriginal: false, // 是否标记为原创，仅视频号、小红书平台可见
+  bilibiliTid: 218, // B站分区ID，默认218（动物圈）
+  bilibiliAiDeclaration: false, // B站创作声明：含AI生成内容
+  kuaishou_declaration: '内容为AI生成', // 快手作者声明类型，默认"内容为AI生成"
+  xiaohongshu_declaration: '', // 小红书声明类型
+  collection: '大学篇', // 合集名称，默认"大学篇"
+  coverSingle: null, // B站封面文件
 }
 
 // helper to create a fresh deep-copied tab from defaultTabInit
@@ -708,10 +921,13 @@ const accountStore = useAccountStore()
 // 根据选择的平台获取可用账号列表
 const availableAccounts = computed(() => {
   const platformMap = {
-    3: '抖音',
-    2: '视频号',
     1: '小红书',
-    4: '快手'
+    2: '视频号',
+    3: '抖音',
+    4: '快手',
+    5: 'B站',
+    6: 'TikTok',
+    7: '百家号'
   }
   const currentPlatform = currentTab.value ? platformMap[currentTab.value.selectedPlatform] : null
   return currentPlatform ? accountStore.accounts.filter(acc => acc.platform === currentPlatform) : []
@@ -1046,9 +1262,9 @@ const confirmPublish = async (tab) => {
     videosPerDay: tab.scheduleEnabled ? tab.videosPerDay || 1 : 1,
     dailyTimes: tab.scheduleEnabled ? tab.dailyTimes || ['10:00'] : ['10:00'],
     startDays: tab.scheduleEnabled ? tab.startDays || 0 : 0,
-    category: tab.isOriginal ? 1 : 0, // 1表示原创，0表示非原创
-    productLink: tab.productLink.trim() || '',
-    productTitle: tab.productTitle.trim() || '',
+    declareOriginal: tab.isOriginal, // 原创声明
+    productLink: tab.douyinProductLink.trim() || '',
+    productTitle: tab.douyinProductTitle.trim() || '',
     thumbnail: tab.coverSingle?.path || '',
     thumbnailLandscape: tab.coverSingle?.path || tab.coverLandscape?.path || '',
     thumbnailPortrait: tab.coverPortrait?.path || '',
@@ -1058,7 +1274,15 @@ const confirmPublish = async (tab) => {
       declaration_date: tab.declaration_date || '',
       isDraft: tab.isDraft
     } : null,
-    isDraft: tab.isDraft
+    isDraft: tab.isDraft,
+    // 快手作者声明参数
+    kuaishouDeclaration: tab.kuaishou_declaration || '内容为AI生成',
+    // 小红书声明参数
+    xiaohongshuDeclaration: tab.xiaohongshu_declaration || '',
+    bilibiliTid: tab.bilibiliTid || 218, // B站分区ID（动物圈）
+    bilibiliAiDeclaration: tab.bilibiliAiDeclaration || false, // B站创作声明：含AI生成内容
+    noReprint: tab.isOriginal ? 1 : 0, // 声明原创时禁止转载
+    collection: tab.collection || '大学篇' // 合集名称
   }
 
   // 校验“内容自行拍摄”时必须选择地点与日期
@@ -1457,15 +1681,15 @@ const batchPublish = async () => {
         .account-section,
         .platform-section,
         .title-section,
-        .product-section,
+        .douyinProduct-section,
         .topic-section,
         .schedule-section {
           margin-bottom: 30px;
         }
 
-        .product-section {
-          .product-name-input,
-          .product-link-input {
+        .douyinProduct-section {
+          .douyinProduct-name-input,
+          .douyinProduct-link-input {
             margin-bottom: 5px;
           }
         }
@@ -1616,22 +1840,26 @@ const batchPublish = async () => {
           border-top: 1px solid #ebeef5;
         }
 
-        .draft-section {
+        .channelsDraft-section {
           margin: 20px 0;
 
-          .draft-checkbox {
+          .channelsDraft-checkbox {
             display: block;
             margin: 10px 0;
           }
         }
 
-        .original-section {
+        .declareOriginal-section {
           margin: 10px 0 20px;
 
-          .original-checkbox {
+          .declareOriginal-checkbox {
             display: block;
             margin: 10px 0;
           }
+        }
+
+        .collection-section {
+          margin: 20px 0;
         }
       }
     }

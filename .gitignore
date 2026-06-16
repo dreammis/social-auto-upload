@@ -182,6 +182,7 @@ package-lock.json
 
 # database
 db/database.db
+data/
 
 # 临时文件夹
 cookiesFile

@@ -1,14 +1,13 @@
 import json
 from pathlib import Path
 
-from conf import BASE_DIR, LOCAL_CHROME_HEADLESS
+from conf import BASE_DIR
 
 
 RUNTIME_CONFIG_PATH = Path(BASE_DIR / "db" / "runtime_config.json")
-
 DEFAULT_RUNTIME_CONFIG = {
-    "localChromeHeadless": bool(LOCAL_CHROME_HEADLESS),
-    "loginBrowserHeadless": False,
+    "localChromeHeadless": True,  # 默认无头模式
+    "loginBrowserHeadless": False,  # 登录时显示浏览器窗口
 }
 
 
