@@ -74,6 +74,7 @@ class DouyinNoteUploadRequest:
     publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE
     debug: bool = True
     headless: bool = True
+    bgm: str = ""
 
 
 @dataclass(slots=True)
@@ -323,6 +324,7 @@ async def upload_note(request: DouyinNoteUploadRequest) -> Path:
         publish_strategy=request.publish_strategy,
         debug=request.debug,
         headless=request.headless,
+        bgm=request.bgm,
     )
     await app.douyin_upload_note()
     return account_file
@@ -549,6 +551,7 @@ def build_parser() -> argparse.ArgumentParser:
     upload_note_parser.add_argument("--note", default="", help="Optional note content")
     upload_note_parser.add_argument("--notef", default="", help="Read note content from file (txt/md)")
     upload_note_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
+    upload_note_parser.add_argument("--bgm", default="", help="BGM music name to search and select")
     upload_note_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
     add_runtime_flags(upload_note_parser)
 
@@ -707,6 +710,7 @@ async def dispatch(args: argparse.Namespace) -> int:
                 publish_strategy=publish_strategy,
                 debug=args.debug,
                 headless=args.headless,
+                bgm=args.bgm or "",
             )
             await upload_note(request)
             print(f"Douyin note upload submitted: {len(request.image_files)} images")
