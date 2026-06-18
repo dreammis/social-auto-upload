@@ -135,31 +135,13 @@
               <!-- 标题 -->
               <div class="form-item">
                 <label>标题</label>
-                <el-input v-model="tab.title" placeholder="请输入标题（B站会自动去除#后的内容）" maxlength="80" show-word-limit />
+                <el-input v-model="tab.title" placeholder="请输入标题" maxlength="80" show-word-limit />
               </div>
 
               <!-- 描述/简介 -->
               <div class="form-item">
                 <label>描述 / 简介</label>
                 <el-input v-model="tab.desc" type="textarea" :rows="3" placeholder="请输入视频描述或简介" maxlength="2000" show-word-limit />
-              </div>
-
-              <!-- 标签/话题 -->
-              <div class="form-item">
-                <label>标签 / 话题</label>
-                <div class="tags-input">
-                  <el-tag v-for="(topic, idx) in tab.selectedTopics" :key="idx" closable @close="tab.selectedTopics.splice(idx, 1)" style="margin-right: 5px;">
-                    {{ topic }}
-                  </el-tag>
-                  <el-input
-                    v-model="newTopicInput"
-                    placeholder="输入标签后按回车添加"
-                    size="small"
-                    style="width: 200px;"
-                    @keyup.enter="addTopicToUnified(tab)"
-                    clearable
-                  />
-                </div>
               </div>
             </el-card>
 
@@ -306,6 +288,25 @@
               <!-- B站独有设置 -->
               <div v-if="tab.selectedPlatforms.includes(5)" class="platform-specific-settings">
                 <h4 class="platform-title" style="color: #00A1D6;">B站</h4>
+                
+                <!-- 标签/话题 -->
+                <div class="form-item">
+                  <label>标签 / 话题</label>
+                  <div class="tags-input">
+                    <el-tag v-for="(tag, idx) in tab.platformConfig.bilibili.tags" :key="idx" closable @close="tab.platformConfig.bilibili.tags.splice(idx, 1)" style="margin-right: 5px;">
+                      {{ tag }}
+                    </el-tag>
+                    <el-input
+                      v-model="newTagInputs.bilibili"
+                      placeholder="输入标签后按回车添加"
+                      size="small"
+                      style="width: 200px;"
+                      @keyup.enter="addTagToPlatform(tab, 'bilibili')"
+                      clearable
+                    />
+                  </div>
+                </div>
+
                 <div class="form-item">
                   <label>分区选择</label>
                   <el-select v-model="tab.platformConfig.bilibili.tid" placeholder="请选择分区" style="width: 100%;">
@@ -325,6 +326,24 @@
               <!-- 视频号独有设置 -->
               <div v-if="tab.selectedPlatforms.includes(2)" class="platform-specific-settings">
                 <h4 class="platform-title" style="color: #07C160;">视频号</h4>
+                
+                <!-- 标签/话题 -->
+                <div class="form-item">
+                  <label>标签 / 话题</label>
+                  <div class="tags-input">
+                    <el-tag v-for="(tag, idx) in tab.platformConfig.channels.tags" :key="idx" closable @close="tab.platformConfig.channels.tags.splice(idx, 1)" style="margin-right: 5px;">
+                      {{ tag }}
+                    </el-tag>
+                    <el-input
+                      v-model="newTagInputs.channels"
+                      placeholder="输入标签后按回车添加"
+                      size="small"
+                      style="width: 200px;"
+                      @keyup.enter="addTagToPlatform(tab, 'channels')"
+                      clearable
+                    />
+                  </div>
+                </div>
 
                 <div class="form-item">
                   <el-checkbox v-model="tab.platformConfig.channels.isDraft">仅保存草稿（用手机发布）</el-checkbox>
@@ -338,6 +357,24 @@
               <!-- 小红书独有设置 -->
               <div v-if="tab.selectedPlatforms.includes(1)" class="platform-specific-settings">
                 <h4 class="platform-title" style="color: #FE2C55;">小红书</h4>
+                
+                <!-- 标签/话题 -->
+                <div class="form-item">
+                  <label>标签 / 话题</label>
+                  <div class="tags-input">
+                    <el-tag v-for="(tag, idx) in tab.platformConfig.xiaohongshu.tags" :key="idx" closable @close="tab.platformConfig.xiaohongshu.tags.splice(idx, 1)" style="margin-right: 5px;">
+                      {{ tag }}
+                    </el-tag>
+                    <el-input
+                      v-model="newTagInputs.xiaohongshu"
+                      placeholder="输入标签后按回车添加"
+                      size="small"
+                      style="width: 200px;"
+                      @keyup.enter="addTagToPlatform(tab, 'xiaohongshu')"
+                      clearable
+                    />
+                  </div>
+                </div>
 
                 <div class="form-item">
                   <label>声明类型</label>
@@ -357,6 +394,24 @@
               <!-- 快手独有设置 -->
               <div v-if="tab.selectedPlatforms.includes(4)" class="platform-specific-settings">
                 <h4 class="platform-title" style="color: #FF4906;">快手</h4>
+                
+                <!-- 标签/话题 -->
+                <div class="form-item">
+                  <label>标签 / 话题</label>
+                  <div class="tags-input">
+                    <el-tag v-for="(tag, idx) in tab.platformConfig.kuaishou.tags" :key="idx" closable @close="tab.platformConfig.kuaishou.tags.splice(idx, 1)" style="margin-right: 5px;">
+                      {{ tag }}
+                    </el-tag>
+                    <el-input
+                      v-model="newTagInputs.kuaishou"
+                      placeholder="输入标签后按回车添加"
+                      size="small"
+                      style="width: 200px;"
+                      @keyup.enter="addTagToPlatform(tab, 'kuaishou')"
+                      clearable
+                    />
+                  </div>
+                </div>
 
                 <div class="form-item">
                   <label>作者声明</label>
@@ -372,6 +427,24 @@
               <!-- 抖音独有设置 -->
               <div v-if="tab.selectedPlatforms.includes(3)" class="platform-specific-settings">
                 <h4 class="platform-title" style="color: #000;">抖音</h4>
+                
+                <!-- 标签/话题 -->
+                <div class="form-item">
+                  <label>标签 / 话题</label>
+                  <div class="tags-input">
+                    <el-tag v-for="(tag, idx) in tab.platformConfig.douyin.tags" :key="idx" closable @close="tab.platformConfig.douyin.tags.splice(idx, 1)" style="margin-right: 5px;">
+                      {{ tag }}
+                    </el-tag>
+                    <el-input
+                      v-model="newTagInputs.douyin"
+                      placeholder="输入标签后按回车添加"
+                      size="small"
+                      style="width: 200px;"
+                      @keyup.enter="addTagToPlatform(tab, 'douyin')"
+                      clearable
+                    />
+                  </div>
+                </div>
 
                 <div class="form-item">
                   <label>商品名称</label>
@@ -392,6 +465,52 @@
                     <el-radio label="可能引人不适">可能引人不适</el-radio>
                     <el-radio label="虚构演绎，仅供娱乐">虚构演绎，仅供娱乐</el-radio>
                   </el-radio-group>
+                </div>
+              </div>
+
+              <!-- TikTok独有设置 -->
+              <div v-if="tab.selectedPlatforms.includes(6)" class="platform-specific-settings">
+                <h4 class="platform-title" style="color: #000;">TikTok</h4>
+                
+                <!-- 标签/话题 -->
+                <div class="form-item">
+                  <label>标签 / 话题</label>
+                  <div class="tags-input">
+                    <el-tag v-for="(tag, idx) in tab.platformConfig.tiktok.tags" :key="idx" closable @close="tab.platformConfig.tiktok.tags.splice(idx, 1)" style="margin-right: 5px;">
+                      {{ tag }}
+                    </el-tag>
+                    <el-input
+                      v-model="newTagInputs.tiktok"
+                      placeholder="输入标签后按回车添加"
+                      size="small"
+                      style="width: 200px;"
+                      @keyup.enter="addTagToPlatform(tab, 'tiktok')"
+                      clearable
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- 百家号独有设置 -->
+              <div v-if="tab.selectedPlatforms.includes(7)" class="platform-specific-settings">
+                <h4 class="platform-title" style="color: #E74C3C;">百家号</h4>
+                
+                <!-- 标签/话题 -->
+                <div class="form-item">
+                  <label>标签 / 话题</label>
+                  <div class="tags-input">
+                    <el-tag v-for="(tag, idx) in tab.platformConfig.baijiahao.tags" :key="idx" closable @close="tab.platformConfig.baijiahao.tags.splice(idx, 1)" style="margin-right: 5px;">
+                      {{ tag }}
+                    </el-tag>
+                    <el-input
+                      v-model="newTagInputs.baijiahao"
+                      placeholder="输入标签后按回车添加"
+                      size="small"
+                      style="width: 200px;"
+                      @keyup.enter="addTagToPlatform(tab, 'baijiahao')"
+                      clearable
+                    />
+                  </div>
                 </div>
               </div>
             </el-card>
@@ -428,6 +547,15 @@
                   <el-icon v-else v-show="tab.publishing"><Loading /></el-icon>
                   <span class="label">{{ result.platform }}</span>
                   <span class="message">{{ result.message }}</span>
+                  <el-link
+                    v-if="result.status === 'error' && result.screenshot"
+                    type="primary"
+                    :underline="true"
+                    @click="showScreenshotPreview(result.screenshot)"
+                    style="margin-left: 8px;"
+                  >
+                    查看截图
+                  </el-link>
                 </div>
               </div>
             </el-card>
@@ -1068,13 +1196,42 @@
           </div>
         </template>
       </el-dialog>
+      
+      <!-- 截图预览弹窗 -->
+      <el-dialog
+        v-model="screenshotPreviewVisible"
+        title="上传失败截图"
+        width="80%"
+        destroy-on-close
+        @close="closeScreenshotPreview"
+      >
+        <div class="screenshot-preview-container">
+          <el-image
+            :src="currentScreenshotUrl"
+            fit="contain"
+            style="width: 100%; max-height: 70vh;"
+            :preview-src-list="[currentScreenshotUrl]"
+          >
+            <template #error>
+              <div class="image-error">
+                <el-icon><Picture /></el-icon>
+                <span>截图加载失败</span>
+              </div>
+            </template>
+          </el-image>
+        </div>
+        <template #footer>
+          <el-button @click="closeScreenshotPreview">关闭</el-button>
+          <el-button type="primary" @click="window.open(currentScreenshotUrl)">在新窗口打开</el-button>
+        </template>
+      </el-dialog>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
-import { Upload, Plus, Close, Folder } from '@element-plus/icons-vue'
+import { Upload, Plus, Close, Folder, Picture } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
@@ -1297,7 +1454,6 @@ const unifiedPublishInit = {
   coverSingle: null, // 统一封面（各平台可能不同）
   title: '', // 标题
   desc: '', // 描述/简介
-  selectedTopics: [], // 标签/话题
 
   // 平台选择
   selectedPlatforms: [], // 选中的平台ID列表 [1,3,5]
@@ -1314,40 +1470,55 @@ const unifiedPublishInit = {
     3: [], // 抖音账号
     4: [], // 快手账号
     5: [], // B站账号
+    6: [], // TikTok账号
+    7: [], // 百家号账号
   },
 
-  // 平台差异化设置
+  // 平台差异化设置（每个平台独立的标签）
   platformConfig: {
     // 公共设置
     common: {
       collection: '', // 合集名称（所有平台共用）
     },
 
+    // 小红书独有
+    xiaohongshu: {
+      tags: [], // 标签/话题（独立）
+      declaration: '笔记含AI合成内容', // 声明类型
+      isOriginal: true, // 原创声明
+    },
+    // 视频号独有
+    channels: {
+      tags: [], // 标签/话题（独立）
+      isDraft: false, // 草稿模式
+      isOriginal: true, // 原创声明
+    },
     // 抖音独有
     douyin: {
+      tags: [], // 标签/话题（独立）
       productTitle: '', // 商品名称
       productLink: '', // 商品链接
       declaration_type: '内容由AI生成', // 声明类型
     },
+    // 快手独有
+    kuaishou: {
+      tags: [], // 标签/话题（独立）
+      declaration: '内容为AI生成', // 作者声明
+    },
     // B站独有
     bilibili: {
+      tags: [], // 标签/话题（独立）
       tid: 218, // 分区ID
       isOriginal: true, // 原创声明(禁止转载) - 默认勾选
       aiDeclaration: true, // AI声明
     },
-    // 视频号独有
-    channels: {
-      isDraft: false, // 草稿模式
-      isOriginal: true, // 原创声明
+    // TikTok独有
+    tiktok: {
+      tags: [], // 标签/话题（独立）
     },
-    // 小红书独有
-    xiaohongshu: {
-      declaration: '笔记含AI生成内容', // 声明类型
-      isOriginal: true, // 原创声明
-    },
-    // 快手独有
-    kuaishou: {
-      declaration: '内容为AI生成', // 作者声明
+    // 百家号独有
+    baijiahao: {
+      tags: [], // 标签/话题（独立）
     }
   },
 
@@ -1599,13 +1770,23 @@ const handleUploadError = (error) => {
 }
 
 // ==================== 统一发布（一键发布）相关函数 ====================
-const newTopicInput = ref('') // 统一发布的标签输入
+// 各平台标签输入状态
+const newTagInputs = reactive({
+  xiaohongshu: '',
+  channels: '',
+  douyin: '',
+  kuaishou: '',
+  bilibili: '',
+  tiktok: '',
+  baijiahao: ''
+})
 
-// 添加标签到统一发布Tab
-const addTopicToUnified = (tab) => {
-  if (newTopicInput.value.trim() && !tab.selectedTopics.includes(newTopicInput.value.trim())) {
-    tab.selectedTopics.push(newTopicInput.value.trim())
-    newTopicInput.value = ''
+// 添加标签到指定平台
+const addTagToPlatform = (tab, platformKey) => {
+  const inputValue = newTagInputs[platformKey].trim()
+  if (inputValue && !tab.platformConfig[platformKey].tags.includes(inputValue)) {
+    tab.platformConfig[platformKey].tags.push(inputValue)
+    newTagInputs[platformKey] = ''
   }
 }
 
@@ -1887,9 +2068,8 @@ const executeUnifiedPublish = async (tab) => {
       files: tab.fileList.map(f => f.path),
       title: tab.title,
       desc: tab.desc,
-      tags: tab.selectedTopics,
 
-      // 平台列表和配置
+      // 平台列表和配置（每个平台的标签在config中）
       platforms: tab.selectedPlatforms,
       accounts: tab.platformAccounts,
       config: tab.platformConfig,
@@ -2443,6 +2623,22 @@ const batchPublish = async () => {
     batchPublishing.value = false
     isCancelled.value = false
   }
+}
+
+// ==================== 截图预览功能 ====================
+const screenshotPreviewVisible = ref(false)
+const currentScreenshotUrl = ref('')
+
+const showScreenshotPreview = (screenshotUrl) => {
+  // 构建完整的URL（如果后端API不是同源，需要添加baseURL）
+  const baseURL = import.meta.env.VITE_API_BASE_URL || ''
+  currentScreenshotUrl.value = baseURL + screenshotUrl
+  screenshotPreviewVisible.value = true
+}
+
+const closeScreenshotPreview = () => {
+  screenshotPreviewVisible.value = false
+  currentScreenshotUrl.value = ''
 }
 </script>
 
@@ -3268,6 +3464,28 @@ const batchPublish = async () => {
       .message {
         flex: 1;
       }
+    }
+  }
+}
+
+// 截图预览弹窗样式
+.screenshot-preview-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  
+  .image-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: #909399;
+    
+    .el-icon {
+      font-size: 48px;
+      margin-bottom: 10px;
     }
   }
 }

@@ -443,16 +443,12 @@ def post_video_bilibili(title, files, tags, account_file, category=None, enableT
         publish_datetimes = [0 for i in range(len(files))]
 
     # 标签处理：B站要求至少一个标签
-    # 优先从描述中提取 #标签
-    hashtag_pattern = re.compile(r'#([^#\s]+)')
-    hashtags = hashtag_pattern.findall(desc) if desc else []
-    if hashtags:
-        tag_list = hashtags
-        print(f"从描述提取的标签：{hashtags}")
-    elif tags:
-        tag_list = tags
-    else:
-        tag_list = [title]  # 默认用标题作为tag
+    # 只使用传入的tags参数，不从描述提取
+    if not tags:
+        raise ValueError("B站标签不能为空，请在话题栏填写标签")
+    
+    tag_list = tags
+    print(f"使用的标签：{tags}")
 
     for index, file in enumerate(files):
         for cookie in account_file:

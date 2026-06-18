@@ -452,9 +452,19 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
             )
             self.tags = self.tags[:max_tags]
 
-        if not getattr(self, "desc", ""):
-            desc = page.locator('p[data-placeholder*="输入正文描述"]')
-            await desc.click()
+        # 定位描述框并点击，确保光标在描述框内
+        desc_box = page.locator('div.tiptap[contenteditable="true"]')
+        if await desc_box.count() == 0:
+            desc_box = page.locator('div[contenteditable="true"][role="textbox"]')
+        if await desc_box.count() == 0:
+            desc_box = page.locator('p[data-placeholder*="输入正文描述"]')
+        
+        if await desc_box.count() > 0:
+            await desc_box.click()
+            await asyncio.sleep(0.3)
+            # 将光标移动到描述框末尾（确保tag在描述文字后面）
+            await page.keyboard.press("End")
+            await asyncio.sleep(0.2)
 
         for tag in self.tags:  # 循环处理所有 tags
             # 话题候选下拉框依赖小红书联想接口实时返回，网络抖动/无匹配时会等不到。

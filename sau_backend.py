@@ -917,7 +917,6 @@ def batchUnifiedPublish():
         coverPath: 封面路径,
         title: 标题,
         desc: 描述,
-        tags: [标签列表],
         
         platforms: [平台ID列表],  // 如 [1,3,5] 表示小红书、抖音、B站
         accounts: {
@@ -926,12 +925,14 @@ def batchUnifiedPublish():
             5: [账号ID]
         },
         
-        config: {  // 各平台差异化配置
-            douyin: { collection, productTitle, productLink, declaration_type },
-            bilibili: { tid, aiDeclaration, isOriginal },
-            channels: { isDraft, isOriginal },
-            xiaohongshu: { declaration, isOriginal },
-            kuaishou: { declaration }
+        config: {  // 各平台差异化配置（每个平台独立标签）
+            xiaohongshu: { tags: [], declaration, isOriginal },
+            channels: { tags: [], isDraft, isOriginal },
+            douyin: { tags: [], collection, productTitle, productLink, declaration_type },
+            kuaishou: { tags: [], declaration },
+            bilibili: { tags: [], tid, aiDeclaration, isOriginal },
+            tiktok: { tags: [] },
+            baijiahao: { tags: [] }
         }
     }
     
@@ -954,14 +955,13 @@ def batchUnifiedPublish():
         files = data.get('files', [])
         title = data.get('title', '')
         desc = data.get('desc', '')
-        tags = data.get('tags', [])
 
         # 提取2种尺寸封面
         covers = data.get('covers', {})
         cover_portrait = covers.get('portrait')   # 竖版 (3:4)
         cover_square = covers.get('square')        # 方形 (4:3)
 
-        # 提取平台配置
+        # 提取平台配置（标签在各平台的config中）
         platforms = data.get('platforms', [])  # 平台ID列表
         accounts = data.get('accounts', {})   # 各平台账号
         config = data.get('config', {})       # 各平台差异化配置
@@ -1023,14 +1023,14 @@ def batchUnifiedPublish():
                     cover_square=cover_square
                 )
 
-                # 根据平台调用对应的发布函数
+                # 根据平台调用对应的发布函数（标签从config中读取）
                 publish_to_platform(
                     platform_id=platform_id,
                     title=title,
                     files=files,
                     coverPath=coverPath,
-                    tags=tags,
-                    accounts=account_file_paths,  # 使用转换后的账号文件路径
+                    tags=[],  # 已废弃，标签从config中读取
+                    accounts=account_file_paths,
                     desc=desc,
                     config=config
                 )
@@ -1047,10 +1047,14 @@ def batchUnifiedPublish():
                 error_msg = str(e)
                 print(f"[统一发布] ❌ {platform_name} 发布失败: {error_msg}\n")
                 
+                # 获取最新截图路径
+                screenshot_url = get_latest_screenshot_for_platform(platform_name)
+                
                 results.append({
                     "platform": platform_name,
                     "status": "error",
-                    "message": error_msg
+                    "message": error_msg,
+                    "screenshot": screenshot_url
                 })
         
         # 统计结果
@@ -1171,15 +1175,18 @@ def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, de
     common_config = config.get('common', {})
     collection = common_config.get('collection', '')  # 合集
 
-    # 提取各平台特有配置
+    # 提取各平台特有配置（包括独立标签）
     douyin_config = config.get('douyin', {})
     bilibili_config = config.get('bilibili', {})
     channels_config = config.get('channels', {})
     xiaohongshu_config = config.get('xiaohongshu', {})
     kuaishou_config = config.get('kuaishou', {})
+    tiktok_config = config.get('tiktok', {})
+    baijiahao_config = config.get('baijiahao', {})
 
     match platform_id:
         case 1:  # 小红书
+            xhs_tags = xiaohongshu_config.get('tags', [])  # 小红书独立标签
             xhs_declaration = xiaohongshu_config.get('declaration', '')
             xhs_is_original = xiaohongshu_config.get('isOriginal', False)
             xhs_category = 1 if xhs_is_original else None
@@ -1188,7 +1195,7 @@ def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, de
             post_video_xhs(
                 title=title,
                 files=files,
-                tags=tags,
+                tags=xhs_tags,  # 使用小红书独立标签
                 account_file=accounts,
                 category=xhs_category,
                 enableTimer=False,
@@ -1197,18 +1204,19 @@ def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, de
                 start_days=0,
                 desc=desc,
                 thumbnail_path=coverPath,
-                collection=collection,  # 使用公共合集
+                collection=collection,
                 declaration_info=declaration_info
             )
 
-        case 2:  # 视频号（无AI声明）
+        case 2:  # 视频号
+            channels_tags = channels_config.get('tags', [])  # 视频号独立标签
             is_draft = channels_config.get('isDraft', False)
             is_original = channels_config.get('isOriginal', False)
 
             post_video_tencent(
                 title=title,
                 files=files,
-                tags=tags,
+                tags=channels_tags,  # 使用视频号独立标签
                 account_file=accounts,
                 category=None,
                 enableTimer=False,
@@ -1218,17 +1226,18 @@ def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, de
                 is_draft=is_draft,
                 thumbnail_path=coverPath,
                 desc=desc,
-                collection=collection  # 使用公共合集
+                collection=collection
             )
 
         case 3:  # 抖音
+            douyin_tags = douyin_config.get('tags', [])  # 抖音独立标签
             declaration_type = douyin_config.get('declaration_type', '')
             declaration_info = {"declaration_type": declaration_type} if declaration_type else None
 
             # 处理抖音双封面（竖版3:4 + 方形4:3）
             if isinstance(coverPath, dict):
-                douyin_portrait = coverPath.get('portrait')  # 竖版封面 (3:4)
-                douyin_square = coverPath.get('square')  # 方形封面 (4:3)
+                douyin_portrait = coverPath.get('portrait')
+                douyin_square = coverPath.get('square')
             else:
                 douyin_portrait = coverPath
                 douyin_square = coverPath
@@ -1236,29 +1245,30 @@ def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, de
             post_video_DouYin(
                 title=title,
                 files=files,
-                tags=tags,
+                tags=douyin_tags,  # 使用抖音独立标签
                 account_file=accounts,
                 category=None,
                 enableTimer=False,
                 videos_per_day=1,
                 daily_times=[10],
                 start_days=0,
-                thumbnail_landscape_path=douyin_square,  # 抖音横封面使用方形
+                thumbnail_landscape_path=douyin_square,
                 thumbnail_portrait_path=douyin_portrait,
                 productLink=douyin_config.get('productLink', ''),
                 productTitle=douyin_config.get('productTitle', ''),
                 declaration_info=declaration_info,
                 desc=desc,
-                collection=collection  # 使用公共合集
+                collection=collection
             )
 
         case 4:  # 快手
+            kuaishou_tags = kuaishou_config.get('tags', [])  # 快手独立标签
             kuaishou_declaration = kuaishou_config.get('declaration', '内容为AI生成')
 
             post_video_ks(
                 title=title,
                 files=files,
-                tags=tags,
+                tags=kuaishou_tags,  # 使用快手独立标签
                 account_file=accounts,
                 category=None,
                 enableTimer=False,
@@ -1271,10 +1281,11 @@ def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, de
                 allow_duet=True,
                 allow_download=True,
                 show_in_city=True,
-                collection=collection  # 使用公共合集
+                collection=collection
             )
             
         case 5:  # B站
+            bilibili_tags = bilibili_config.get('tags', [])  # B站独立标签
             bilibili_tid = bilibili_config.get('tid', 218)
             bilibili_ai_decl = bilibili_config.get('aiDeclaration', False)
             bilibili_orig = bilibili_config.get('isOriginal', False)
@@ -1288,7 +1299,7 @@ def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, de
             post_video_bilibili(
                 title=title,
                 files=files,
-                tags=tags,
+                tags=bilibili_tags,  # 使用B站独立标签
                 account_file=accounts,
                 category=None,
                 enableTimer=False,
@@ -1299,15 +1310,17 @@ def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, de
                 desc=desc,
                 copyright_type=1 if bilibili_orig else 2,
                 cover_path=bilibili_cover,
-                collection=collection,  # 使用公共合集
+                collection=collection,
                 ai_declaration=bilibili_ai_decl
             )
             
         case 6:  # TikTok
+            tiktok_tags = tiktok_config.get('tags', [])  # TikTok独立标签
+            
             post_video_tiktok(
                 title=title,
                 files=files,
-                tags=tags,
+                tags=tiktok_tags,  # 使用TikTok独立标签
                 account_file=accounts,
                 category=None,
                 enableTimer=False,
@@ -1317,10 +1330,12 @@ def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, de
             )
             
         case 7:  # 百家号
+            baijiahao_tags = baijiahao_config.get('tags', [])  # 百家号独立标签
+            
             post_video_baijiahao(
                 title=title,
                 files=files,
-                tags=tags,
+                tags=baijiahao_tags,  # 使用百家号独立标签
                 account_file=accounts,
                 category=None,
                 enableTimer=False,
@@ -1684,6 +1699,61 @@ from pathlib import Path
 
 SCREENSHOTS_DIR = Path("screenshots")
 SCREENSHOTS_DIR.mkdir(exist_ok=True)
+
+
+def get_latest_screenshot_for_platform(platform_name):
+    """
+    获取指定平台的最新截图路径
+    
+    Args:
+        platform_name: 平台名称（如 'B站', '抖音', '小红书'）
+        
+    Returns:
+        截图URL路径（如 '/screenshots/view/bilibili/20260618_123456_account/001_ERROR.png'）
+        如果没有截图则返回 None
+    """
+    # 平台名称映射到目录名
+    platform_map = {
+        'B站': 'bilibili',
+        '抖音': 'douyin',
+        '小红书': 'xiaohongshu',
+        '快手': 'kuaishou',
+        '视频号': 'tencent',
+        'TikTok': 'tiktok',
+        '百家号': 'baijiahao'
+    }
+    
+    platform_dir_name = platform_map.get(platform_name, platform_name.lower())
+    platform_dir = SCREENSHOTS_DIR / platform_dir_name
+    
+    if not platform_dir.exists():
+        return None
+    
+    # 获取最新的session目录
+    session_dirs = sorted(
+        platform_dir.iterdir(),
+        key=lambda x: x.stat().st_mtime,
+        reverse=True
+    )
+    
+    if not session_dirs:
+        return None
+    
+    latest_session = session_dirs[0]
+    
+    # 获取该session中包含ERROR的截图（优先）
+    error_screenshots = sorted(latest_session.glob("*ERROR*.png"), reverse=True)
+    if error_screenshots:
+        screenshot = error_screenshots[0]
+        return f"/screenshots/view/{platform_dir_name}/{latest_session.name}/{screenshot.name}"
+    
+    # 如果没有ERROR截图，获取最新的截图
+    all_screenshots = sorted(latest_session.glob("*.png"), reverse=True)
+    if all_screenshots:
+        screenshot = all_screenshots[0]
+        return f"/screenshots/view/{platform_dir_name}/{latest_session.name}/{screenshot.name}"
+    
+    return None
 
 
 @app.route('/screenshots/list', methods=['GET'])
