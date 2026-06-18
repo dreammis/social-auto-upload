@@ -572,215 +572,102 @@ async def tiktok_cookie_gen(id, status_queue, account_id=None, existing_file_pat
 
 
 async def bilibili_cookie_gen(id, status_queue, account_id=None, existing_file_path=None):
-    """B站登录（Web QR 扫码 + 自动补全 biliup LoginInfo 格式）"""
-    import json
-    import time
-    import base64
-    from pathlib import Path
-    from io import BytesIO
-    from urllib.parse import urlparse, parse_qs
+    """B站登录（使用 playwright，和其他平台保持一致）"""
+    url_changed_event = asyncio.Event()
 
-    try:
-        # 尝试导入qrcode库（用于生成二维码图片）
+    async def on_url_change():
+        if page.url != original_url:
+            url_changed_event.set()
+
+    async with async_playwright() as playwright:
+        options = get_browser_options()
+        browser = await playwright.chromium.launch(**options)
+        context = await browser.new_context()
+        context = await set_init_script(context)
+        page = await context.new_page()
+
+        # 直接访问B站登录页
+        original_url = "https://passport.bilibili.com/login"
+        await page.goto(original_url)
+
+        # 等待页面加载完成
+        await page.wait_for_load_state('networkidle')
+
+        # 获取登录二维码图片
         try:
-            import qrcode
-        except ImportError:
-            status_queue.put("MESSAGE:正在安装qrcode包...")
-            import subprocess as _sp
-            result = _sp.run(
-                ["uv", "pip", "install", "qrcode", "pillow"],
-                capture_output=True, text=True, encoding="utf-8", errors="replace"
-            )
-            if result.returncode != 0:
-                status_queue.put("500:qrcode安装失败，请手动执行: uv pip install qrcode pillow")
-                return
-            import qrcode
+            img_locator = page.get_by_role("img", name="Scan me!")
+            await img_locator.wait_for(state="visible", timeout=10000)
+            src = await img_locator.get_attribute("src")
+            print("✅ B站二维码地址:", src)
+            status_queue.put(src)
+            status_queue.put("MESSAGE:请使用B站APP扫码登录...")
+        except Exception as e:
+            print(f"❌ 获取二维码失败: {e}")
+            status_queue.put("500:获取二维码失败，请重试")
+            await page.close()
+            await context.close()
+            await browser.close()
+            return None
 
-        import requests
+        # 监听页面跳转
+        page.on('framenavigated',
+                lambda frame: asyncio.create_task(on_url_change()) if frame == page.main_frame else None)
 
-        # 准备账号文件路径
-        cookie_path, file_name = resolve_cookie_target(existing_file_path)
-        cookie_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            # 等待 URL 变化或超时（最多等待200秒）
+            await asyncio.wait_for(url_changed_event.wait(), timeout=200)
+            print("✅ 监听页面跳转成功，登录完成")
+            print(f"当前URL: {page.url}")
 
-        # 通知前端开始登录
-        status_queue.put("MESSAGE:正在获取B站登录二维码...")
-
-        # ===== 第一步：获取并显示 QR 码 =====
-        qrcode_url_api = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://passport.bilibili.com/",
-        }
-
-        resp = requests.get(qrcode_url_api, headers=headers, timeout=10)
-        resp_data = resp.json()
-
-        if resp_data.get("code") != 0:
-            status_queue.put(f"500:获取二维码失败: {resp_data.get('message', '未知错误')}")
-            return
-
-        qrcode_data = resp_data.get("data", {})
-        qrcode_url = qrcode_data.get("url")
-        qrcode_key = qrcode_data.get("qrcode_key")
-
-        if not qrcode_url or not qrcode_key:
-            status_queue.put("500:获取二维码数据不完整")
-            return
-
-        # 生成二维码图片并通过 SSE 推送给前端显示
-        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L,
-                           box_size=10, border=4)
-        qr.add_data(qrcode_url)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-
-        buffer = BytesIO()
-        img.save(buffer, format="PNG")
-        qrcode_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-        status_queue.put(f"data:image/png;base64,{qrcode_base64}")
-        status_queue.put("MESSAGE:请使用B站APP扫描二维码登录...")
-
-        # ===== 第二步：轮询登录状态 =====
-        poll_url = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
-        max_wait = 180
-        check_interval = 2
-
-        login_result_data = None
-        for i in range(max_wait // check_interval):
-            await asyncio.sleep(check_interval)
-
+            # 扫码成功后，访问上传页以获取完整的cookie
+            print("正在访问B站上传页以获取完整cookie...")
+            await page.goto("https://member.bilibili.com/platform/upload/video/frame")
             try:
-                poll_resp = requests.get(poll_url, params={"qrcode_key": qrcode_key},
-                                         headers=headers, timeout=10)
-                poll_data = poll_resp.json()
-
-                top_code = poll_data.get("code", -1)
-                data = poll_data.get("data", {})
-                inner_code = data.get("code", -1) if data else -1
-                inner_message = data.get("message", "") if data else ""
-
-                status_code = inner_code if inner_code in (0, 86038, 86101, 86090) else top_code
-
-                if status_code == 0:
-                    login_result_data = data
-                    print("B站扫码登录成功")
-                    break
-
-                elif status_code == 86038:
-                    status_queue.put("500:二维码已失效，请重新登录")
-                    return
-                elif status_code == 86101:
-                    continue  # 未扫码，继续等待
-                elif status_code == 86090:
-                    status_queue.put("MESSAGE:已扫描，请在手机上确认登录...")
-                    continue
-                else:
-                    continue
-
+                await page.wait_for_load_state('networkidle', timeout=10000)
+                print(f"上传页加载完成，当前URL: {page.url}")
             except Exception as e:
-                print(f"检查登录状态出错: {e}")
-                continue
+                print(f"上传页加载超时: {e}")
 
-        if not login_result_data:
+            # 检查是否成功进入上传页
+            if "passport.bilibili.com" in page.url:
+                print("❌ 访问上传页失败，跳转到登录页")
+                status_queue.put("500:登录成功但访问上传页失败，请重试")
+                await page.close()
+                await context.close()
+                await browser.close()
+                return None
+
+        except asyncio.TimeoutError:
             status_queue.put("500:登录超时，请重试")
-            return
+            print("❌ 监听页面跳转超时")
+            await page.close()
+            await context.close()
+            await browser.close()
+            return None
 
-        # ===== 第三步：收集 cookie 并构造完整的 biliup LoginInfo 格式 =====
-        cookies_dict = {}
-        refresh_token = login_result_data.get("refresh_token", "")
-        if refresh_token:
-            cookies_dict["refresh_token"] = refresh_token
+        # 保存cookie
+        cookie_path, file_name = resolve_cookie_target(existing_file_path)
+        await context.storage_state(path=cookie_path)
+        print(f"✅ Cookie已保存到: {cookie_path}")
 
-        # 从原始 Set-Cookie 头提取 cookie（避免 requests 库自动 URL 解码导致 SESSDATA 损坏）
-        # requests.cookies[key] 会对值进行 URL 解码，把 %2C 变成逗号，
-        # 而 B站服务器期望的是原始的 URL 编码值
-        import re
-        for header_value in poll_resp.headers.get("Set-Cookie", "").split(","):
-            for key in ("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5", "sid"):
-                match = re.search(rf'{key}=([^;]+)', header_value)
-                if match and key not in cookies_dict:
-                    cookies_dict[key] = match.group(1)
+        # 验证cookie是否有效
+        result = await check_cookie(5, file_name)
+        if not result:
+            status_queue.put("500:登录成功但cookie验证失败，请重试")
+            print("❌ B站登录成功但cookie验证失败")
+            await page.close()
+            await context.close()
+            await browser.close()
+            return None
 
-        # 从 poll_resp.cookies 补充缺失的 cookie（作为后备）
-        for key in ("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5", "sid"):
-            if key not in cookies_dict and key in poll_resp.cookies:
-                cookies_dict[key] = poll_resp.cookies[key]
-
-        # 从轮询响应的 url 参数中补充缺失的 cookie
-        url_params = login_result_data.get("url", "")
-        if url_params:
-            parsed = urlparse(url_params)
-            params = parse_qs(parsed.query)
-            for key in ("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5"):
-                if key not in cookies_dict and key in params:
-                    cookies_dict[key] = params[key][0]
-
-        print(f"提取到的 cookies: SESSDATA={'有' if cookies_dict.get('SESSDATA') else '无'}, "
-              f"bili_jct={'有' if cookies_dict.get('bili_jct') else '无'}, "
-              f"DedeUserID={'有' if cookies_dict.get('DedeUserID') else '无'}")
-
-        # 构造 biliup LoginInfo 格式
-        # 注意：B站已禁止 web cookies 换取 access_token（返回86096错误），
-        # 所以 access_token 留空，上传时使用 --submit web 走 Web Cookie 路径
-        sess_data = cookies_dict.get("SESSDATA", "")
-        bili_jct = cookies_dict.get("bili_jct", "")
-        dede_user_id = cookies_dict.get("DedeUserID", "")
-
-        token_info = {
-            "access_token": "",
-            "expires_in": 0,
-            "mid": int(dede_user_id) if dede_user_id.isdigit() else 0,
-            "refresh_token": refresh_token,
-        }
-
-        # 构造完整的 biliup LoginInfo 格式
-        login_info = {
-            "cookie_info": {"cookies": cookies_dict},
-            "sso": [],
-            "token_info": token_info,
-            "platform": None,
-        }
-
-        # 验证 SESSDATA 是否有效
-        if sess_data:
-            try:
-                verify_headers = {
-                    "User-Agent": headers["User-Agent"],
-                    "Cookie": f"SESSDATA={sess_data}",
-                }
-                verify_resp = requests.get(
-                    "https://api.bilibili.com/x/web-interface/nav",
-                    headers=verify_headers, timeout=10
-                )
-                verify_data = verify_resp.json()
-                if verify_data.get("code") == 0 and verify_data.get("data", {}).get("isLogin"):
-                    uname = verify_data["data"].get("uname", "未知")
-                    print(f"SESSDATA 验证成功！登录用户: {uname}")
-                else:
-                    print(f"SESSDATA 验证失败: code={verify_data.get('code')}, "
-                          f"message={verify_data.get('message')}")
-            except Exception as e:
-                print(f"SESSDATA 验证异常: {e}")
-        else:
-            print("⚠️ 未获取到 SESSDATA！")
-
-        with open(cookie_path, "w", encoding="utf-8") as f:
-            json.dump(login_info, f, indent=2, ensure_ascii=False)
-
-        print(f"B站登录成功！完整 LoginInfo 已保存到: {cookie_path}")
-
-        # 注意：不再调用 biliup renew，因为B站已禁止 web cookies 换取 access_token
-        # renew 会覆盖 cookie 文件，可能破坏有效的 SESSDATA
-        # 上传时使用 --submit web 参数，只需要 SESSDATA 即可
+        await page.close()
+        await context.close()
+        await browser.close()
 
         # 保存账号信息到数据库
         persist_account_login(5, file_name, id, account_id)
-        print("B站账号信息已记录")
+        print("✅ B站用户状态已记录")
+        status_queue.put("MESSAGE:B站登录成功！")
         status_queue.put("200")
 
-    except Exception as e:
-        print(f"B站登录失败: {e}")
-        import traceback
-        traceback.print_exc()
-        status_queue.put(f"500:{str(e)}")
+

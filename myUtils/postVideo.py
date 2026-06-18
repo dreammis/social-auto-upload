@@ -1,6 +1,9 @@
 import asyncio
 import re
+import os
+import tempfile
 from pathlib import Path
+from PIL import Image
 
 from conf import BASE_DIR
 from myUtils.screenshot_manager import ScreenshotManager
@@ -10,9 +13,86 @@ from uploader.tencent_uploader.main import TencentVideo
 from uploader.xiaohongshu_uploader.main import XiaoHongShuVideo
 from uploader.baijiahao_uploader.main import BaiJiaHaoVideo
 from uploader.tk_uploader.main import TiktokVideo
-from uploader.bilibili_uploader.uploader import BilibiliUploader
+from uploader.bilibili_uploader.main import BilibiliVideo, BILIBILI_PUBLISH_STRATEGY_IMMEDIATE, BILIBILI_PUBLISH_STRATEGY_SCHEDULED
 from utils.constant import TencentZoneTypes
 from utils.files_times import generate_schedule_time_next_day
+
+
+def compress_image_if_needed(image_path, max_size_mb=5):
+    """压缩图片如果超过指定大小
+    
+    Args:
+        image_path: 图片路径（Path对象或字符串）
+        max_size_mb: 最大大小（MB），默认5MB
+    
+    Returns:
+        Path对象：如果图片小于限制，返回原路径；否则返回压缩后的临时文件路径
+    """
+    if not image_path:
+        return None
+    
+    path = Path(image_path)
+    if not path.exists():
+        return None
+    
+    # 检查文件大小
+    file_size_mb = path.stat().st_size / (1024 * 1024)
+    
+    if file_size_mb <= max_size_mb:
+        return path
+    
+    print(f"图片大小 {file_size_mb:.2f}MB 超过限制 {max_size_mb}MB，开始压缩...")
+    
+    try:
+        # 打开图片
+        img = Image.open(path)
+        
+        # 创建临时文件
+        temp_dir = tempfile.gettempdir()
+        temp_path = Path(temp_dir) / f"compressed_{path.name}"
+        
+        # 逐步降低质量直到满足大小要求
+        quality = 85
+        while quality > 20:
+            # 保存压缩后的图片
+            if img.mode in ('RGBA', 'P'):
+                # 转换为RGB模式（去除透明度）
+                img = img.convert('RGB')
+            
+            img.save(temp_path, optimize=True, quality=quality)
+            
+            # 检查压缩后的大小
+            compressed_size_mb = temp_path.stat().st_size / (1024 * 1024)
+            
+            if compressed_size_mb <= max_size_mb:
+                print(f"压缩成功：{file_size_mb:.2f}MB → {compressed_size_mb:.2f}MB (质量={quality})")
+                return temp_path
+            
+            quality -= 5
+        
+        # 如果质量降到20还是太大，尝试缩小尺寸
+        print("质量压缩不足，尝试缩小尺寸...")
+        scale_factor = 0.9
+        while scale_factor > 0.5:
+            new_width = int(img.width * scale_factor)
+            new_height = int(img.height * scale_factor)
+            resized_img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            
+            resized_img.save(temp_path, optimize=True, quality=75)
+            compressed_size_mb = temp_path.stat().st_size / (1024 * 1024)
+            
+            if compressed_size_mb <= max_size_mb:
+                print(f"压缩成功（缩放{scale_factor:.1f}）：{file_size_mb:.2f}MB → {compressed_size_mb:.2f}MB")
+                return temp_path
+            
+            scale_factor -= 0.1
+        
+        print(f"警告：无法将图片压缩到 {max_size_mb}MB 以下，使用最小压缩版本")
+        return temp_path
+        
+    except Exception as e:
+        print(f"图片压缩失败：{e}")
+        return path
 
 
 def resolve_thumbnail_path(thumbnail_path):
@@ -183,6 +263,11 @@ def post_video_ks(title, files, tags, account_file, category=TencentZoneTypes.LI
     account_file = [Path(BASE_DIR / "cookiesFile" / file) for file in account_file]
     files = [Path(BASE_DIR / "videoFile" / file) for file in files]
     thumbnail = resolve_thumbnail_path(thumbnail_path)
+    
+    # 快手平台限制封面图片不能大于5MB，需要压缩
+    if thumbnail:
+        thumbnail = compress_image_if_needed(thumbnail, max_size_mb=5)
+    
     if enableTimer:
         publish_datetimes = generate_schedule_time_next_day(len(files), videos_per_day, daily_times, start_days)
     else:
@@ -326,7 +411,7 @@ def post_video_tiktok(title,files,tags,account_file,category=TencentZoneTypes.LI
 
 def post_video_bilibili(title, files, tags, account_file, category=None, enableTimer=False, videos_per_day=1, daily_times=None, start_days=0, tid=218, desc='',
                          copyright_type=1, cover_path=None, collection=None, ai_declaration=False):
-    """B站视频发布（纯 Python 实现，不依赖 biliup CLI）
+    """B站视频发布（使用 playwright 实现）
 
     Args:
         title: 视频标题
@@ -362,12 +447,12 @@ def post_video_bilibili(title, files, tags, account_file, category=None, enableT
     hashtag_pattern = re.compile(r'#([^#\s]+)')
     hashtags = hashtag_pattern.findall(title)
     if hashtags:
-        tag_str = ",".join(hashtags)
+        tag_list = hashtags
         print(f"从标题提取的标签：{hashtags}")
     elif tags:
-        tag_str = ",".join(tags)
+        tag_list = tags
     else:
-        tag_str = title  # 默认用标题作为tag
+        tag_list = [title]  # 默认用标题作为tag
 
     for index, file in enumerate(files):
         for cookie in account_file:
@@ -382,27 +467,27 @@ def post_video_bilibili(title, files, tags, account_file, category=None, enableT
             if resolved_cover:
                 print(f"封面路径：{resolved_cover}")
 
-            uploader = BilibiliUploader(cookie)
-
-            # 定时发布
-            dtime = None
-            if isinstance(publish_datetimes[index], int) and publish_datetimes[index] != 0:
-                dtime = publish_datetimes[index]
+            # 使用 playwright 实现
+            publish_strategy = BILIBILI_PUBLISH_STRATEGY_SCHEDULED if enableTimer else BILIBILI_PUBLISH_STRATEGY_IMMEDIATE
+            
+            app = BilibiliVideo(
+                title=title,
+                file_path=str(file),
+                tags=tag_list,
+                publish_date=publish_datetimes[index],
+                account_file=str(cookie),
+                tid=tid,
+                desc=desc or title,
+                cover_path=str(resolved_cover) if resolved_cover else None,
+                copyright_type=copyright_type,
+                no_reprint=1 if copyright_type == 1 else 0,
+                ai_declaration=ai_declaration,
+                publish_strategy=publish_strategy,
+            )
 
             try:
-                result = uploader.upload(
-                    video_path=str(file),
-                    title=title,
-                    tid=tid,
-                    tag=tag_str,
-                    desc=desc or title,
-                    copyright_type=copyright_type,
-                    cover_path=resolved_cover,
-                    no_reprint=1 if copyright_type == 1 else 0,
-                    dtime=dtime,
-                    ai_declaration=ai_declaration,
-                )
-                print(f"B站视频上传成功: {file}, BV号: {result.get('bvid', '')}")
+                asyncio.run(app.main(), debug=False)
+                print(f"B站视频上传成功: {file}")
             except Exception as e:
                 print(f"B站视频上传失败: {e}")
                 raise

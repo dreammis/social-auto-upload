@@ -35,7 +35,13 @@ from uploader.douyin_uploader.main import DouYinVideo
 from uploader.ks_uploader.main import KSVideo
 from uploader.tencent_uploader.main import TencentVideo
 from uploader.xiaohongshu_uploader.main import XiaoHongShuVideo
-from uploader.bilibili_uploader.runtime import run_biliup_command
+from uploader.bilibili_uploader.main import (
+    BILIBILI_PUBLISH_STRATEGY_IMMEDIATE,
+    BILIBILI_PUBLISH_STRATEGY_SCHEDULED,
+    BilibiliVideo,
+    bilibili_setup,
+    cookie_auth as bilibili_cookie_auth,
+)
 from uploader.tk_uploader.main import TiktokVideo
 from uploader.baijiahao_uploader.main import BaiJiaHaoVideo
 from utils.base_social_media import set_init_script
@@ -78,7 +84,7 @@ UPLOAD_PAGE_CLASS_MAP = {
     2: TencentVideo,
     3: DouYinVideo,
     4: KSVideo,
-    # 5: Bilibili — 已改用 biliup CLI，不再支持 Playwright 打开上传页
+    5: BilibiliVideo,
     6: TiktokVideo,
     7: BaiJiaHaoVideo
 }
@@ -677,7 +683,6 @@ def postVideo():
     productLink = data.get('productLink', '')
     productTitle = data.get('productTitle', '')
     desc = data.get('desc', '')
-    thumbnail_landscape = data.get('thumbnailLandscape', data.get('thumbnail', ''))
     thumbnail_portrait = data.get('thumbnailPortrait', '')
     is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
 
@@ -720,7 +725,7 @@ def postVideo():
     print("File List:", file_list)
     print("Account List:", account_list)
 
-    thumbnail_path = data.get('thumbnail', '') or thumbnail_landscape or thumbnail_portrait
+    thumbnail_path = data.get('thumbnail', '') or thumbnail_portrait
 
     # 封面参数（B站使用单封面）- 复用 thumbnail 字段
     bilibili_cover = thumbnail_path  # B站封面路径
@@ -739,7 +744,7 @@ def postVideo():
                                    start_days, is_draft, thumbnail_path, desc, collection=collection)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_landscape, thumbnail_portrait, productLink, productTitle, declaration_info, desc,
+                          start_days, thumbnail_path, thumbnail_portrait, productLink, productTitle, declaration_info, desc,
                           collection=collection)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
@@ -844,9 +849,8 @@ def postVideoBatch():
         print("Account List:", account_list)
 
         # 平台特有参数
-        thumbnail_landscape = data.get('thumbnailLandscape', '')
         thumbnail_portrait = data.get('thumbnailPortrait', '')
-        thumbnail_path = data.get('thumbnail', '') or thumbnail_landscape or thumbnail_portrait
+        thumbnail_path = data.get('thumbnail', '') or thumbnail_portrait
         bilibili_tid = data.get('bilibiliTid', 218)
         kuaishou_declaration = data.get('kuaishouDeclaration', None)
         xiaohongshu_declaration = data.get('xiaohongshuDeclaration', '')
@@ -875,7 +879,7 @@ def postVideoBatch():
                                    start_days, is_draft, thumbnail_path, desc, collection=collection)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_landscape, thumbnail_portrait, productLink, productTitle, declaration_info, desc,
+                          start_days, thumbnail_path, thumbnail_portrait, productLink, productTitle, declaration_info, desc,
                           collection=collection)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
@@ -900,6 +904,433 @@ def postVideoBatch():
             "msg": None,
             "data": None
         }), 200
+
+# ==================== 统一发布（一键发布）API ====================
+@app.route('/batchUnifiedPublish', methods=['POST'])
+def batchUnifiedPublish():
+    """
+    统一发布API - 一次填写信息，批量发布到多平台
+    
+    请求格式:
+    {
+        files: [视频路径列表],
+        coverPath: 封面路径,
+        title: 标题,
+        desc: 描述,
+        tags: [标签列表],
+        
+        platforms: [平台ID列表],  // 如 [1,3,5] 表示小红书、抖音、B站
+        accounts: {
+            1: [账号ID],
+            3: [账号ID],
+            5: [账号ID]
+        },
+        
+        config: {  // 各平台差异化配置
+            douyin: { collection, productTitle, productLink, declaration_type },
+            bilibili: { tid, aiDeclaration, isOriginal },
+            channels: { isDraft, isOriginal },
+            xiaohongshu: { declaration, isOriginal },
+            kuaishou: { declaration }
+        }
+    }
+    
+    响应格式:
+    {
+        code: 200,
+        msg: None,
+        data: {
+            results: [
+                { platform: "B站", status: "success", message: "发布成功" },
+                { platform: "抖音", status: "error", message: "错误信息" }
+            ]
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+
+        # 提取公共参数
+        files = data.get('files', [])
+        title = data.get('title', '')
+        desc = data.get('desc', '')
+        tags = data.get('tags', [])
+
+        # 提取2种尺寸封面
+        covers = data.get('covers', {})
+        cover_portrait = covers.get('portrait')   # 竖版 (3:4)
+        cover_square = covers.get('square')        # 方形 (4:3)
+
+        # 提取平台配置
+        platforms = data.get('platforms', [])  # 平台ID列表
+        accounts = data.get('accounts', {})   # 各平台账号
+        config = data.get('config', {})       # 各平台差异化配置
+
+        if not files:
+            return jsonify({
+                "code": 400,
+                "msg": "请上传视频文件",
+                "data": None
+            }), 400
+            
+        if not title:
+            return jsonify({
+                "code": 400,
+                "msg": "请输入标题",
+                "data": None
+            }), 400
+            
+        if not platforms:
+            return jsonify({
+                "code": 400,
+                "msg": "请选择至少一个平台",
+                "data": None
+            }), 400
+        
+        results = []  # 存储每个平台的发布结果
+        
+        # 按顺序发布到各平台
+        for platform_id in platforms:
+            platform_name = get_platform_name(platform_id)
+
+            try:
+                print(f"\n{'='*50}")
+                print(f"[统一发布] 开始发布到: {platform_name} (平台ID: {platform_id})")
+                print(f"{'='*50}\n")
+
+                # 获取该平台的账号
+                platform_accounts = accounts.get(str(platform_id), accounts.get(platform_id, []))
+
+                if not platform_accounts:
+                    raise ValueError("未选择该平台的账号")
+
+                # 将账号ID转换为账号文件路径
+                account_file_paths = []
+                for account_id in platform_accounts:
+                    file_path = get_account_file_path(account_id)
+                    if file_path:
+                        account_file_paths.append(file_path)
+                    else:
+                        print(f"警告: 无法找到账号ID {account_id} 的文件路径")
+
+                if not account_file_paths:
+                    raise ValueError("无法获取该平台的账号文件路径")
+
+                # 根据平台获取对应的封面
+                coverPath = get_cover_for_platform(
+                    platform_id,
+                    cover_portrait=cover_portrait,
+                    cover_square=cover_square
+                )
+
+                # 根据平台调用对应的发布函数
+                publish_to_platform(
+                    platform_id=platform_id,
+                    title=title,
+                    files=files,
+                    coverPath=coverPath,
+                    tags=tags,
+                    accounts=account_file_paths,  # 使用转换后的账号文件路径
+                    desc=desc,
+                    config=config
+                )
+                
+                # 发布成功
+                results.append({
+                    "platform": platform_name,
+                    "status": "success",
+                    "message": "发布成功"
+                })
+                print(f"[统一发布] ✅ {platform_name} 发布成功\n")
+                
+            except Exception as e:
+                error_msg = str(e)
+                print(f"[统一发布] ❌ {platform_name} 发布失败: {error_msg}\n")
+                
+                results.append({
+                    "platform": platform_name,
+                    "status": "error",
+                    "message": error_msg
+                })
+        
+        # 统计结果
+        success_count = sum(1 for r in results if r['status'] == 'success')
+        fail_count = sum(1 for r in results if r['status'] == 'error')
+        
+        return jsonify({
+            "code": 200,
+            "msg": f"发布完成：{success_count} 成功，{fail_count} 失败",
+            "data": {
+                "results": results,
+                "summary": {
+                    "total": len(results),
+                    "success": success_count,
+                    "failed": fail_count
+                }
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"[统一发布] 致命错误: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            "code": 500,
+            "msg": f"统一发布出错: {str(e)}",
+            "data": None
+        }), 500
+
+
+def get_account_file_path(account_id):
+    """根据账号ID获取账号文件路径"""
+    try:
+        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT filePath FROM user_info WHERE id = ?', (account_id,))
+            row = cursor.fetchone()
+            if row:
+                return row['filePath']
+            return None
+    except Exception as e:
+        print(f"获取账号文件路径失败: {str(e)}")
+        return None
+
+
+def get_platform_name(platform_id):
+    """获取平台名称"""
+    platform_map = {
+        1: "小红书",
+        2: "视频号",
+        3: "抖音",
+        4: "快手",
+        5: "B站",
+        6: "TikTok",
+        7: "百家号"
+    }
+    return platform_map.get(platform_id, f"未知平台({platform_id})")
+
+
+def get_cover_for_platform(platform_id, cover_portrait=None, cover_square=None):
+    """
+    根据平台ID获取对应的封面路径
+
+    封面分配规则:
+    - 小红书 (1): 竖版 (3:4)
+    - 视频号 (2): 竖版 (3:4)
+    - 抖音 (3): 竖版 (3:4) + 方形 (4:3) [双封面]
+    - 快手 (4): 竖版 (3:4)
+    - B站 (5): 方形 (4:3)
+
+    注意：
+    - 抖音的横封面是4:3比例，使用cover_square
+    - B站目前只需要方形封面（4:3）
+    """
+    cover_mapping = {
+        # 小红书 → 竖版
+        1: cover_portrait,
+        # 视频号 → 竖版
+        2: cover_portrait,
+        # 抖音 → 竖版（主封面）
+        3: cover_portrait,
+        # 快手 → 竖版
+        4: cover_portrait,
+        # B站 → 方形
+        5: cover_square,
+    }
+
+    main_cover = cover_mapping.get(platform_id)
+
+    # 对于需要双封面的平台（抖音），返回字典
+    if platform_id == 3:  # 抖音
+        return {
+            'main': main_cover or cover_portrait,
+            'portrait': cover_portrait,
+            'square': cover_square
+        }
+
+    return main_cover
+
+
+def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, desc, config):
+    """
+    根据平台ID发布视频（核心分发逻辑）
+
+    参数:
+        platform_id: 平台ID (1-7)
+        title: 标题
+        files: 视频文件路径列表
+        coverPath: 封面路径
+        tags: 标签列表
+        accounts: 账号ID列表
+        desc: 描述/简介
+        config: 差异化配置字典
+    """
+    # 提取公共设置
+    common_config = config.get('common', {})
+    collection = common_config.get('collection', '')  # 合集
+
+    # 提取各平台特有配置
+    douyin_config = config.get('douyin', {})
+    bilibili_config = config.get('bilibili', {})
+    channels_config = config.get('channels', {})
+    xiaohongshu_config = config.get('xiaohongshu', {})
+    kuaishou_config = config.get('kuaishou', {})
+
+    match platform_id:
+        case 1:  # 小红书
+            xhs_declaration = xiaohongshu_config.get('declaration', '')
+            xhs_is_original = xiaohongshu_config.get('isOriginal', False)
+            xhs_category = 1 if xhs_is_original else None
+            declaration_info = {"declaration_type": xhs_declaration} if xhs_declaration else None
+
+            post_video_xhs(
+                title=title,
+                files=files,
+                tags=tags,
+                account_file=accounts,
+                category=xhs_category,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0,
+                desc=desc,
+                thumbnail_path=coverPath,
+                collection=collection,  # 使用公共合集
+                declaration_info=declaration_info
+            )
+
+        case 2:  # 视频号（无AI声明）
+            is_draft = channels_config.get('isDraft', False)
+            is_original = channels_config.get('isOriginal', False)
+
+            post_video_tencent(
+                title=title,
+                files=files,
+                tags=tags,
+                account_file=accounts,
+                category=None,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0,
+                is_draft=is_draft,
+                thumbnail_path=coverPath,
+                desc=desc,
+                collection=collection  # 使用公共合集
+            )
+
+        case 3:  # 抖音
+            declaration_type = douyin_config.get('declaration_type', '')
+            declaration_info = {"declaration_type": declaration_type} if declaration_type else None
+
+            # 处理抖音双封面（竖版3:4 + 方形4:3）
+            if isinstance(coverPath, dict):
+                douyin_portrait = coverPath.get('portrait')  # 竖版封面 (3:4)
+                douyin_square = coverPath.get('square')  # 方形封面 (4:3)
+            else:
+                douyin_portrait = coverPath
+                douyin_square = coverPath
+
+            post_video_DouYin(
+                title=title,
+                files=files,
+                tags=tags,
+                account_file=accounts,
+                category=None,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0,
+                thumbnail_landscape_path=douyin_square,  # 抖音横封面使用方形
+                thumbnail_portrait_path=douyin_portrait,
+                productLink=douyin_config.get('productLink', ''),
+                productTitle=douyin_config.get('productTitle', ''),
+                declaration_info=declaration_info,
+                desc=desc,
+                collection=collection  # 使用公共合集
+            )
+
+        case 4:  # 快手
+            kuaishou_declaration = kuaishou_config.get('declaration', '内容为AI生成')
+
+            post_video_ks(
+                title=title,
+                files=files,
+                tags=tags,
+                account_file=accounts,
+                category=None,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0,
+                desc=desc,
+                thumbnail_path=coverPath,
+                kuaishou_declaration=kuaishou_declaration,
+                allow_duet=True,
+                allow_download=True,
+                show_in_city=True,
+                collection=collection  # 使用公共合集
+            )
+            
+        case 5:  # B站
+            bilibili_tid = bilibili_config.get('tid', 218)
+            bilibili_ai_decl = bilibili_config.get('aiDeclaration', False)
+            bilibili_orig = bilibili_config.get('isOriginal', False)
+
+            # 处理B站封面（只需要方形4:3）
+            if isinstance(coverPath, dict):
+                bilibili_cover = coverPath.get('square')
+            else:
+                bilibili_cover = coverPath
+
+            post_video_bilibili(
+                title=title,
+                files=files,
+                tags=tags,
+                account_file=accounts,
+                category=None,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0,
+                tid=bilibili_tid,
+                desc=desc,
+                copyright_type=1 if bilibili_orig else 2,
+                cover_path=bilibili_cover,
+                collection=collection,  # 使用公共合集
+                ai_declaration=bilibili_ai_decl
+            )
+            
+        case 6:  # TikTok
+            post_video_tiktok(
+                title=title,
+                files=files,
+                tags=tags,
+                account_file=accounts,
+                category=None,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0
+            )
+            
+        case 7:  # 百家号
+            post_video_baijiahao(
+                title=title,
+                files=files,
+                tags=tags,
+                account_file=accounts,
+                category=None,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0
+            )
+            
+        case _:
+            raise ValueError(f"不支持的平台ID: {platform_id}")
 
 # Cookie文件上传API
 @app.route('/uploadCookie', methods=['POST'])
@@ -1082,7 +1513,6 @@ def open_upload_page():
                 "data": None
             }), 404
 
-        # B站使用 biliup CLI，不支持 Playwright 打开上传页
         actual_cookie_path = str(cookie_file_path)
 
         thread = threading.Thread(

@@ -872,7 +872,9 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)
 
         xiaohongshu_logger.info(_msg("🚀", "小人正在点击发布按钮"))
-        while True:
+        max_retries = 3  # 最大重试次数
+        retry_count = 0
+        while retry_count < max_retries:
             try:
                 if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED:
                     await page.locator('button:has-text("定时发布")').click()
@@ -885,10 +887,16 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
                 xiaohongshu_logger.success(_msg("🥳", "视频发布成功，小人开心收工"))
                 break
             except Exception as e:
-                xiaohongshu_logger.info(_msg("🏃", f"小人正在冲刺发布视频，可能按钮还没准备好: {e}"))
-                if self.debug and self.screenshot_manager:
-                    await self.screenshot_manager.take_screenshot(page, "发布重试")
+                retry_count += 1
+                xiaohongshu_logger.info(_msg("🏃", f"小人正在冲刺发布视频，重试 {retry_count}/{max_retries}: {e}"))
+                # 只在最后一次失败时截图
+                if retry_count == max_retries and self.debug and self.screenshot_manager:
+                    await self.screenshot_manager.take_screenshot(page, f"发布失败_重试{retry_count}次")
                 await asyncio.sleep(0.5)
+        
+        # 如果重试3次都失败，抛出异常
+        if retry_count >= max_retries:
+            raise Exception(f"发布失败：已重试{max_retries}次仍未成功")
 
     async def upload(self, playwright: Playwright) -> None:
         xiaohongshu_logger.info(_msg("🧍", "小人先检查 cookie、视频文件、封面和发布时间"))
@@ -909,7 +917,8 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
             xiaohongshu_logger.success(_msg("🥳", "cookie 更新完毕"))
         except Exception as e:
             xiaohongshu_logger.error(_msg("❌", f"上传过程中发生错误: {e}"))
-            if page and self.screenshot_manager:
+            # 只在非发布失败的情况下截图（发布失败已在重试循环中截图）
+            if page and self.screenshot_manager and not str(e).startswith("发布失败"):
                 await self._take_error_screenshot(page, str(e))
             raise
         finally:
@@ -1001,7 +1010,10 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
         if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)
 
-        while True:
+        xiaohongshu_logger.info(_msg("🚀", "小人正在点击发布按钮"))
+        max_retries = 3  # 最大重试次数
+        retry_count = 0
+        while retry_count < max_retries:
             try:
                 if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED:
                     await page.locator('button:has-text("定时发布")').click()
@@ -1013,11 +1025,17 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
                 )
                 xiaohongshu_logger.success(_msg("🥳", "图文发布成功，小人开心收工"))
                 break
-            except Exception:
-                xiaohongshu_logger.info(_msg("🏃", "小人正在冲刺发布图文"))
-                if self.debug and self.screenshot_manager:
-                    await self.screenshot_manager.take_screenshot(page, "图文发布重试")
+            except Exception as e:
+                retry_count += 1
+                xiaohongshu_logger.info(_msg("🏃", f"小人正在冲刺发布图文，重试 {retry_count}/{max_retries}: {e}"))
+                # 只在最后一次失败时截图
+                if retry_count == max_retries and self.debug and self.screenshot_manager:
+                    await self.screenshot_manager.take_screenshot(page, f"图文发布失败_重试{retry_count}次")
                 await asyncio.sleep(0.5)
+        
+        # 如果重试3次都失败，抛出异常
+        if retry_count >= max_retries:
+            raise Exception(f"图文发布失败：已重试{max_retries}次仍未成功")
 
     async def upload(self, playwright: Playwright) -> None:
         xiaohongshu_logger.info(_msg("🧍", "小人先检查 cookie、图片和发布时间"))

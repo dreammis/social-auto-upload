@@ -1110,7 +1110,10 @@ class DouYinVideo(DouYinBaseUploader):
             if self.publish_strategy == DOUYIN_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
                 await self.set_schedule_time_douyin(page, self.publish_date)
 
-            while True:
+            douyin_logger.info(_msg("🚀", "小人正在点击发布按钮"))
+            max_retries = 3  # 最大重试次数
+            retry_count = 0
+            while retry_count < max_retries:
                 try:
                     publish_button = page.get_by_role("button", name="发布", exact=True)
                     if await publish_button.count():
@@ -1121,18 +1124,25 @@ class DouYinVideo(DouYinBaseUploader):
                     )
                     douyin_logger.success(_msg("🥳", "视频发布成功，小人开心收工"))
                     break
-                except Exception:
+                except Exception as e:
+                    retry_count += 1
                     await self.handle_auto_video_cover(page)
-                    douyin_logger.info(_msg("🏃", "小人正在冲刺发布视频"))
-                    if self.debug and self.screenshot_manager:
-                        await self.screenshot_manager.take_screenshot(page, "发布重试")
+                    douyin_logger.info(_msg("🏃", f"小人正在冲刺发布视频，重试 {retry_count}/{max_retries}: {e}"))
+                    # 只在最后一次失败时截图
+                    if retry_count == max_retries and self.debug and self.screenshot_manager:
+                        await self.screenshot_manager.take_screenshot(page, f"发布失败_重试{retry_count}次")
                     await asyncio.sleep(0.5)
+            
+            # 如果重试3次都失败，抛出异常
+            if retry_count >= max_retries:
+                raise Exception(f"发布失败：已重试{max_retries}次仍未成功")
 
             await context.storage_state(path=self.account_file)
             douyin_logger.success(_msg("🥳", "cookie 更新完毕"))
         except Exception as e:
             douyin_logger.error(_msg("❌", f"上传过程中发生错误: {e}"))
-            if page and self.screenshot_manager:
+            # 只在非发布失败的情况下截图（发布失败已在重试循环中截图）
+            if page and self.screenshot_manager and not str(e).startswith("发布失败"):
                 await self._take_error_screenshot(page, str(e))
             raise
         finally:

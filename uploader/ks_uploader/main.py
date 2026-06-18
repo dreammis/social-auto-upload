@@ -291,6 +291,7 @@ class KSBaseUploader(BaseVideoUploader):
         publish_strategy: str | None = None,
         debug: bool = DEBUG_MODE,
         headless: bool | None = None,
+        screenshot_manager = None,  # 截图管理器
     ):
         self.publish_date = publish_date
         self.account_file = str(account_file)
@@ -299,6 +300,7 @@ class KSBaseUploader(BaseVideoUploader):
         self.headless = get_local_chrome_headless() if headless is None else headless
         self.local_executable_path = LOCAL_CHROME_PATH
         self.date_format = "%Y-%m-%d %H:%M"
+        self.screenshot_manager = screenshot_manager  # 截图管理器
 
     async def validate_base_args(self):
         if not os.path.exists(self.account_file):
@@ -498,6 +500,7 @@ class KSVideo(KSBaseUploader):
             publish_strategy=publish_strategy,
             debug=debug,
             headless=headless,
+            screenshot_manager=screenshot_manager,  # 传递截图管理器
         )
         self.title = title
         self.file_path = file_path
@@ -732,7 +735,10 @@ class KSVideo(KSBaseUploader):
             if self.publish_strategy == KUAISHOU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
                 await self.set_schedule_time(page, self.publish_date)
 
-            while True:
+            kuaishou_logger.info(_msg("🚀", "小人正在点击发布按钮"))
+            max_retries = 3  # 最大重试次数
+            retry_count = 0
+            while retry_count < max_retries:
                 try:
                     publish_button = page.get_by_text("发布", exact=True)
                     if await publish_button.count() > 0:
@@ -747,15 +753,22 @@ class KSVideo(KSBaseUploader):
                     kuaishou_logger.success(_msg("🥳", "视频发布成功，小人开心收工"))
                     break
                 except Exception as exc:
-                    kuaishou_logger.info(_msg("🏃", f"小人正在冲刺发布视频: {exc}"))
-                    if self.debug and self.screenshot_manager:
-                        await self.screenshot_manager.take_screenshot(page, "发布重试")
+                    retry_count += 1
+                    kuaishou_logger.info(_msg("🏃", f"小人正在冲刺发布视频，重试 {retry_count}/{max_retries}: {exc}"))
+                    # 只在最后一次失败时截图
+                    if retry_count == max_retries and self.debug and self.screenshot_manager:
+                        await self.screenshot_manager.take_screenshot(page, f"发布失败_重试{retry_count}次")
                     await asyncio.sleep(1)
+            
+            # 如果重试3次都失败，抛出异常
+            if retry_count >= max_retries:
+                raise Exception(f"发布失败：已重试{max_retries}次仍未成功")
 
             upload_success = True
         except Exception as e:
             kuaishou_logger.error(_msg("❌", f"上传过程中发生错误: {e}"))
-            if page and self.screenshot_manager:
+            # 只在非发布失败的情况下截图（发布失败已在重试循环中截图）
+            if page and self.screenshot_manager and not str(e).startswith("发布失败"):
                 await self._take_error_screenshot(page, str(e))
             raise
         finally:
@@ -876,7 +889,10 @@ class KSNote(KSBaseUploader):
         if self.publish_strategy == KUAISHOU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time(page, self.publish_date)
 
-        while True:
+        kuaishou_logger.info(_msg("🚀", "小人正在点击发布按钮"))
+        max_retries = 3  # 最大重试次数
+        retry_count = 0
+        while retry_count < max_retries:
             try:
                 publish_button = page.get_by_text("发布", exact=True)
                 if await publish_button.count() > 0:
@@ -891,10 +907,16 @@ class KSNote(KSBaseUploader):
                 kuaishou_logger.success(_msg("🥳", "图文发布成功，小人开心收工"))
                 break
             except Exception as exc:
-                kuaishou_logger.info(_msg("🏃", f"小人正在冲刺发布图文: {exc}"))
-                if self.debug and self.screenshot_manager:
-                    await self.screenshot_manager.take_screenshot(page, "图文发布重试")
+                retry_count += 1
+                kuaishou_logger.info(_msg("🏃", f"小人正在冲刺发布图文，重试 {retry_count}/{max_retries}: {exc}"))
+                # 只在最后一次失败时截图
+                if retry_count == max_retries and self.debug and self.screenshot_manager:
+                    await self.screenshot_manager.take_screenshot(page, f"图文发布失败_重试{retry_count}次")
                 await asyncio.sleep(1)
+        
+        # 如果重试3次都失败，抛出异常
+        if retry_count >= max_retries:
+            raise Exception(f"图文发布失败：已重试{max_retries}次仍未成功")
 
     async def upload(self, playwright: Playwright) -> None:
         kuaishou_logger.info(_msg("🧍", "小人先检查 cookie、图片和发布时间"))

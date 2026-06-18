@@ -72,7 +72,7 @@ async def get_tiktok_cookie(account_file):
 class TiktokVideo(object):
     upload_page = "https://www.tiktok.com/creator-center/upload"
 
-    def __init__(self, title, file_path, tags, publish_date, account_file, category=None):
+    def __init__(self, title, file_path, tags, publish_date, account_file, category=None, screenshot_manager=None):
         self.title = title
         self.file_path = file_path
         self.tags = tags
@@ -80,6 +80,8 @@ class TiktokVideo(object):
         self.account_file = account_file
         self.headless = get_local_chrome_headless()
         self.category = category
+        self.screenshot_manager = screenshot_manager  # 截图管理器
+        self.debug = False  # TikTok默认不开启debug
 
     async def set_original_declaration(self, page):
         """TikTok「声明原创」功能。
@@ -240,8 +242,11 @@ class TiktokVideo(object):
             await page.keyboard.press("End")
 
     async def click_publish(self, page):
+        tiktok_logger.info("🚀 小人正在点击发布按钮")
         success_flag_div = '#\\:r9\\:'
-        while True:
+        max_retries = 3  # 最大重试次数
+        retry_count = 0
+        while retry_count < max_retries:
             try:
                 publish_button = self.locator_base.locator('div.btn-post')
                 if await publish_button.count():
@@ -251,14 +256,20 @@ class TiktokVideo(object):
                 tiktok_logger.success("  [-] video published success")
                 break
             except Exception as e:
+                retry_count += 1
                 if await self.locator_base.locator(success_flag_div).count():
                     tiktok_logger.success("  [-]video published success")
                     break
                 else:
-                    tiktok_logger.exception(f"  [-] Exception: {e}")
-                    tiktok_logger.info("  [-] video publishing")
-                    await page.screenshot(full_page=True)
+                    tiktok_logger.info(f"  [-] video publishing, retry {retry_count}/{max_retries}: {e}")
+                    # 只在最后一次失败时截图
+                    if retry_count == max_retries and self.debug and self.screenshot_manager:
+                        await self.screenshot_manager.take_screenshot(page, f"发布失败_重试{retry_count}次")
                     await asyncio.sleep(0.5)
+        
+        # 如果重试3次都失败，抛出异常
+        if retry_count >= max_retries:
+            raise Exception(f"发布失败：已重试{max_retries}次仍未成功")
 
     async def detect_upload_status(self, page):
         while True:

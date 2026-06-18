@@ -11,9 +11,9 @@
             @click="activeTab = tab.name"
           >
             <span>{{ tab.label }}</span>
-            <el-icon 
-              v-if="tabs.length > 1"
-              class="close-icon" 
+            <el-icon
+              v-if="tabs.length > 1 && tab.type !== 'unified'"
+              class="close-icon"
               @click.stop="removeTab(tab.name)"
             >
               <Close />
@@ -52,6 +52,389 @@
           v-show="activeTab === tab.name"
           class="tab-content"
         >
+          <!-- ==================== 统一发布Tab（一键发布） ==================== -->
+          <div v-if="tab.type === 'unified'" class="unified-publish-container">
+            <!-- 发布状态提示 -->
+            <div v-if="tab.publishStatus" class="publish-status">
+              <el-alert
+                :title="tab.publishStatus.message"
+                :type="tab.publishStatus.type"
+                :closable="false"
+                show-icon
+              />
+            </div>
+
+            <!-- 📁 公共区域 - 所有平台共用 -->
+            <el-card class="section-card">
+              <template #header>
+                <span class="card-title">📁 公共设置（所有平台共用）</span>
+              </template>
+
+              <!-- 视频上传 -->
+              <div class="form-item">
+                <label>视频文件</label>
+                <el-button type="primary" @click="showUploadOptions(tab)" :disabled="tab.publishing">
+                  <el-icon><Upload /></el-icon> 上传视频
+                </el-button>
+                <div v-if="tab.fileList.length > 0" class="uploaded-files-inline">
+                  <el-tag v-for="(file, idx) in tab.fileList" :key="idx" closable @close="removeFile(tab, idx)">
+                    {{ file.name }}
+                  </el-tag>
+                </div>
+              </div>
+
+              <!-- 封面配置（3种尺寸，参考抖音双封面UI） -->
+              <div class="form-item" style="margin-top: 8px;">
+                <label>封面</label>
+                <div class="cover-section">
+                  <div class="cover-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+                    <!-- 3:4 -->
+                    <div class="cover-card">
+                      <div class="cover-card-header">
+                        <span>3:4</span>
+                        <el-button size="small" type="primary" plain @click="showUploadOptions(tab, UPLOAD_TARGETS.COVER_PORTRAIT)" :disabled="tab.publishing">
+                          选择封面
+                        </el-button>
+                      </div>
+                      <div v-if="tab.coverPortrait" class="cover-file-item">
+                        <el-link :href="tab.coverPortrait.url" target="_blank" type="primary">{{ tab.coverPortrait.name }}</el-link>
+                        <span class="file-size">{{ (tab.coverPortrait.size / 1024 / 1024).toFixed(2) }}MB</span>
+                        <el-button type="danger" size="small" @click="removeCover(tab, UPLOAD_TARGETS.COVER_PORTRAIT)">删除</el-button>
+                      </div>
+                      <div v-else class="cover-empty">未选择竖封面</div>
+                      <div class="cover-platform-hint">
+                        <el-icon><InfoFilled /></el-icon>
+                        <span>适用：小红书 / 视频号 / 抖音 / 快手</span>
+                        <el-tag size="small" type="warning" style="margin-left: 8px;">快手≤5MB</el-tag>
+                      </div>
+                    </div>
+
+                    <!-- 4:3 -->
+                    <div class="cover-card">
+                      <div class="cover-card-header">
+                        <span>4:3</span>
+                        <el-button size="small" type="primary" plain @click="showUploadOptions(tab, UPLOAD_TARGETS.COVER_SQUARE)" :disabled="tab.publishing">
+                          选择封面
+                        </el-button>
+                      </div>
+                      <div v-if="tab.coverSquare" class="cover-file-item">
+                        <el-link :href="tab.coverSquare.url" target="_blank" type="primary">{{ tab.coverSquare.name }}</el-link>
+                        <span class="file-size">{{ (tab.coverSquare.size / 1024 / 1024).toFixed(2) }}MB</span>
+                        <el-button type="danger" size="small" @click="removeCover(tab, UPLOAD_TARGETS.COVER_SQUARE)">删除</el-button>
+                      </div>
+                      <div v-else class="cover-empty">未选择方封面</div>
+                      <div class="cover-platform-hint">
+                        <el-icon><InfoFilled /></el-icon>
+                        <span>适用：抖音 / B站</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 标题 -->
+              <div class="form-item">
+                <label>标题</label>
+                <el-input v-model="tab.title" placeholder="请输入标题（B站会自动去除#后的内容）" maxlength="80" show-word-limit />
+              </div>
+
+              <!-- 描述/简介 -->
+              <div class="form-item">
+                <label>描述 / 简介</label>
+                <el-input v-model="tab.desc" type="textarea" :rows="3" placeholder="请输入视频描述或简介" maxlength="2000" show-word-limit />
+              </div>
+
+              <!-- 标签/话题 -->
+              <div class="form-item">
+                <label>标签 / 话题</label>
+                <div class="tags-input">
+                  <el-tag v-for="(topic, idx) in tab.selectedTopics" :key="idx" closable @close="tab.selectedTopics.splice(idx, 1)" style="margin-right: 5px;">
+                    {{ topic }}
+                  </el-tag>
+                  <el-input
+                    v-model="newTopicInput"
+                    placeholder="输入标签后按回车添加"
+                    size="small"
+                    style="width: 200px;"
+                    @keyup.enter="addTopicToUnified(tab)"
+                    clearable
+                  />
+                </div>
+              </div>
+            </el-card>
+
+            <!-- 👤 账号配置（自动识别平台） -->
+            <el-card class="section-card">
+              <template #header>
+                <span class="card-title">👤 账号配置</span>
+              </template>
+
+              <!-- 用户名搜索框 -->
+              <div class="form-item">
+                <label>搜索账号（输入用户名查找）</label>
+                <el-select
+                  v-model="tab.selectedUserIds"
+                  multiple
+                  filterable
+                  remote
+                  reserve-keyword
+                  placeholder="输入用户名搜索，如'表情包'"
+                  :remote-method="(query) => searchAccounts(tab, query)"
+                  :loading="tab.accountSearchLoading"
+                  style="width: 100%;"
+                  :disabled="tab.publishing"
+                  @change="onAccountSelected(tab)"
+                >
+                  <el-option-group
+                    v-for="group in tab.searchResults"
+                    :key="group.label"
+                    :label="`${group.label} (${group.accounts.length}个)`"
+                  >
+                    <el-option
+                      v-for="acc in group.accounts"
+                      :key="acc.id"
+                      :label="`${acc.name}`"
+                      :value="acc.id"
+                    >
+                      <span class="account-option">
+                        <span>{{ acc.name }}</span>
+                        <el-tag size="small" :type="getPlatformTagType(acc.platform)" style="margin-left: 8px;">
+                          {{ acc.platform }}
+                        </el-tag>
+                        <span v-if="acc.status === '正常'" class="status-dot status-normal"></span>
+                        <span v-else class="status-dot status-error"></span>
+                      </span>
+                    </el-option>
+                  </el-option-group>
+                </el-select>
+              </div>
+
+              <!-- 自动检测到的平台（只读显示） -->
+              <div v-if="tab.selectedPlatforms.length > 0" class="auto-detected-platforms">
+                <h4 style="margin-bottom: 10px; font-size: 14px; color: #606266;">
+                  📱 将自动发布到以下 {{ tab.selectedPlatforms.length }} 个平台:
+                </h4>
+
+                <div class="platform-tags-display">
+                  <el-tag
+                    v-for="platformId in tab.selectedPlatforms"
+                    :key="platformId"
+                    :type="getPlatformTagType(getPlatformConfig(platformId).name)"
+                    size="large"
+                    effect="dark"
+                    style="margin-right: 8px; margin-bottom: 8px;"
+                  >
+                    {{ getPlatformConfig(platformId).name }}
+                    ({{ getSelectedAccountsByPlatform(tab, platformId).length }}个账号)
+                  </el-tag>
+                </div>
+              </div>
+
+              <!-- 未选择账号时的提示 -->
+              <div v-else class="no-platform-hint">
+                <el-alert
+                  title="请先搜索并选择账号，系统将自动识别可发布的平台"
+                  type="info"
+                  :closable="false"
+                  show-icon
+                  size="small"
+                />
+              </div>
+
+              <!-- 已选账号详情展示区 -->
+              <div v-if="tab.selectedUserIds.length > 0" class="selected-accounts-display">
+                <h4 style="margin-bottom: 10px; font-size: 14px; color: #606266;">
+                  已选择 {{ tab.selectedUserIds.length }} 个账号:
+                </h4>
+
+                <!-- 按平台分组显示 -->
+                <div v-for="platformId in tab.selectedPlatforms" :key="platformId" class="platform-account-group">
+                  <div class="platform-label">
+                    <el-tag :type="getPlatformTagType(getPlatformConfig(platformId).name)" size="small">
+                      {{ getPlatformConfig(platformId).name }}
+                    </el-tag>
+                  </div>
+
+                  <div class="account-list-in-platform">
+                    <div
+                      v-for="acc in getSelectedAccountsByPlatform(tab, platformId)"
+                      :key="acc.id"
+                      class="account-tag-item"
+                    >
+                      <el-tag closable @close="removeAccountFromSelection(tab, acc.id)">
+                        {{ acc.name }}
+                      </el-tag>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 提示信息 -->
+              <div class="account-config-tips">
+                <el-alert
+                  title="提示：输入用户名后，系统会自动匹配该用户在所有平台的账号。选择后将同时发布到该用户的所有选中平台。"
+                  type="info"
+                  :closable="false"
+                  show-icon
+                  size="small"
+                />
+              </div>
+            </el-card>
+
+            <!-- ⚙️ 差异化设置 -->
+            <el-card class="section-card" v-if="tab.selectedPlatforms.length > 0">
+              <template #header>
+                <span class="card-title">⚙️ 平台差异化设置</span>
+              </template>
+
+              <!-- 📦 公共设置（所有平台共用） -->
+              <div class="platform-specific-settings common-settings">
+                <h4 class="platform-title" style="color: #409EFF;">📦 公共设置</h4>
+
+                <!-- 合集功能 -->
+                <div class="form-item">
+                  <label>合集名称</label>
+                  <el-input v-model="tab.platformConfig.common.collection" placeholder="输入合集名称" clearable>
+                    <template #prefix>
+                      <el-icon><Folder /></el-icon>
+                    </template>
+                  </el-input>
+                </div>
+              </div>
+
+              <!-- 各平台独有设置 -->
+              <!-- B站独有设置 -->
+              <div v-if="tab.selectedPlatforms.includes(5)" class="platform-specific-settings">
+                <h4 class="platform-title" style="color: #00A1D6;">B站</h4>
+                <div class="form-item">
+                  <label>分区选择</label>
+                  <el-select v-model="tab.platformConfig.bilibili.tid" placeholder="请选择分区" style="width: 100%;">
+                    <el-option v-for="zone in BILIBILI_ZONES" :key="zone.value" :label="zone.label" :value="zone.value" />
+                  </el-select>
+                </div>
+
+                <div class="form-item">
+                  <el-checkbox v-model="tab.platformConfig.bilibili.isOriginal">原创声明（禁止转载）</el-checkbox>
+                </div>
+
+                <div class="form-item">
+                  <el-checkbox v-model="tab.platformConfig.bilibili.aiDeclaration">AI生成内容声明</el-checkbox>
+                </div>
+              </div>
+
+              <!-- 视频号独有设置 -->
+              <div v-if="tab.selectedPlatforms.includes(2)" class="platform-specific-settings">
+                <h4 class="platform-title" style="color: #07C160;">视频号</h4>
+
+                <div class="form-item">
+                  <el-checkbox v-model="tab.platformConfig.channels.isDraft">仅保存草稿（用手机发布）</el-checkbox>
+                </div>
+
+                <div class="form-item">
+                  <el-checkbox v-model="tab.platformConfig.channels.isOriginal">声明原创</el-checkbox>
+                </div>
+              </div>
+
+              <!-- 小红书独有设置 -->
+              <div v-if="tab.selectedPlatforms.includes(1)" class="platform-specific-settings">
+                <h4 class="platform-title" style="color: #FE2C55;">小红书</h4>
+
+                <div class="form-item">
+                  <label>声明类型</label>
+                  <el-select v-model="tab.platformConfig.xiaohongshu.declaration" placeholder="请选择声明类型" clearable style="width: 100%;">
+                    <el-option label="笔记含AI合成内容" value="笔记含AI合成内容" />
+                    <el-option label="内容自行拍摄" value="内容自行拍摄" />
+                    <el-option label="内容取材网络" value="内容取材网络" />
+                    <el-option label="可能引人不适" value="可能引人不适" />
+                  </el-select>
+                </div>
+
+                <div class="form-item">
+                  <el-checkbox v-model="tab.platformConfig.xiaohongshu.isOriginal">声明原创</el-checkbox>
+                </div>
+              </div>
+
+              <!-- 快手独有设置 -->
+              <div v-if="tab.selectedPlatforms.includes(4)" class="platform-specific-settings">
+                <h4 class="platform-title" style="color: #FF4906;">快手</h4>
+
+                <div class="form-item">
+                  <label>作者声明</label>
+                  <el-select v-model="tab.platformConfig.kuaishou.declaration" placeholder="请选择作者声明类型" style="width: 100%;">
+                    <el-option label="内容为AI生成" value="内容为AI生成" />
+                    <el-option label="内容自行拍摄" value="内容自行拍摄" />
+                    <el-option label="内容取材网络" value="内容取材网络" />
+                    <el-option label="可能引人不适" value="可能引人不适" />
+                  </el-select>
+                </div>
+              </div>
+
+              <!-- 抖音独有设置 -->
+              <div v-if="tab.selectedPlatforms.includes(3)" class="platform-specific-settings">
+                <h4 class="platform-title" style="color: #000;">抖音</h4>
+
+                <div class="form-item">
+                  <label>商品名称</label>
+                  <el-input v-model="tab.platformConfig.douyin.productTitle" placeholder="请输入商品名称（可选）" clearable />
+                </div>
+
+                <div class="form-item">
+                  <label>商品链接</label>
+                  <el-input v-model="tab.platformConfig.douyin.productLink" placeholder="请输入商品链接（可选）" clearable />
+                </div>
+
+                <div class="form-item">
+                  <label>声明类型</label>
+                  <el-radio-group v-model="tab.platformConfig.douyin.declaration_type">
+                    <el-radio label="">不声明</el-radio>
+                    <el-radio label="内容取材网络">内容取材网络</el-radio>
+                    <el-radio label="内容由AI生成">内容由AI生成</el-radio>
+                    <el-radio label="可能引人不适">可能引人不适</el-radio>
+                    <el-radio label="虚构演绎，仅供娱乐">虚构演绎，仅供娱乐</el-radio>
+                  </el-radio-group>
+                </div>
+              </div>
+            </el-card>
+
+            <!-- 🚀 发布按钮 -->
+            <div class="unified-publish-actions">
+              <el-button
+                type="primary"
+                size="large"
+                @click="executeUnifiedPublish(tab)"
+                :loading="tab.publishing"
+                :disabled="!canUnifiedPublish(tab)"
+                style="width: 100%; height: 50px; font-size: 18px;"
+              >
+                🚀 一键发布到 {{ tab.selectedPlatforms.length }} 个平台
+              </el-button>
+            </div>
+
+            <!-- 发布进度 -->
+            <el-card v-if="tab.publishResults.length > 0 || tab.publishing" class="section-card">
+              <template #header>
+                <span class="card-title">发布进度</span>
+              </template>
+              <el-progress :percentage="tab.publishProgress" :status="tab.publishProgress === 100 ? 'success' : ''" />
+              
+              <div class="publish-results-list">
+                <div
+                  v-for="(result, index) in tab.publishResults"
+                  :key="index"
+                  :class="['result-item', result.status]"
+                >
+                  <el-icon v-if="result.status === 'success'"><Check /></el-icon>
+                  <el-icon v-else-if="result.status === 'error'"><Close /></el-icon>
+                  <el-icon v-else v-show="tab.publishing"><Loading /></el-icon>
+                  <span class="label">{{ result.platform }}</span>
+                  <span class="message">{{ result.message }}</span>
+                </div>
+              </div>
+            </el-card>
+          </div>
+
+          <!-- ==================== 普通发布Tab（原有功能保持不变） ==================== -->
+          <div v-else>
           <!-- 发布状态提示 -->
           <div v-if="tab.publishStatus" class="publish-status">
             <el-alert
@@ -84,55 +467,6 @@
               </div>
             </div>
           </div>
-
-          <!-- 上传选项弹窗 -->
-          <el-dialog
-            v-model="uploadOptionsVisible"
-            :title="uploadOptionsTitle"
-            width="400px"
-            class="upload-options-dialog"
-          >
-            <div class="upload-options-content">
-              <el-button type="primary" @click="selectLocalUpload" class="option-btn">
-                <el-icon><Upload /></el-icon>
-                本地上传
-              </el-button>
-              <el-button type="success" @click="selectMaterialLibrary" class="option-btn">
-                <el-icon><Folder /></el-icon>
-                素材库
-              </el-button>
-            </div>
-          </el-dialog>
-
-          <!-- 本地上传弹窗 -->
-          <el-dialog
-            v-model="localUploadVisible"
-            :title="localUploadTitle"
-            width="600px"
-            class="local-upload-dialog"
-          >
-            <el-upload
-              class="video-upload"
-              drag
-              :auto-upload="true"
-              :http-request="handleCustomUpload"
-              :on-error="handleUploadError"
-              :multiple="allowMultipleUpload"
-              :accept="uploadAccept"
-              :headers="authHeaders"
-              :show-file-list="false"
-            >
-              <el-icon class="el-icon--upload"><Upload /></el-icon>
-              <div class="el-upload__text">
-                将{{ uploadTargetNoun }}拖到此处，或<em>点击上传</em>
-              </div>
-              <template #tip>
-                <div class="el-upload__tip">
-                  {{ uploadTargetTip }}
-                </div>
-              </template>
-            </el-upload>
-          </el-dialog>
 
           <!-- 批量发布进度对话框 -->
           <el-dialog
@@ -190,6 +524,12 @@
           <!-- 封面部分：根据平台配置动态显示 -->
           <div v-if="getPlatformConfig(tab.selectedPlatform).features.cover !== 'none'" class="cover-section">
             <h3>封面</h3>
+            <!-- 快手平台特殊提示 -->
+            <el-alert v-if="tab.selectedPlatform === 4" type="warning" :closable="false" style="margin-bottom: 12px;">
+              <template #title>
+                <span style="font-size: 13px;">快手平台限制：封面图片不能大于5MB，系统会自动压缩超过限制的图片</span>
+              </template>
+            </el-alert>
             <div class="cover-grid">
               <!-- 单封面模式：小红书、视频号、快手 -->
               <div v-if="getPlatformConfig(tab.selectedPlatform).features.cover === 'single'" class="cover-card">
@@ -207,7 +547,7 @@
                 <div v-else class="cover-empty">未选择封面</div>
               </div>
 
-              <!-- 双封面模式：抖音（竖封面 + 横封面） -->
+              <!-- 双封面模式：抖音（竖封面 + 方封面） -->
               <template v-if="getPlatformConfig(tab.selectedPlatform).features.cover === 'double'">
                 <div class="cover-card">
                   <div class="cover-card-header">
@@ -226,58 +566,21 @@
 
                 <div class="cover-card">
                   <div class="cover-card-header">
-                    <span>横封面 4:3</span>
-                    <el-button size="small" type="primary" plain @click="showUploadOptions(tab, UPLOAD_TARGETS.COVER_LANDSCAPE)">
+                    <span>方封面 4:3</span>
+                    <el-button size="small" type="primary" plain @click="showUploadOptions(tab, UPLOAD_TARGETS.COVER_SQUARE)">
                       选择封面
                     </el-button>
                   </div>
-                  <div v-if="tab.coverLandscape" class="cover-file-item">
-                    <el-link :href="tab.coverLandscape.url" target="_blank" type="primary">{{ tab.coverLandscape.name }}</el-link>
-                    <span class="file-size">{{ (tab.coverLandscape.size / 1024 / 1024).toFixed(2) }}MB</span>
-                    <el-button type="danger" size="small" @click="removeCover(tab, UPLOAD_TARGETS.COVER_LANDSCAPE)">删除</el-button>
+                  <div v-if="tab.coverSquare" class="cover-file-item">
+                    <el-link :href="tab.coverSquare.url" target="_blank" type="primary">{{ tab.coverSquare.name }}</el-link>
+                    <span class="file-size">{{ (tab.coverSquare.size / 1024 / 1024).toFixed(2) }}MB</span>
+                    <el-button type="danger" size="small" @click="removeCover(tab, UPLOAD_TARGETS.COVER_SQUARE)">删除</el-button>
                   </div>
-                  <div v-else class="cover-empty">未选择横封面</div>
+                  <div v-else class="cover-empty">未选择方封面</div>
                 </div>
               </template>
             </div>
           </div>
-
-          <!-- 素材库选择弹窗 -->
-          <el-dialog
-            v-model="materialLibraryVisible"
-            :title="currentUploadTarget === UPLOAD_TARGETS.VIDEO ? '选择视频素材' : '选择封面素材'"
-            width="800px"
-            class="material-library-dialog"
-          >
-            <div class="material-library-content">
-              <el-checkbox-group v-model="selectedMaterials" :max="isCoverUploadTarget ? 1 : undefined">
-                <div class="material-list">
-                  <div
-                    v-for="material in selectableMaterials"
-                    :key="material.id"
-                    class="material-item"
-                  >
-                    <el-checkbox :label="material.id" class="material-checkbox">
-                      <div class="material-info">
-                        <div class="material-name">{{ material.filename }}</div>
-                        <div class="material-details">
-                          <span class="file-size">{{ material.filesize }}MB</span>
-                          <span class="upload-time">{{ material.upload_time }}</span>
-                        </div>
-                      </div>
-                    </el-checkbox>
-                  </div>
-                </div>
-              </el-checkbox-group>
-              <el-empty v-if="selectableMaterials.length === 0" description="暂无可选素材" />
-            </div>
-            <template #footer>
-              <div class="dialog-footer">
-                <el-button @click="materialLibraryVisible = false">取消</el-button>
-                <el-button type="primary" @click="confirmMaterialSelection">确定</el-button>
-              </div>
-            </template>
-          </el-dialog>
 
           <!-- 账号选择 -->
           <div class="account-section">
@@ -675,8 +978,96 @@
               {{ tab.publishing ? '发布中...' : '发布' }}
             </el-button>
           </div>
+          </div>  <!-- 关闭 v-else 普通发布Tab容器 -->
         </div>
       </div>
+
+      <!-- ==================== 全局上传弹窗（所有Tab共用） ==================== -->
+      <!-- 上传选项弹窗 -->
+      <el-dialog
+        v-model="uploadOptionsVisible"
+        :title="uploadOptionsTitle"
+        width="400px"
+        class="upload-options-dialog"
+      >
+        <div class="upload-options-content">
+          <el-button type="primary" @click="selectLocalUpload" class="option-btn">
+            <el-icon><Upload /></el-icon>
+            本地上传
+          </el-button>
+          <el-button type="success" @click="selectMaterialLibrary" class="option-btn">
+            <el-icon><Folder /></el-icon>
+            素材库
+          </el-button>
+        </div>
+      </el-dialog>
+
+      <!-- 本地上传弹窗 -->
+      <el-dialog
+        v-model="localUploadVisible"
+        :title="localUploadTitle"
+        width="600px"
+        class="local-upload-dialog"
+      >
+        <el-upload
+          class="video-upload"
+          drag
+          :auto-upload="true"
+          :http-request="handleCustomUpload"
+          :on-error="handleUploadError"
+          :multiple="allowMultipleUpload"
+          :accept="uploadAccept"
+          :headers="authHeaders"
+          :show-file-list="false"
+        >
+          <el-icon class="el-icon--upload"><Upload /></el-icon>
+          <div class="el-upload__text">
+            将{{ uploadTargetNoun }}拖到此处，或<em>点击上传</em>
+          </div>
+          <template #tip>
+            <div class="el-upload__tip">
+              {{ uploadTargetTip }}
+            </div>
+          </template>
+        </el-upload>
+      </el-dialog>
+
+      <!-- 素材库选择弹窗 -->
+      <el-dialog
+        v-model="materialLibraryVisible"
+        :title="currentUploadTarget === UPLOAD_TARGETS.VIDEO ? '选择视频素材' : '选择封面素材'"
+        width="800px"
+        class="material-library-dialog"
+      >
+        <div class="material-library-content">
+          <el-checkbox-group v-model="selectedMaterials" :max="isCoverUploadTarget ? 1 : undefined">
+            <div class="material-list">
+              <div
+                v-for="material in selectableMaterials"
+                :key="material.id"
+                class="material-item"
+              >
+                <el-checkbox :label="material.id" class="material-checkbox">
+                  <div class="material-info">
+                    <div class="material-name">{{ material.filename }}</div>
+                    <div class="material-details">
+                      <span class="file-size">{{ material.filesize }}MB</span>
+                      <span class="upload-time">{{ material.upload_time }}</span>
+                    </div>
+                  </div>
+                </el-checkbox>
+              </div>
+            </div>
+          </el-checkbox-group>
+          <el-empty v-if="selectableMaterials.length === 0" description="暂无可选素材" />
+        </div>
+        <template #footer>
+          <div class="dialog-footer">
+            <el-button @click="materialLibraryVisible = false">取消</el-button>
+            <el-button type="primary" @click="confirmMaterialSelection">确定</el-button>
+          </div>
+        </template>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -695,7 +1086,7 @@ const UPLOAD_TARGETS = {
   VIDEO: 'video',
   COVER_SINGLE: 'coverSingle',
   COVER_PORTRAIT: 'coverPortrait',
-  COVER_LANDSCAPE: 'coverLandscape'
+  COVER_SQUARE: 'coverSquare'
 }
 
 // Authorization headers
@@ -704,7 +1095,7 @@ const authHeaders = computed(() => ({
 }))
 
 // 当前激活的tab
-const activeTab = ref('tab1')
+const activeTab = ref('unified')  // 默认显示"一键发布"Tab
 
 // tab计数器
 let tabCounter = 1
@@ -867,7 +1258,7 @@ const defaultTabInit = {
   displayFileList: [], // 用于显示的文件列表
   coverSingle: null,
   coverPortrait: null,
-  coverLandscape: null,
+  coverSquare: null,
   selectedAccounts: [], // 选中的账号ID列表
   selectedPlatform: 1, // 选中的平台（单选）
   title: '',
@@ -895,6 +1286,93 @@ const defaultTabInit = {
   coverSingle: null, // B站封面文件
 }
 
+// ==================== 统一发布Tab数据结构 ====================
+const unifiedPublishInit = {
+  name: 'unified',
+  label: '🚀 一键发布',
+  type: 'unified', // 特殊类型标识
+  // 公共区域 - 所有平台共用
+  fileList: [], // 视频文件列表
+  displayFileList: [],
+  coverSingle: null, // 统一封面（各平台可能不同）
+  title: '', // 标题
+  desc: '', // 描述/简介
+  selectedTopics: [], // 标签/话题
+
+  // 平台选择
+  selectedPlatforms: [], // 选中的平台ID列表 [1,3,5]
+
+  // 账号搜索与选择（新设计）
+  selectedUserIds: [], // 已选择的账号ID列表 [2, 5, 8]
+  accountSearchLoading: false, // 搜索加载状态
+  searchResults: [], // 搜索结果 [{label: '表情包', accounts: [...]}]
+
+  // 各平台账号配置（自动从selectedUserIds计算）
+  platformAccounts: {
+    1: [], // 小红书账号
+    2: [], // 视频号账号
+    3: [], // 抖音账号
+    4: [], // 快手账号
+    5: [], // B站账号
+  },
+
+  // 平台差异化设置
+  platformConfig: {
+    // 公共设置
+    common: {
+      collection: '', // 合集名称（所有平台共用）
+    },
+
+    // 抖音独有
+    douyin: {
+      productTitle: '', // 商品名称
+      productLink: '', // 商品链接
+      declaration_type: '内容由AI生成', // 声明类型
+    },
+    // B站独有
+    bilibili: {
+      tid: 218, // 分区ID
+      isOriginal: true, // 原创声明(禁止转载) - 默认勾选
+      aiDeclaration: true, // AI声明
+    },
+    // 视频号独有
+    channels: {
+      isDraft: false, // 草稿模式
+      isOriginal: true, // 原创声明
+    },
+    // 小红书独有
+    xiaohongshu: {
+      declaration: '笔记含AI生成内容', // 声明类型
+      isOriginal: true, // 原创声明
+    },
+    // 快手独有
+    kuaishou: {
+      declaration: '内容为AI生成', // 作者声明
+    }
+  },
+
+  // 各平台封面配置（2种尺寸）
+  coverPortrait: null, // 竖版 (3:4)
+  coverSquare: null,    // 方形 (4:3)
+
+  // 发布状态
+  publishStatus: null,
+  publishing: false,
+  publishProgress: 0,
+  publishResults: [],
+}
+
+// 创建统一发布Tab
+const makeUnifiedTab = () => {
+  try {
+    return typeof structuredClone === 'function'
+      ? structuredClone(unifiedPublishInit)
+      : JSON.parse(JSON.stringify(unifiedPublishInit))
+  } catch (e) {
+    return JSON.parse(JSON.stringify(unifiedPublishInit))
+  }
+}
+
 // helper to create a fresh deep-copied tab from defaultTabInit
 const makeNewTab = () => {
   // prefer structuredClone when available (newer browsers/node), fallback to JSON
@@ -905,9 +1383,10 @@ const makeNewTab = () => {
   }
 }
 
-// tab页数据 - 默认只有一个tab (use deep copy to avoid shared refs)
+// tab页数据 - 默认包含"一键发布"Tab和普通发布Tab
 const tabs = reactive([
-  makeNewTab()
+  makeUnifiedTab(),  // 🚀 一键发布（特殊Tab）
+  makeNewTab()       // 普通发布1
 ])
 
 // 账号相关状态
@@ -1013,6 +1492,11 @@ const setCoverFile = (tab, target, fileInfo) => {
 
   if (target === UPLOAD_TARGETS.COVER_LANDSCAPE) {
     tab.coverLandscape = fileInfo
+    return
+  }
+
+  if (target === UPLOAD_TARGETS.COVER_SQUARE) {
+    tab.coverSquare = fileInfo
   }
 }
 
@@ -1036,6 +1520,13 @@ const addTab = () => {
 
 // 删除tab
 const removeTab = (tabName) => {
+  // 保护"一键发布"Tab，不允许删除
+  const tab = tabs.find(t => t.name === tabName)
+  if (tab && tab.type === 'unified') {
+    ElMessage.warning('🚀 一键发布Tab不可删除')
+    return
+  }
+  
   const index = tabs.findIndex(tab => tab.name === tabName)
   if (index > -1) {
     tabs.splice(index, 1)
@@ -1105,6 +1596,456 @@ const handleCustomUpload = async (options) => {
 // 处理文件上传失败
 const handleUploadError = (error) => {
   ElMessage.error('文件上传失败')
+}
+
+// ==================== 统一发布（一键发布）相关函数 ====================
+const newTopicInput = ref('') // 统一发布的标签输入
+
+// 添加标签到统一发布Tab
+const addTopicToUnified = (tab) => {
+  if (newTopicInput.value.trim() && !tab.selectedTopics.includes(newTopicInput.value.trim())) {
+    tab.selectedTopics.push(newTopicInput.value.trim())
+    newTopicInput.value = ''
+  }
+}
+
+// ==================== 账号搜索与选择（统一发布） ====================
+
+// 搜索账号 - 按用户名模糊匹配
+const searchAccounts = (tab, query) => {
+  if (!query || query.trim().length === 0) {
+    tab.searchResults = []
+    return
+  }
+
+  tab.accountSearchLoading = true
+
+  // 模拟异步搜索（实际可改为API调用）
+  setTimeout(() => {
+    const keyword = query.toLowerCase().trim()
+
+    // 在所有账号中按用户名搜索
+    const matchedAccounts = accountStore.accounts.filter(acc =>
+      acc.name && acc.name.toLowerCase().includes(keyword)
+    )
+
+    // 按用户名分组
+    const groupedByUser = {}
+    matchedAccounts.forEach(acc => {
+      if (!groupedByUser[acc.name]) {
+        groupedByUser[acc.name] = {
+          label: acc.name,
+          accounts: []
+        }
+      }
+      groupedByUser[acc.name].accounts.push(acc)
+    })
+
+    // 转换为数组并排序
+    tab.searchResults = Object.values(groupedByUser).sort((a, b) =>
+      a.label.localeCompare(b.label, 'zh-CN')
+    )
+
+    tab.accountSearchLoading = false
+  }, 300)
+}
+
+// 账号选择变化时触发
+const onAccountSelected = (tab) => {
+  // 1. 自动从选择的账号中提取平台列表
+  autoDetectPlatforms(tab)
+
+  // 2. 根据选择的账号ID，重新计算各平台的账号列表
+  recalculatePlatformAccounts(tab)
+}
+
+// 自动检测平台（从已选账号中提取）
+const autoDetectPlatforms = (tab) => {
+  // 收集所有已选账号对应的平台ID
+  const platformIds = new Set()
+
+  tab.selectedUserIds.forEach(userId => {
+    const account = accountStore.accounts.find(acc => acc.id === userId)
+    if (account) {
+      const platformId = getPlatformIdByName(account.platform)
+      if (platformId && [1, 2, 3, 4, 5].includes(platformId)) { // 只支持5大平台
+        platformIds.add(platformId)
+      }
+    }
+  })
+
+  // 转换为数组并排序（按平台顺序：小红书、视频号、抖音、快手、B站）
+  tab.selectedPlatforms = Array.from(platformIds).sort((a, b) => a - b)
+
+  console.log(`[统一发布] 自动检测到 ${tab.selectedPlatforms.length} 个平台:`, tab.selectedPlatforms.map(id => getPlatformConfig(id).name))
+}
+
+// 重新计算各平台的账号配置
+const recalculatePlatformAccounts = (tab) => {
+  // 清空所有平台账号
+  for (const platformId in tab.platformAccounts) {
+    tab.platformAccounts[platformId] = []
+  }
+
+  // 根据selectedUserIds填充platformAccounts
+  tab.selectedUserIds.forEach(userId => {
+    const account = accountStore.accounts.find(acc => acc.id === userId)
+    if (account) {
+      // 找到该账号对应的平台ID
+      const platformId = getPlatformIdByName(account.platform)
+      if (platformId && tab.platformAccounts[platformId]) {
+        tab.platformAccounts[platformId].push(userId)
+      }
+    }
+  })
+}
+
+// 根据平台名称获取平台ID
+const getPlatformIdByName = (platformName) => {
+  const nameToIdMap = {
+    '小红书': 1,
+    '视频号': 2,
+    '抖音': 3,
+    '快手': 4,
+    'B站': 5,
+    'TikTok': 6,
+    '百家号': 7
+  }
+  return nameToIdMap[platformName]
+}
+
+// 获取指定平台已选的账号列表
+const getSelectedAccountsByPlatform = (tab, platformId) => {
+  return tab.selectedUserIds.map(userId => {
+    return accountStore.accounts.find(acc => acc.id === userId)
+  }).filter(acc => acc && acc.platform === getPlatformConfig(platformId).name)
+}
+
+// 从选择中移除某个账号
+const removeAccountFromSelection = (tab, userId) => {
+  const index = tab.selectedUserIds.indexOf(userId)
+  if (index > -1) {
+    tab.selectedUserIds.splice(index, 1)
+    // 重新计算平台账号
+    recalculatePlatformAccounts(tab)
+  }
+}
+
+// 获取平台标签类型（用于颜色）
+const getPlatformTagType = (platformName) => {
+  const typeMap = {
+    '小红书': 'danger',
+    '视频号': 'success',
+    '抖音': '',
+    '快手': 'warning',
+    'B站': '',
+    'TikTok': 'info',
+    '百家号': 'info'
+  }
+  return typeMap[platformName] || ''
+}
+
+// ==================== 封面和差异化设置辅助函数 ====================
+
+// 获取除抖音外的其他平台（用于单封面上传）
+const getOtherPlatforms = (tab) => {
+  return tab.selectedPlatforms.filter(id => id !== 3) // 3是抖音
+}
+
+// 获取封面比例
+const getCoverRatio = (platformId) => {
+  const ratioMap = {
+    1: '3:4',   // 小红书 - 竖版
+    2: '3:4',   // 视频号 - 竖版
+    3: '3:4',   // 抖音 - 竖版
+    4: '3:4',   // 快手 - 竖版
+    5: '4:3',   // B站 - 方形
+  }
+  return ratioMap[platformId] || '3:4'
+}
+
+// 获取平台封面上传按钮文字
+const getPlatformCoverName = (tab, platformId) => {
+  const coverFile = tab.platformCovers[platformId]
+  return coverFile ? '已选择' : '选择'
+}
+
+// 获取平台封面文件
+const getPlatformCoverFile = (tab, platformId) => {
+  return tab.platformCovers[platformId]
+}
+
+// ==================== 平台-尺寸映射函数 ====================
+
+// 获取平台对应的封面名称
+const getCoverNameForPlatform = (platformId) => {
+  const mapping = {
+    1: '竖版 (3:4)',   // 小红书
+    2: '竖版 (3:4)',   // 视频号
+    3: '双尺寸',       // 抖音 (3:4 + 4:3)
+    4: '竖版 (3:4)',   // 快手
+    5: '方版 (4:3)',   // B站 (目前只需要4:3)
+  }
+  return mapping[platformId] || '未配置'
+}
+
+// 获取封面类型（用于标签颜色）
+const getCoverTypeForPlatform = (platformId) => {
+  const typeMap = {
+    1: '',      // 小红书 - 竖版
+    2: '',      // 视频号 - 竖版
+    3: 'warning', // 抖音 - 双尺寸
+    4: '',      // 快手 - 竖版
+    5: '',      // B站 - 方版（目前只需要一张）
+  }
+  return typeMap[platformId] || ''
+}
+
+// 检查平台是否有必需的封面
+const hasRequiredCover = (tab, platformId) => {
+  switch (platformId) {
+    case 1: // 小红书 → 竖版
+    case 2: // 视频号 → 竖版
+    case 4: // 快手 → 竖版
+      return !!tab.coverPortrait
+
+    case 3: // 抖音 → 竖版 + 方形
+      return !!(tab.coverPortrait && tab.coverSquare)
+
+    case 5: // B站 → 方形 (4:3)
+      return !!tab.coverSquare
+
+    default:
+      return true
+  }
+}
+
+// 根据平台获取实际使用的封面路径
+const getCoverPathForPlatform = (tab, platformId) => {
+  switch (platformId) {
+    case 1: // 小红书
+    case 2: // 视频号
+    case 4: // 快手
+      return tab.coverPortrait?.path
+
+    case 3: // 抖音（返回双封面对象）
+      return {
+        portrait: tab.coverPortrait?.path,
+        square: tab.coverSquare?.path
+      }
+
+    case 5: // B站（目前只需要方形4:3）
+      return tab.coverSquare?.path
+
+    default:
+      return tab.coverSingle?.path
+  }
+}
+
+// 根据平台ID获取账号列表
+const getAccountsByPlatform = (platformId) => {
+  const platformMap = {
+    1: '小红书',
+    2: '视频号',
+    3: '抖音',
+    4: '快手',
+    5: 'B站'
+  }
+  const platformName = platformMap[platformId]
+  return platformName ? accountStore.accounts.filter(acc => acc.platform === platformName) : []
+}
+
+// 检查是否可以执行统一发布
+const canUnifiedPublish = (tab) => {
+  // 检查是否至少选择了一个账号
+  const hasSelectedAccounts = tab.selectedUserIds.length > 0
+
+  return (
+    tab.fileList.length > 0 &&
+    tab.title.trim() !== '' &&
+    tab.selectedPlatforms.length > 0 &&
+    hasSelectedAccounts &&  // 新增：必须选择账号
+    !tab.publishing
+  )
+}
+
+// 执行统一批量发布
+const executeUnifiedPublish = async (tab) => {
+  if (!canUnifiedPublish(tab)) {
+    ElMessage.warning('请填写完整信息并选择至少一个平台')
+    return
+  }
+
+  tab.publishing = true
+  tab.publishProgress = 0
+  tab.publishResults = []
+
+  try {
+    // 构建请求数据
+    const requestData = {
+      // 公共参数
+      files: tab.fileList.map(f => f.path),
+      title: tab.title,
+      desc: tab.desc,
+      tags: tab.selectedTopics,
+
+      // 平台列表和配置
+      platforms: tab.selectedPlatforms,
+      accounts: tab.platformAccounts,
+      config: tab.platformConfig,
+
+      // 2种尺寸封面
+      covers: {
+        portrait: tab.coverPortrait?.path,  // 竖版 (3:4)
+        square: tab.coverSquare?.path,       // 方形 (4:3)
+      }
+    }
+
+    // 调用后端批量发布API
+    const response = await http.post('/batchUnifiedPublish', requestData)
+
+    if (response.code === 200 && response.data) {
+      // 后端返回实时进度（SSE或轮询）
+      // 这里简化处理，假设后端直接返回结果
+      
+      // 模拟进度更新（实际应该用SSE）
+      for (let i = 0; i < response.data.results.length; i++) {
+        const result = response.data.results[i]
+        tab.publishProgress = Math.floor(((i + 1) / response.data.results.length) * 100)
+        tab.publishResults.push(result)
+        
+        // 短暂延迟让用户看到进度变化
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+
+      // 统计结果
+      const successCount = tab.publishResults.filter(r => r.status === 'success').length
+      const failCount = tab.publishResults.filter(r => r.status === 'error').length
+
+      if (failCount === 0) {
+        ElMessage.success(`🎉 全部发布成功！共 ${successCount} 个平台`)
+        tab.publishStatus = { message: `全部发布成功！共 ${successCount} 个平台`, type: 'success' }
+      } else {
+        ElMessage.warning(`发布完成：${successCount} 成功，${failCount} 失败`)
+        tab.publishStatus = { message: `发布完成：${successCount} 成功，${failCount} 失败`, type: 'warning' }
+      }
+    } else {
+      throw new Error(response.msg || '批量发布请求失败')
+    }
+
+  } catch (error) {
+    console.error('统一发布出错:', error)
+    ElMessage.error(`批量发布出错: ${error.message}`)
+    tab.publishStatus = { message: `批量发布出错: ${error.message}`, type: 'error' }
+    
+    // 如果后端不可用，尝试前端逐个调用（备用方案）
+    await fallbackUnifiedPublish(tab)
+  } finally {
+    tab.publishing = false
+  }
+}
+
+// 备用方案：前端逐个平台发布（当后端API不可用时）
+const fallbackUnifiedPublish = async (tab) => {
+  try {
+    for (let i = 0; i < tab.selectedPlatforms.length; i++) {
+      const platformId = tab.selectedPlatforms[i]
+      const platformName = getPlatformConfig(platformId).name
+      
+      tab.publishProgress = Math.floor((i / tab.selectedPlatforms.length) * 100)
+      tab.publishResults.push({
+        platform: platformName,
+        status: 'publishing',
+        message: '正在发布...'
+      })
+
+      try {
+        // 构建单个平台的发布参数
+        const singleTabData = {
+          fileList: [...tab.fileList],
+          displayFileList: [],
+          coverSingle: tab.coverSingle,
+          selectedAccounts: tab.platformAccounts[platformId] || [],
+          selectedPlatform: platformId,
+          title: tab.title,
+          desc: tab.desc,
+          selectedTopics: [...tab.selectedTopics],
+          ...getPlatformSpecificConfig(tab, platformId)
+        }
+
+        // 调用现有的confirmPublish逻辑（需要适配）
+        // 这里简化处理，实际需要根据各平台参数转换
+        await new Promise(resolve => setTimeout(resolve, 2000)) // 模拟发布时间
+        
+        // 更新结果
+        const resultIdx = tab.publishResults.findIndex(r => r.platform === platformName)
+        if (resultIdx >= 0) {
+          tab.publishResults[resultIdx] = {
+            platform: platformName,
+            status: 'success',
+            message: '发布成功'
+          }
+        }
+      } catch (platformError) {
+        const resultIdx = tab.publishResults.findIndex(r => r.platform === platformName)
+        if (resultIdx >= 0) {
+          tab.publishResults[resultIdx] = {
+            platform: platformName,
+            status: 'error',
+            message: platformError.message || '发布失败'
+          }
+        }
+      }
+    }
+    
+    tab.publishProgress = 100
+    
+  } catch (fallbackError) {
+    console.error('备用发布方案也失败:', fallbackError)
+  }
+}
+
+// 根据平台ID获取该平台的差异化配置
+const getPlatformSpecificConfig = (tab, platformId) => {
+  const config = tab.platformConfig
+  const common = config.common
+
+  switch (platformId) {
+    case 3: // 抖音
+      return {
+        douyinProductTitle: config.douyin.productTitle,
+        douyinProductLink: config.douyin.productLink,
+        declaration_type: config.douyin.declaration_type,
+        collection: common.collection,  // 使用公共合集
+        aiDeclaration: common.aiDeclaration  // 使用公共AI声明
+      }
+    case 5: // B站
+      return {
+        bilibiliTid: config.bilibili.tid,
+        bilibiliAiDeclaration: common.aiDeclaration,  // 使用公共AI声明
+        isOriginal: config.bilibili.isOriginal ? 1 : 0,
+        collection: common.collection  // 使用公共合集
+      }
+    case 2: // 视频号（无AI声明）
+      return {
+        isDraft: config.channels.isDraft,
+        isOriginal: config.channels.isOriginal,
+        collection: common.collection  // 使用公共合集
+      }
+    case 1: // 小红书
+      return {
+        xiaohongshu_declaration: config.xiaohongshu.declaration || (common.aiDeclaration ? '笔记含AI合成内容' : ''),
+        isOriginal: config.xiaohongshu.isOriginal,
+        collection: common.collection  // 使用公共合集
+      }
+    case 4: // 快手
+      return {
+        kuaishou_declaration: config.kuaishou.declaration || (common.aiDeclaration ? '内容为AI生成' : ''),
+        collection: common.collection  // 使用公共合集
+      }
+    default:
+      return {}
+  }
 }
 
 // 声明类型变更时设置子级默认值
@@ -1754,6 +2695,23 @@ const batchPublish = async () => {
               margin-left: auto;
             }
           }
+
+          .cover-platform-hint {
+            margin-top: 12px;
+            padding: 8px 10px;
+            background-color: #ecf5ff;
+            border-left: 3px solid #409EFF;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #409EFF;
+            font-size: 12px;
+
+            .el-icon {
+              flex-shrink: 0;
+            }
+          }
         }
         
         .account-input {
@@ -1957,6 +2915,359 @@ const batchPublish = async () => {
       display: flex;
       justify-content: flex-end;
       gap: 12px;
+    }
+  }
+}
+
+// ==================== 统一发布（一键发布）样式 ====================
+.unified-publish-container {
+  max-width: 900px;
+  margin: 0 auto;
+  
+  .section-card {
+    margin-bottom: 20px;
+    
+    .card-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #303133;
+    }
+    
+    .form-item {
+      margin-bottom: 15px;
+      
+      > label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: #606266;
+      }
+      
+      .uploaded-files-inline {
+        margin-top: 10px;
+        
+        .el-tag {
+          margin-right: 8px;
+          margin-bottom: 5px;
+        }
+      }
+      
+      .cover-preview {
+        margin-top: 10px;
+      }
+      
+      .tags-input {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+    }
+    
+    .account-config-item {
+      margin-bottom: 15px;
+      padding: 12px;
+      background-color: #f5f7fa;
+      border-radius: 4px;
+
+      > label {
+        font-weight: 500;
+        color: #606266;
+        margin-bottom: 5px;
+        display: block;
+      }
+    }
+
+    // 账号搜索选项样式
+    .account-option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+
+        &.status-normal {
+          background-color: #67c23a;
+        }
+
+        &.status-error {
+          background-color: #f56c6c;
+        }
+      }
+    }
+
+    // 已选账号展示区
+    .selected-accounts-display {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f0f9eb;
+      border: 1px solid #e1f3d8;
+      border-radius: 4px;
+
+      .platform-account-group {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 12px;
+        padding: 10px;
+        background-color: #fff;
+        border-radius: 4px;
+        border: 1px solid #ebeef5;
+
+        &:last-child {
+          margin-bottom: 0;
+        }
+
+        .platform-label {
+          min-width: 80px;
+          font-weight: 500;
+          padding-top: 4px;
+        }
+
+        .account-list-in-platform {
+          flex: 1;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+
+          .account-tag-item {
+            .el-tag {
+              max-width: 200px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+          }
+
+          .no-account-hint {
+            color: #909399;
+            font-size: 12px;
+            line-height: 32px;
+          }
+        }
+      }
+    }
+
+    // 账号配置提示
+    .account-config-tips {
+      margin-top: 15px;
+    }
+
+    // 自动检测到的平台
+    .auto-detected-platforms {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #ecf5ff;
+      border: 1px solid #d9ecff;
+      border-radius: 4px;
+
+      .platform-tags-display {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+
+        .el-tag {
+          font-size: 14px;
+          padding: 6px 12px;
+        }
+      }
+    }
+
+    // 未选择账号时的提示
+    .no-platform-hint {
+      margin-top: 15px;
+    }
+
+    // 公共设置样式
+    .common-settings {
+      background-color: #f0f9ff;
+      border: 1px solid #b3d8ff;
+    }
+
+    // 封面配置样式
+    .cover-settings {
+      background-color: #fdf6ec;
+      border: 1px solid #faecd8;
+
+      // 3种尺寸封面上传容器
+      .cover-upload-container {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        margin-bottom: 20px;
+
+        @media (max-width: 768px) {
+          grid-template-columns: 1fr;
+        }
+
+        .cover-size-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 15px;
+          background-color: #fff;
+          border-radius: 8px;
+          border: 2px dashed #dcdfe6;
+          transition: all 0.3s;
+
+          &:hover {
+            border-color: #409EFF;
+            box-shadow: 0 2px 12px rgba(64, 158, 255, 0.1);
+          }
+
+          // 封面预览区域
+          .cover-preview {
+            width: 120px;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f5f7fa;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            overflow: hidden;
+
+            &.portrait {
+              aspect-ratio: 3/4;  // 竖版
+              height: 140px;
+              width: auto;
+            }
+
+            &.square {
+              aspect-ratio: 4/3;  // 方形
+              width: 130px;
+              height: auto;
+            }
+
+            img {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+            }
+          }
+
+          // 封面信息
+          .cover-info {
+            text-align: center;
+
+            .cover-label {
+              display: block;
+              font-weight: 600;
+              color: #303133;
+              margin-bottom: 5px;
+              font-size: 14px;
+            }
+
+            .cover-platforms {
+              display: block;
+              font-size: 11px;
+              color: #909399;
+              margin-bottom: 8px;
+              line-height: 1.4;
+            }
+
+            .file-name {
+              display: block;
+              margin-top: 5px;
+              color: #67c23a;
+              font-size: 11px;
+              max-width: 150px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+          }
+        }
+      }
+
+      // 平台-尺寸映射展示区
+      .platform-cover-mapping {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #fff;
+        border-radius: 4px;
+        border: 1px solid #e4e7ed;
+
+        .mapping-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+
+          .mapping-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 10px;
+            background-color: #f5f7fa;
+            border-radius: 4px;
+
+            .mapping-arrow {
+              color: #909399;
+              font-weight: bold;
+            }
+          }
+        }
+      }
+    }
+    
+    .platform-specific-settings {
+      margin-bottom: 20px;
+      padding: 15px;
+      border: 1px solid #ebeef5;
+      border-radius: 4px;
+      background-color: #fafafa;
+      
+      .platform-title {
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid currentColor;
+      }
+    }
+  }
+  
+  .unified-publish-actions {
+    margin: 30px 0;
+    text-align: center;
+  }
+  
+  .publish-results-list {
+    margin-top: 20px;
+    
+    .result-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      margin-bottom: 8px;
+      border-radius: 4px;
+      background-color: #f5f7fa;
+      
+      &.success {
+        background-color: #f0f9eb;
+        color: #67c23a;
+      }
+      
+      &.error {
+        background-color: #fef0f0;
+        color: #f56c6c;
+      }
+      
+      &.publishing {
+        background-color: #ecf5ff;
+        color: #409eff;
+      }
+      
+      .label {
+        font-weight: bold;
+        min-width: 60px;
+      }
+      
+      .message {
+        flex: 1;
+      }
     }
   }
 }

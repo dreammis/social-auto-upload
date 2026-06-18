@@ -452,6 +452,7 @@ class TencentBaseUploader(BaseVideoUploader):
         publish_strategy: str = TENCENT_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool | None = None,
+        screenshot_manager = None,  # 截图管理器
     ):
         self.publish_date = publish_date
         self.account_file = _resolve_account_file(account_file)
@@ -459,6 +460,7 @@ class TencentBaseUploader(BaseVideoUploader):
         self.debug = debug
         self.headless = get_local_chrome_headless() if headless is None else headless
         self.local_executable_path = LOCAL_CHROME_PATH
+        self.screenshot_manager = screenshot_manager  # 截图管理器
 
     async def validate_base_args(self):
         if not os.path.exists(self.account_file):
@@ -757,7 +759,10 @@ class TencentBaseUploader(BaseVideoUploader):
                 await asyncio.sleep(2)
 
     async def submit_publish(self, page: Page) -> None:
-        while True:
+        tencent_logger.info(_msg("🚀", "小人正在点击发布按钮"))
+        max_retries = 3  # 最大重试次数
+        retry_count = 0
+        while retry_count < max_retries:
             try:
                 if getattr(self, "is_draft", False):
                     draft_button = page.locator('div.form-btns button:has-text("保存草稿")')
@@ -773,6 +778,7 @@ class TencentBaseUploader(BaseVideoUploader):
                     tencent_logger.success(_msg("🥳", "视频发布成功"))
                 break
             except Exception as exc:
+                retry_count += 1
                 current_url = page.url
                 if getattr(self, "is_draft", False):
                     if "post/list" in current_url or "draft" in current_url:
@@ -782,9 +788,15 @@ class TencentBaseUploader(BaseVideoUploader):
                     if TENCENT_MANAGE_URL in current_url:
                         tencent_logger.success(_msg("🥳", "视频发布成功"))
                         break
-                tencent_logger.exception(f"  [-] Exception: {exc}")
-                tencent_logger.info(_msg("🏃", "视频正在发布中..."))
+                tencent_logger.info(_msg("🏃", f"视频正在发布中，重试 {retry_count}/{max_retries}: {exc}"))
+                # 只在最后一次失败时截图
+                if retry_count == max_retries and self.debug and self.screenshot_manager:
+                    await self.screenshot_manager.take_screenshot(page, f"发布失败_重试{retry_count}次")
                 await asyncio.sleep(0.5)
+        
+        # 如果重试3次都失败，抛出异常
+        if retry_count >= max_retries:
+            raise Exception(f"发布失败：已重试{max_retries}次仍未成功")
 
 
 class TencentVideo(TencentBaseUploader):
@@ -816,6 +828,7 @@ class TencentVideo(TencentBaseUploader):
             publish_strategy=publish_strategy,
             debug=debug,
             headless=headless,
+            screenshot_manager=screenshot_manager,  # 传递截图管理器
         )
         self.title = title
         self.file_path = file_path
