@@ -443,12 +443,12 @@ def post_video_bilibili(title, files, tags, account_file, category=None, enableT
         publish_datetimes = [0 for i in range(len(files))]
 
     # 标签处理：B站要求至少一个标签
-    # 优先从标题中提取 #标签（如"可爱猫咪#萌宠#猫咪"提取出"萌宠"和"猫咪"）
+    # 优先从描述中提取 #标签
     hashtag_pattern = re.compile(r'#([^#\s]+)')
-    hashtags = hashtag_pattern.findall(title)
+    hashtags = hashtag_pattern.findall(desc) if desc else []
     if hashtags:
         tag_list = hashtags
-        print(f"从标题提取的标签：{hashtags}")
+        print(f"从描述提取的标签：{hashtags}")
     elif tags:
         tag_list = tags
     else:
