@@ -473,7 +473,7 @@ def post_video_bilibili(title, files, tags, account_file, category=None, enableT
                 publish_date=publish_datetimes[index],
                 account_file=str(cookie),
                 tid=tid,
-                desc=desc or title,
+                desc=desc,
                 cover_path=str(resolved_cover) if resolved_cover else None,
                 copyright_type=copyright_type,
                 no_reprint=1 if copyright_type == 1 else 0,

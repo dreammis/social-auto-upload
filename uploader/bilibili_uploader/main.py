@@ -533,18 +533,20 @@ class BilibiliVideo(BilibiliBaseUploader):
         try:
             await tags_input.wait_for(state="visible", timeout=10000)
             bilibili_logger.info(_msg("📝", f"开始填写标签 [tag-container]: {','.join(self.tags)}"))
+
+            # 清空输入框（如果有残留）
+            current_value = await tags_input.input_value() or ""
+            while current_value:
+                await page.keyboard.press("Backspace")
+                await page.keyboard.press("Backspace")
+                await page.keyboard.press("Backspace")
+                await page.wait_for_timeout(200)
+                current_value = await tags_input.input_value() or ""
             
             for tag in self.tags:
                 # 点击输入框确保聚焦
                 await tags_input.click()
                 await page.wait_for_timeout(500)
-                
-                # 清空输入框（如果有残留）
-                current_value = (await tags_input.input_value() or "")
-                if current_value:
-                    await page.keyboard.press("Control+A")
-                    await page.keyboard.press("Backspace")
-                    await page.wait_for_timeout(200)
                 
                 # 输入标签文本（使用type模拟真实键盘输入）
                 await tags_input.type(tag, delay=80)  # 每个字符间隔80ms，更稳定
@@ -887,6 +889,7 @@ class BilibiliVideo(BilibiliBaseUploader):
                 for text in success_texts:
                     if await page.get_by_text(text).count():
                         bilibili_logger.success(_msg("🎉", f"视频{text}"))
+                        await page.wait_for_timeout(5000)
                         return
                 
                 # 检查按钮是否消失（说明已经提交）
@@ -897,6 +900,7 @@ class BilibiliVideo(BilibiliBaseUploader):
                     if "member.bilibili.com/platform/home" in current_url or \
                        "upload/video/frame" in current_url and "submit" not in current_url:
                         bilibili_logger.success(_msg("�", "视频提交成功（按钮已消失）"))
+                        await page.wait_for_timeout(5000)
                         return
                 
                 await asyncio.sleep(1)

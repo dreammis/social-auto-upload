@@ -970,7 +970,7 @@ class TencentVideo(TencentBaseUploader):
 
     async def prepare_video_for_publish(self, page: Page) -> None:
         await self.fill_title_and_description(page)
-        await self.apply_collection(page)
+        # await self.apply_collection(page)
 
     async def upload(self, playwright: Playwright) -> None:
         tencent_logger.info(_msg("🧍", "小人先检查 cookie、视频文件和发布时间"))
