@@ -50,12 +50,16 @@ def _build_login_result(success: bool, status: str, message: str, account_file: 
 
 async def cookie_auth(account_file):
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True, channel="chrome")
+        # 抖音无头会撞反爬墙→content/upload 跳登录→误判 cookie 失效（间歇性）。校验必须有头。
+        browser = await playwright.chromium.launch(
+            headless=False, channel="chrome",
+            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+        )
         try:
             context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
             page = await context.new_page()
-            await page.goto("https://creator.douyin.com/creator-micro/content/upload")
+            await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
             try:
                 await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=5000)
             except Exception:
@@ -106,7 +110,12 @@ async def _extract_douyin_qrcode_src(page: Page) -> str:
 
 
 async def _save_douyin_qrcode(page: Page, account_file: str, previous_qrcode_path: Path | None = None, qrcode_callback=None) -> dict:
-    qrcode_src = await _extract_douyin_qrcode_src(page)
+    # 提取二维码 src 仅为了保存/终端显示；定位不到时不致命——有头浏览器里二维码可见，直接扫码即可
+    try:
+        qrcode_src = await _extract_douyin_qrcode_src(page)
+    except Exception as exc:
+        douyin_logger.warning(_msg("😵", f"没定位到二维码元素（{str(exc)[:50]}）——请直接在弹出的浏览器里扫码，小人继续等登录跳转"))
+        return {"image_path": "", "image_data_url": ""}
     qrcode_path = save_data_url_image(qrcode_src, build_login_qrcode_path(account_file))
     if previous_qrcode_path and previous_qrcode_path != qrcode_path:
         if remove_qrcode_file(previous_qrcode_path):
@@ -126,7 +135,8 @@ async def _save_douyin_qrcode(page: Page, account_file: str, previous_qrcode_pat
 
 
 async def _is_douyin_login_completed(page: Page) -> bool:
-    if not page.url.startswith("https://creator.douyin.com/creator-micro/home"):
+    # 登录后会跳到 creator-micro 下任意页（home/content 等）；登录页是 creator.douyin.com/ 根路径
+    if "creator.douyin.com/creator-micro" not in page.url:
         return False
 
     login_markers = [
@@ -149,7 +159,7 @@ async def _is_douyin_login_completed(page: Page) -> bool:
 
 
 async def _wait_for_douyin_login(page: Page, account_file: str, qrcode_info: dict, qrcode_callback=None, poll_interval: int = 3, max_checks: int = 100) -> dict:
-    qrcode_path = Path(qrcode_info["image_path"])
+    qrcode_path = Path(qrcode_info["image_path"]) if qrcode_info.get("image_path") else None
     for _ in range(max_checks):
         if await _is_douyin_login_completed(page):
             douyin_logger.info(_msg("🥳", f"扫码成功，已经跳转到登录后页面: {page.url}"))
@@ -161,7 +171,7 @@ async def _wait_for_douyin_login(page: Page, account_file: str, qrcode_info: dic
             await expired_box.click()
             await asyncio.sleep(1)
             qrcode_info = await _save_douyin_qrcode(page, account_file, qrcode_path, qrcode_callback=qrcode_callback)
-            qrcode_path = Path(qrcode_info["image_path"])
+            qrcode_path = Path(qrcode_info["image_path"]) if qrcode_info.get("image_path") else None
 
         await asyncio.sleep(poll_interval)
 
@@ -185,7 +195,7 @@ async def douyin_cookie_gen(
             page = await context.new_page()
             await page.goto("https://creator.douyin.com/")
             qrcode_info = await _save_douyin_qrcode(page, account_file, qrcode_callback=qrcode_callback)
-            qrcode_path = Path(qrcode_info["image_path"])
+            qrcode_path = Path(qrcode_info["image_path"]) if qrcode_info.get("image_path") else None
             douyin_logger.info(_msg("🧍", "请扫码，小人正在耐心等待登录完成"))
             result = await _wait_for_douyin_login(
                 page,
@@ -263,30 +273,22 @@ class DouYinBaseUploader(BaseVideoUploader):
         await asyncio.sleep(1)
 
     async def fill_title_and_description(self, page: Page, title: str, description: str, tags: list[str] | None = None):
-        description_section = (
-            page.get_by_text("作品描述", exact=True)
-            .locator("xpath=ancestor::div[2]")
-            .locator("xpath=following-sibling::div[1]")
-        )
-
-        title_input = description_section.locator('input[type="text"]').first
-        await title_input.wait_for(state="visible", timeout=10000)
+        # 2026-06 抖音发布页 DOM：标题=input[placeholder*=填写作品标题]，描述=div.zone-container[contenteditable]
+        # version_2(post/video) 发布页要等视频上传完才渲染表单（实测约 40s），故等待超时给到 120s
+        title_input = page.locator('input[placeholder*="填写作品标题"]').first
+        await title_input.wait_for(state="visible", timeout=120000)
         await title_input.fill(title[:30])
 
-        description_editor = description_section.locator('.zone-container[contenteditable="true"]').first
-        await description_editor.wait_for(state="visible", timeout=10000)
+        description_editor = page.locator('div.zone-container[contenteditable="true"]').first
+        await description_editor.wait_for(state="visible", timeout=120000)
         await description_editor.click()
         await page.keyboard.press("Control+KeyA")
         await page.keyboard.press("Delete")
 
-        # tags 合并到 description 结尾，一起用 textContent 赋值
-        if tags:
-            tags_text = " ".join(f"#{t}" for t in tags)
-            full_text = description + "\n\n" + tags_text
-        else:
-            full_text = description
-
-        await description_editor.evaluate('(el, text) => el.textContent = text', full_text)
+        for tag in tags or []:
+            await page.keyboard.type(" #" + tag)
+            await page.keyboard.press("Space")
+        await page.keyboard.press("Escape")  # 收起话题下拉，避免浮层拦截后续点击
 
     async def set_location(self, page: Page, location: str = ""):
         if not location:
@@ -541,29 +543,46 @@ class DouYinVideo(DouYinBaseUploader):
             return
 
         douyin_logger.info(_msg("🏃", "小人正在设置视频封面"))
-        await page.click('text="选择封面"')
-        cover_locator_str = 'div[id*="creator-content-modal"]'
-        cover_locator = page.locator(cover_locator_str)
-        await page.wait_for_selector(cover_locator_str)
+        # 先清掉 shepherd 新手引导浮层，否则它会拦截“选择封面”点击导致弹窗打不开
+        await page.evaluate(
+            "() => document.querySelectorAll('.shepherd-element,.shepherd-modal-overlay-container').forEach(e=>e.remove())"
+        )
+        await page.get_by_text("选择封面", exact=True).first.click(force=True)
+        cover_locator_str = 'div.dy-creator-content-modal'
+        cover_locator = page.locator(cover_locator_str).first
+        await page.wait_for_selector(cover_locator_str, timeout=20000)
 
-        upload_input = cover_locator.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input")
-
-        if self.thumbnail_landscape_path:
-            await page.wait_for_timeout(1000)
-            await upload_input.set_input_files(self.thumbnail_landscape_path)
-            await page.wait_for_timeout(2000)
-            douyin_logger.info(_msg("🖼️", "横版封面上传完成"))
+        await page.wait_for_timeout(1500)
+        # version_2 封面弹窗有 4 个隐藏 file input：
+        #   [0]/[1] 左侧“AI生成参考图”上传/替换，[2]/[3] 才是“上传封面”/替换。
+        # 旧代码用 .first 传到了 AI 参考图（不会成为封面）→ 这就是“传了却没封面”的根因。
+        # 取 input.semi-upload-hidden-input 的第 2 个（nth(1)），即真正的封面上传输入。
+        cover_upload = cover_locator.locator("input.semi-upload-hidden-input").nth(1)
 
         if self.thumbnail_portrait_path:
-            await cover_locator.locator("div[class*='steps'] div").nth(1).click()
-            await page.wait_for_timeout(1000)
-            await upload_input.set_input_files(self.thumbnail_portrait_path)
-            await page.wait_for_timeout(2000)
-            douyin_logger.info(_msg("🖼️", "竖版封面上传完成"))
+            # 弹窗默认就在“设置竖封面”页；防御性点一下 tab（已激活则忽略）
+            try:
+                await cover_locator.get_by_text("设置竖封面", exact=True).first.click(timeout=3000)
+                await page.wait_for_timeout(800)
+            except Exception:
+                pass
+            await cover_upload.set_input_files(self.thumbnail_portrait_path)
+            await page.wait_for_timeout(3000)
+            douyin_logger.info(_msg("🖼️", "竖版封面已上传到预览"))
+        elif self.thumbnail_landscape_path:
+            try:
+                await cover_locator.get_by_text("设置横封面", exact=True).first.click(timeout=3000)
+                await page.wait_for_timeout(800)
+            except Exception:
+                pass
+            await cover_upload.set_input_files(self.thumbnail_landscape_path)
+            await page.wait_for_timeout(3000)
+            douyin_logger.info(_msg("🖼️", "横版封面已上传到预览"))
 
-        await cover_locator.locator('button:visible:has-text("完成")').click()
+        # 点红色主按钮“完成”应用封面（exact 避免误中“完成编辑”）
+        await cover_locator.get_by_role("button", name="完成", exact=True).first.click()
         douyin_logger.info(_msg("🥳", "视频封面设置完成"))
-        await page.wait_for_selector("div.extractFooter", state="detached")
+        await cover_locator.wait_for(state="detached", timeout=20000)
 
     async def upload(self, playwright: Playwright) -> None:
         douyin_logger.info(_msg("🧍", "小人先检查 cookie、视频文件、封面和发布时间"))
@@ -578,10 +597,12 @@ class DouYinVideo(DouYinBaseUploader):
         context = await set_init_script(context)
 
         page = await context.new_page()
-        await page.goto("https://creator.douyin.com/creator-micro/content/upload")
+        await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
         douyin_logger.info(_msg("🏃", f"小人开始搬运视频: {self.title}.mp4"))
         douyin_logger.info(_msg("🧭", "小人正在赶往上传主页"))
-        await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
+        await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=90000)
+        # wait_for_url 完成时上传页可能尚未渲染出文件 input（实测偶发），先等它挂载再 set_input_files
+        await page.wait_for_selector("div[class^='container'] input", state="attached", timeout=60000)
         await page.locator("div[class^='container'] input").set_input_files(self.file_path)
 
         while True:
@@ -643,9 +664,13 @@ class DouYinVideo(DouYinBaseUploader):
 
         while True:
             try:
+                # 移除会拦截发布按钮点击的新手引导/话题下拉浮层
+                await page.evaluate(
+                    "() => { document.querySelectorAll('.shepherd-element, .shepherd-modal-overlay-container, [class*=\"mention-wrapper\"]').forEach(e => e.remove()); }"
+                )
                 publish_button = page.get_by_role("button", name="发布", exact=True)
                 if await publish_button.count():
-                    await publish_button.click()
+                    await publish_button.click(force=True)
                 await page.wait_for_url(
                     "https://creator.douyin.com/creator-micro/content/manage**",
                     timeout=3000,
@@ -792,9 +817,9 @@ class DouYinNote(DouYinBaseUploader):
         upload_success = False
         try:
             page = await context.new_page()
-            await page.goto("https://creator.douyin.com/creator-micro/content/upload")
+            await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
             douyin_logger.info(_msg("🧭", "小人正在赶往图文发布页"))
-            await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
+            await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=90000)
 
             await self.upload_note_content(page)
             upload_success = True
