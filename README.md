@@ -9,6 +9,16 @@
 ## 💎 赞助商
 
 <table width="100%">
+ <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://chilltion.com/?ref=1y5k5k">
+        <img src="static/DolOffer.png" alt="DolOffer Sponsor" width="180">
+      </a>
+    </td>
+    <td width="75%" align="left" valign="middle">
+      感谢 <a href="https://doloffer.com/" target="_blank">DolOffer</a> 对本项目的支持！对于做内容矩阵、多平台分发和 AI 自动化运营的创作者来说，ChatGPT、Claude、YouTube Premium、Spotify、Apple Music、Notion、Office 等数字工具往往是长期成本。DolOffer 提供 AI、视频、音乐和效率工具相关的订阅与充值服务，帮助用户更低成本地配置常用数字产品。更多说明可查看 <a href="https://github.com/Doloffer-g/guide" target="_blank">DolOffer Guide</a>。使用优惠码 <code>AI8888</code> 可额外享受 9 折优惠，具体价格和服务规则以官网为准。  
+    </td>
+  </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
       <a href="https://chilltion.com/?ref=1y5k5k">
