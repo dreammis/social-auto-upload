@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SocialFlow AI — System Architecture</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    color: #f0f6fc;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #8b949e;
+    margin-bottom: 28px;
+  }
+
+  /* LEGEND */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    justify-content: center; margin-bottom: 28px;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: #8b949e;
+  }
+  .legend-dot {
+    width: 10px; height: 10px; border-radius: 2px;
+  }
+
+  /* LAYER */
+  .layer {
+    border-radius: 10px;
+    border: 1px solid;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    position: relative;
+  }
+  .layer-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .layer-num {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 800;
+    color: #0d1117;
+  }
+  .nodes {
+    display: flex; flex-wrap: wrap; gap: 10px;
+  }
+
+  /* NODE */
+  .node {
+    border-radius: 8px;
+    border: 1.5px solid;
+    padding: 10px 14px;
+    min-width: 130px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    position: relative;
+  }
+  .node:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .node-title {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    margin-bottom: 3px;
+  }
+  .node-sub {
+    font-size: 10px;
+    color: #8b949e;
+  }
+  .node-tag {
+    position: absolute;
+    top: -7px; right: 6px;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 99px;
+    letter-spacing: 0.05em;
+  }
+
+  /* CONNECTOR ARROWS */
+  .arrow-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: -6px 0;
+    gap: 4px;
+    color: #30363d;
+    font-size: 18px;
+  }
+  .arrow-desc {
+    font-size: 10px;
+    color: #484f58;
+    padding: 0 8px;
+  }
+
+  /* Colors per layer */
+  .l-client   { border-color: #1d3a6b; background: rgba(59,130,246,0.06); }
+  .l-gateway  { border-color: #3a1f6e; background: rgba(139,92,246,0.06); }
+  .l-services { border-color: #3a1f6e; background: rgba(139,92,246,0.04); }
+  .l-ai       { border-color: #0c4a3e; background: rgba(16,185,129,0.06); }
+  .l-video    { border-color: #5a3a00; background: rgba(245,158,11,0.06); }
+  .l-upload   { border-color: #5a1a1a; background: rgba(239,68,68,0.06); }
+  .l-data     { border-color: #293547; background: rgba(100,116,139,0.06); }
+
+  .lbl-client   { color: #3b82f6; }
+  .lbl-gateway  { color: #8b5cf6; }
+  .lbl-services { color: #a78bfa; }
+  .lbl-ai       { color: #10b981; }
+  .lbl-video    { color: #f59e0b; }
+  .lbl-upload   { color: #ef4444; }
+  .lbl-data     { color: #94a3b8; }
+
+  .n-client   { border-color: rgba(59,130,246,0.5);  background: rgba(59,130,246,0.1);  }
+  .n-client .node-title { color: #60a5fa; }
+  .n-gateway  { border-color: rgba(139,92,246,0.5);  background: rgba(139,92,246,0.1);  }
+  .n-gateway .node-title { color: #a78bfa; }
+  .n-ai       { border-color: rgba(16,185,129,0.5);  background: rgba(16,185,129,0.1);  }
+  .n-ai .node-title { color: #34d399; }
+  .n-video    { border-color: rgba(245,158,11,0.5);  background: rgba(245,158,11,0.1);  }
+  .n-video .node-title { color: #fbbf24; }
+  .n-upload   { border-color: rgba(239,68,68,0.5);   background: rgba(239,68,68,0.1);   }
+  .n-upload .node-title { color: #f87171; }
+  .n-data     { border-color: rgba(100,116,139,0.5); background: rgba(100,116,139,0.1); }
+  .n-data .node-title { color: #94a3b8; }
+  .n-ext      { border-color: rgba(232,121,249,0.5); background: rgba(232,121,249,0.1); }
+  .n-ext .node-title { color: #e879f9; }
+
+  .dot-client   { background: #3b82f6; }
+  .dot-gateway  { background: #8b5cf6; }
+  .dot-ai       { background: #10b981; }
+  .dot-video    { background: #f59e0b; }
+  .dot-upload   { background: #ef4444; }
+  .dot-data     { background: #64748b; }
+  .dot-ext      { background: #e879f9; }
+
+  .badge-free  { background: #0c4a3e; color: #34d399; }
+  .badge-api   { background: #1d3a6b; color: #60a5fa; }
+  .badge-key   { background: #5a3a00; color: #fbbf24; }
+  .badge-new   { background: #5a1a1a; color: #f87171; }
+
+  .monetize-badge {
+    display: inline-block;
+    background: rgba(245,158,11,0.15);
+    border: 1px solid rgba(245,158,11,0.3);
+    color: #fbbf24;
+    font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 99px;
+    margin-left: 8px; vertical-align: middle;
+  }
+
+  .section-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 900px) { .section-grid { grid-template-columns: 1fr; } }
+
+  .flow-summary {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-top: 14px;
+    font-size: 12px;
+  }
+  .flow-summary h3 { font-size: 13px; font-weight: 700; color: #f0f6fc; margin-bottom: 10px; }
+  .flow-step {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid #21262d;
+  }
+  .flow-step:last-child { border-bottom: none; }
+  .flow-num {
+    width: 22px; height: 22px; min-width: 22px;
+    border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 10px; font-weight: 800;
+    background: #21262d; color: #8b949e;
+  }
+  .flow-text { color: #8b949e; line-height: 1.5; }
+  .flow-text strong { color: #e6edf3; }
+</style>
+</head>
+<body>
+
+<h1>⚡ SocialFlow AI — Kiến trúc tổng thể hệ thống</h1>
+<div class="subtitle">7 tầng · 9 repos tích hợp · AI multi-platform automation · Nuôi page + Monetize</div>
+
+<!-- LEGEND -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot dot-client"></div>Client Layer</div>
+  <div class="legend-item"><div class="legend-dot dot-gateway"></div>API / Backend</div>
+  <div class="legend-item"><div class="legend-dot dot-ai"></div>AI Engine</div>
+  <div class="legend-item"><div class="legend-dot dot-video"></div>Video Pipeline</div>
+  <div class="legend-item"><div class="legend-dot dot-upload"></div>Upload Platforms</div>
+  <div class="legend-item"><div class="legend-dot dot-data"></div>Data Layer</div>
+  <div class="legend-item"><div class="legend-dot dot-ext"></div>External AI APIs</div>
+</div>
+
+<!-- ① CLIENT -->
+<div class="layer l-client">
+  <div class="layer-label lbl-client">
+    <div class="layer-num" style="background:#3b82f6">1</div>
+    CLIENT LAYER — Giao diện người dùng
+  </div>
+  <div class="nodes">
+    <div class="node n-client">
+      <div class="node-title">Vue 3 Dashboard</div>
+      <div class="node-sub">Quản lý tất cả accounts + stats</div>
+    </div>
+    <div class="node n-client">
+      <div class="node-title">Mobile PWA</div>
+      <div class="node-sub">Responsive, offline-ready</div>
+    </div>
+    <div class="node n-client">
+      <div class="node-title">Multi-Tenant Admin</div>
+      <div class="node-sub">Bán license cho user khác</div>
+    </div>
+  </div>
+</div>
+
+<!-- arrow -->
+<div class="arrow-row">↓<span class="arrow-desc">HTTPS / WebSocket</span>↓</div>
+
+<!-- ② API GATEWAY -->
+<div class="layer l-gateway">
+  <div class="layer-label lbl-gateway">
+    <div class="layer-num" style="background:#8b5cf6">2</div>
+    API GATEWAY — NestJS Backend
+  </div>
+  <div class="nodes">
+    <div class="node n-gateway" style="flex:1; min-width:200px;">
+      <div class="node-tag badge-api">CORE</div>
+      <div class="node-title">Auth + JWT + License Gate</div>
+      <div class="node-sub">Anti-crack · Rate Limit · Role-based Access</div>
+    </div>
+    <div class="node n-gateway">
+      <div class="node-title">Scheduler Service</div>
+      <div class="node-sub">Cron jobs · Queue management</div>
+    </div>
+    <div class="node n-gateway">
+      <div class="node-title">Analytics Service</div>
+      <div class="node-sub">Views · Followers · Revenue</div>
+    </div>
+    <div class="node n-gateway">
+      <div class="node-title">Affiliate Manager <span class="monetize-badge">💰 Revenue</span></div>
+      <div class="node-sub">Shopee / TikTok Shop links</div>
+    </div>
+    <div class="node n-gateway">
+      <div class="node-title">URL Shortener</div>
+      <div class="node-sub">chhoto-url · Track clicks</div>
+    </div>
+  </div>
+</div>
+
+<!-- arrow -->
+<div class="arrow-row">↓<span class="arrow-desc">Internal RPC / Redis Queue</span>↓</div>
+
+<!-- SECTION GRID: AI + EXT APIs -->
+<div class="section-grid">
+
+<!-- ③ AI ENGINE -->
+<div class="layer l-ai" style="margin-bottom:0">
+  <div class="layer-label lbl-ai">
+    <div class="layer-num" style="background:#10b981">3</div>
+    AI ENGINE — Python Workers
+  </div>
+  <div class="nodes">
+    <div class="node n-ai">
+      <div class="node-tag badge-new">NEW</div>
+      <div class="node-title">Trend Engine</div>
+      <div class="node-sub">TikTok Creative Center<br>Facebook Trending VN<br>YouTube trending API</div>
+    </div>
+    <div class="node n-ai">
+      <div class="node-tag badge-new">NEW</div>
+      <div class="node-title">Page Warmer</div>
+      <div class="node-sub">Account warm-up<br>Auto comment reply<br>Cross engagement</div>
+    </div>
+    <div class="node n-ai">
+      <div class="node-title">Video Factory</div>
+      <div class="node-sub">Multi-niche templates<br>Batch generation<br>Schedule-aware</div>
+    </div>
+    <div class="node n-ai">
+      <div class="node-title">omniget Downloader</div>
+      <div class="node-sub">Download viral videos<br>Re-purpose content</div>
+    </div>
+  </div>
+</div>
+
+<!-- External AI APIs -->
+<div class="layer" style="border-color:#3d1a5e; background:rgba(232,121,249,0.04); margin-bottom:0">
+  <div class="layer-label" style="color:#e879f9">
+    <div class="layer-num" style="background:#e879f9">★</div>
+    EXTERNAL AI APIs
+  </div>
+  <div class="nodes" style="flex-direction:column; gap:8px">
+    <div class="node n-ext">
+      <div class="node-title">🎬 Video: Kling 2.6</div>
+      <div class="node-sub">TikTok motion · $0.08/5s</div>
+    </div>
+    <div class="node n-ext">
+      <div class="node-title">🎬 Video: Google Veo 3</div>
+      <div class="node-sub">YouTube HD · Vertex AI</div>
+    </div>
+    <div class="node n-ext">
+      <div class="node-title">🎬 Video: Wan 2.5</div>
+      <div class="node-sub">Artistic · Free/Runpod</div>
+    </div>
+    <div class="node n-ext">
+      <div class="node-title">✍️ Script: GPT-4o / Claude</div>
+      <div class="node-sub">Hooks · Captions · SEO</div>
+    </div>
+    <div class="node n-ext">
+      <div class="node-title">🗣️ Voice: ElevenLabs</div>
+      <div class="node-sub">29 giọng VN · Realistic</div>
+    </div>
+    <div class="node n-ext">
+      <div class="node-title">🖼️ Image: Flux 2 Pro</div>
+      <div class="node-sub">Thumbnail · Cover art</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end section-grid -->
+
+<!-- arrow -->
+<div class="arrow-row">↓<span class="arrow-desc">Generated video → FFmpeg processing</span>↓</div>
+
+<!-- ④ VIDEO PIPELINE -->
+<div class="layer l-video">
+  <div class="layer-label lbl-video">
+    <div class="layer-num" style="background:#f59e0b">4</div>
+    VIDEO PIPELINE — Xử lý & đóng gói video
+  </div>
+  <div class="nodes">
+    <div class="node n-video">
+      <div class="node-title">Script Generator</div>
+      <div class="node-sub">Hook → Body → CTA<br>A/B test variants</div>
+    </div>
+    <div class="node n-video">
+      <div class="node-title">Voice Engine</div>
+      <div class="node-sub">ElevenLabs / Edge TTS<br>Auto sync to video</div>
+    </div>
+    <div class="node n-video">
+      <div class="node-title">Clypra Editor</div>
+      <div class="node-sub">Tauri app + FFmpeg<br>Subtitle burn-in</div>
+    </div>
+    <div class="node n-video">
+      <div class="node-tag badge-new">NEW</div>
+      <div class="node-title">LocalMiniDrama</div>
+      <div class="node-sub">AI mini drama series<br>Story continuity AI</div>
+    </div>
+    <div class="node n-video">
+      <div class="node-title">Fingerprint Changer</div>
+      <div class="node-sub">Metadata · Hash · Anti-dup<br>Platform-safe repost</div>
+    </div>
+  </div>
+</div>
+
+<!-- arrow -->
+<div class="arrow-row">↓<span class="arrow-desc">social-auto-upload → Playwright browser automation</span>↓</div>
+
+<!-- ⑤ UPLOAD PLATFORMS -->
+<div class="layer l-upload">
+  <div class="layer-label lbl-upload">
+    <div class="layer-num" style="background:#ef4444">5</div>
+    UPLOAD PLATFORMS — social-auto-upload (extended)
+    <span class="monetize-badge">💰 Monetize Target</span>
+  </div>
+  <div class="nodes">
+    <div class="node n-upload">
+      <div class="node-title">TikTok VN</div>
+      <div class="node-sub">Playwright cookie<br>✅ Có sẵn (fork)</div>
+    </div>
+    <div class="node n-upload">
+      <div class="node-tag badge-new">NEW</div>
+      <div class="node-title">TikTok US/UK</div>
+      <div class="node-sub">Residential proxy<br>Creator Rewards target</div>
+    </div>
+    <div class="node n-upload">
+      <div class="node-tag badge-new">NEW</div>
+      <div class="node-title">Facebook Pages</div>
+      <div class="node-sub">Graph API + Playwright<br>Reels monetize 5K+</div>
+    </div>
+    <div class="node n-upload">
+      <div class="node-tag badge-new">NEW</div>
+      <div class="node-title">YouTube</div>
+      <div class="node-sub">Official API v3<br>YPP monetize 1K+</div>
+    </div>
+    <div class="node n-upload">
+      <div class="node-tag badge-new">NEW</div>
+      <div class="node-title">Instagram</div>
+      <div class="node-sub">Graph API<br>Reels + Stories</div>
+    </div>
+    <div class="node n-upload">
+      <div class="node-tag badge-new">NEW</div>
+      <div class="node-title">Shopee Video</div>
+      <div class="node-sub">Playwright VN<br>Affiliate embed</div>
+    </div>
+  </div>
+</div>
+
+<!-- arrow -->
+<div class="arrow-row">↓<span class="arrow-desc">Store metadata + results</span>↓</div>
+
+<!-- ⑥ DATA -->
+<div class="layer l-data">
+  <div class="layer-label lbl-data">
+    <div class="layer-num" style="background:#64748b">6</div>
+    DATA LAYER — Lưu trữ & hàng đợi
+  </div>
+  <div class="nodes">
+    <div class="node n-data">
+      <div class="node-title">PostgreSQL</div>
+      <div class="node-sub">Accounts · Schedule · Revenue<br>Multi-tenant schemas</div>
+    </div>
+    <div class="node n-data">
+      <div class="node-title">Redis</div>
+      <div class="node-sub">Job queue · Rate limit cache<br>Session store</div>
+    </div>
+    <div class="node n-data">
+      <div class="node-title">MinIO / S3</div>
+      <div class="node-sub">Video storage · CDN origin<br>Backup before upload</div>
+    </div>
+    <div class="node n-data">
+      <div class="node-title">SQLite (local)</div>
+      <div class="node-sub">Trend snapshots<br>Cookie sessions</div>
+    </div>
+  </div>
+</div>
+
+<!-- MONETIZE FLOW SUMMARY -->
+<div class="flow-summary">
+  <h3>🔄 Data Flow — Luồng hoạt động từ Trend → Tiền</h3>
+  <div class="flow-step">
+    <div class="flow-num" style="background:#0c4a3e;color:#34d399">1</div>
+    <div class="flow-text"><strong>Trend Engine</strong> crawl TikTok Creative Center + Facebook Trending → lưu top trends mỗi 2h</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num" style="background:#1d3a6b;color:#60a5fa">2</div>
+    <div class="flow-text"><strong>Scheduler</strong> kích hoạt Video Factory theo slot lịch đã cấu hình (8h, 12h, 18h, 21h)</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num" style="background:#5a3a00;color:#fbbf24">3</div>
+    <div class="flow-text"><strong>Video Factory</strong>: GPT-4o viết script → ElevenLabs đọc → Kling/Veo tạo video → FFmpeg đóng gói + burn subtitle</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num" style="background:#5a1a1a;color:#f87171">4</div>
+    <div class="flow-text"><strong>Upload Engine</strong> đăng video lên 5–6 nền tảng đồng thời, embed affiliate link tự động</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num" style="background:#0c4a3e;color:#34d399">5</div>
+    <div class="flow-text"><strong>Page Warmer</strong> auto reply comment trong 1h đầu → boost engagement → algorithm ưu tiên push</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num" style="background:#3a1f6e;color:#a78bfa">6</div>
+    <div class="flow-text"><strong>Analytics</strong> track follower growth → khi đạt ngưỡng (5K FB / 10K TikTok) → alert bật monetize thủ công</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num" style="background:#5a3a00;color:#fbbf24">7</div>
+    <div class="flow-text"><strong>Revenue streams</strong>: Affiliate Shopee/TikTok Shop + Reels Ads Facebook + TikTok Creator Rewards + YouTube YPP</div>
+  </div>
+</div>
+
+</body>
+</html>

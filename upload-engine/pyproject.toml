@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "socialflow-upload-engine"
+version = "0.0.1"
+description = "SocialFlow AI - Upload Engine Service"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.5.0",
+    "playwright>=1.40.0",
+    "redis>=5.0.0",
+    "psycopg2-binary>=2.9.9",
+    "sqlalchemy>=2.0.23",
+    "minio>=7.2.0",
+    "aiohttp>=3.9.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.21.1",
+    "pytest-cov>=4.1.0",
+    "black>=23.12.0",
+    "isort>=5.13.2",
+    "flake8>=6.1.0",
+    "mypy>=1.7.1",
+]

@@ -1,0 +1,147 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: socialflow-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-socialflow}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-socialflow_dev}
+      POSTGRES_DB: ${DB_NAME:-socialflow}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-socialflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: socialflow-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO S3-compatible Storage
+  minio:
+    image: minio/minio:latest
+    container_name: socialflow-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/minio_data
+    command: server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NestJS Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: socialflow-backend
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgresql://${DB_USER:-socialflow}:${DB_PASSWORD:-socialflow_dev}@postgres:5432/${DB_NAME:-socialflow}
+      REDIS_URL: redis://redis:6379
+      MINIO_URL: http://minio:9000
+      MINIO_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      JWT_SECRET: ${JWT_SECRET:-dev_secret_key_change_in_prod}
+      LICENSE_KEY: ${LICENSE_KEY:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Vue 3 Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: socialflow-frontend
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+  # Python AI Worker
+  ai-worker:
+    build:
+      context: ./ai-worker
+      dockerfile: Dockerfile
+    container_name: socialflow-ai-worker
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${DB_USER:-socialflow}:${DB_PASSWORD:-socialflow_dev}@postgres:5432/${DB_NAME:-socialflow}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    depends_on:
+      - redis
+      - postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Python Upload Engine
+  upload-engine:
+    build:
+      context: ./upload-engine
+      dockerfile: Dockerfile
+    container_name: socialflow-upload-engine
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${DB_USER:-socialflow}:${DB_PASSWORD:-socialflow_dev}@postgres:5432/${DB_NAME:-socialflow}
+      MINIO_URL: http://minio:9000
+      MINIO_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    depends_on:
+      - redis
+      - postgres
+      - minio
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+networks:
+  default:
+    name: socialflow-network
