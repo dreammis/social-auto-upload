@@ -284,7 +284,6 @@ class DouYinBaseUploader(BaseVideoUploader):
         await description_editor.click()
         await page.keyboard.press("Control+KeyA")
         await page.keyboard.press("Delete")
-        await page.keyboard.type(description)
 
         for tag in tags or []:
             await page.keyboard.type(" #" + tag)
@@ -402,6 +401,72 @@ class DouYinBaseUploader(BaseVideoUploader):
             douyin_logger.info(_msg("🧾", f"自主声明已选择「{declaration}」"))
         except Exception as exc:
             douyin_logger.warning(_msg("🧾", f"自主声明设置失败，跳过该步骤继续发布：{exc}"))
+
+    async def select_bgm(self, page: Page, bgm_name: str) -> bool:
+        """为图文发布选择 BGM：可选增强功能，搜索无结果或异常均跳过不中断发布。"""
+        try:
+            # 点击「选择音乐」按钮
+            music_entry = page.locator('text="选择音乐"').nth(1)
+            if not await music_entry.count():
+                music_entry = page.locator('text="选择音乐"').first
+            await music_entry.wait_for(state="visible", timeout=10000)
+            await music_entry.click()
+
+            # 等待侧边栏出现并搜索
+            sidesheet = page.locator(".semi-sidesheet-content").first
+            await sidesheet.wait_for(state="visible", timeout=8000)
+            search_input = sidesheet.locator('input.semi-input[placeholder="搜索音乐"]').first
+            await search_input.wait_for(state="visible", timeout=5000)
+            await search_input.fill(bgm_name)
+            await search_input.press("Enter")
+
+            # 等待搜索结果
+            await asyncio.sleep(2)
+            first_card = sidesheet.locator(".card-container-tmocjc").first
+            try:
+                await first_card.wait_for(state="visible", timeout=8000)
+            except Exception:
+                douyin_logger.warning(_msg("🎵", f"音乐「{bgm_name}」搜索结果为空，小人跳过"))
+                await self._close_music_sidesheet(page)
+                return False
+
+            # 打印找到的音乐名称
+            try:
+                song_name_el = first_card.locator(".song-name-oRge4d").first
+                if await song_name_el.count():
+                    song_name = await song_name_el.inner_text()
+                    douyin_logger.info(_msg("🎵", f"小人找到了: {song_name}"))
+            except Exception:
+                pass
+
+            # JS 点击「使用」（按钮 visibility:hidden，普通 click 无效）
+            apply_btn = first_card.locator(".apply-btn-LUPP0D").first
+            await apply_btn.evaluate("el => el.click()")
+            douyin_logger.info(_msg("🥳", f"BGM「{bgm_name}」已应用"))
+
+            # 等待侧边栏关闭，超时则手动关闭
+            try:
+                await sidesheet.wait_for(state="hidden", timeout=5000)
+            except Exception:
+                await self._close_music_sidesheet(page)
+
+            return True
+        except Exception as exc:
+            douyin_logger.warning(_msg("🎵", f"添加 BGM 时出错，跳过该步骤继续发布：{exc}"))
+            try:
+                await self._close_music_sidesheet(page)
+            except Exception:
+                pass
+            return False
+
+    async def _close_music_sidesheet(self, page: Page) -> None:
+        try:
+            close_btn = page.locator(".semi-sidesheet-close").first
+            if await close_btn.count() and await close_btn.is_visible():
+                await close_btn.click()
+                await asyncio.sleep(1)
+        except Exception:
+            pass
 
 
 class DouYinVideo(DouYinBaseUploader):
@@ -645,6 +710,7 @@ class DouYinNote(DouYinBaseUploader):
         publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
+        bgm: str = "",
     ):
         super().__init__(
             publish_date=publish_date,
@@ -657,11 +723,16 @@ class DouYinNote(DouYinBaseUploader):
         self.note = note or ""
         self.title = title or (self.note[:30] if self.note else "")
         self.tags = tags or []
+        self.bgm = bgm or ""
 
     async def validate_upload_args(self):
         await self.validate_base_args()
         if not self.title or not str(self.title).strip():
             raise ValueError("图文模式下，title 是必须的")
+
+        if len(self.title) > 20:
+            raise ValueError(f"标题不能超过20字符，当前: {len(self.title)}字符")
+
         if not self.image_paths:
             raise ValueError("图文模式下，图片是必须的")
 
@@ -670,6 +741,10 @@ class DouYinNote(DouYinBaseUploader):
 
         if len(self.image_paths) > 35:
             raise ValueError("图文模式下最多只支持上传 35 张图片")
+
+        note_len = len(self.note) if self.note else 0
+        if note_len > 1000:
+            raise ValueError(f"正文不能超过1000字符，当前: {note_len}字符")
 
         normalized_image_paths = []
         for image_path in self.image_paths:
@@ -700,7 +775,14 @@ class DouYinNote(DouYinBaseUploader):
         await asyncio.sleep(1)
         douyin_logger.info(_msg("✍️", "小人开始填标题、描述和话题"))
         await self.fill_title_and_description(page, self.title, self.note, self.tags)
+        title_len = len(self.title) if self.title else 0
+        tags_text = " ".join(f"#{t}" for t in self.tags) if self.tags else ""
+        desc_and_tags_len = len(self.note or "") + (len(tags_text) + 2 if self.tags else 0)
+        douyin_logger.info(_msg("📝", f"标题总字数: {title_len}，描述+话题总字数: {desc_and_tags_len}"))
         douyin_logger.info(_msg("🏷️", f"小人一共贴了 {len(self.tags)} 个话题"))
+
+        if self.bgm:
+            await self.select_bgm(page, self.bgm)
 
         if self.publish_strategy == DOUYIN_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_douyin(page, self.publish_date)

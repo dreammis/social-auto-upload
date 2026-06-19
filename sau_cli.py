@@ -79,6 +79,7 @@ class DouyinNoteUploadRequest:
     publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE
     debug: bool = True
     headless: bool = True
+    bgm: str = ""
 
 
 @dataclass(slots=True)
@@ -378,6 +379,7 @@ async def upload_note(request: DouyinNoteUploadRequest) -> Path:
         publish_strategy=request.publish_strategy,
         debug=request.debug,
         headless=request.headless,
+        bgm=request.bgm,
     )
     await app.douyin_upload_note()
     return account_file
@@ -602,7 +604,9 @@ def build_parser() -> argparse.ArgumentParser:
     upload_note_parser.add_argument("--images", required=True, nargs="+", type=existing_file_path, help="Image file paths")
     upload_note_parser.add_argument("--title", required=True, help="Note title")
     upload_note_parser.add_argument("--note", default="", help="Optional note content")
+    upload_note_parser.add_argument("--notef", default="", help="Read note content from file (txt/md)")
     upload_note_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
+    upload_note_parser.add_argument("--bgm", default="", help="BGM music name to search and select")
     upload_note_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
     add_runtime_flags(upload_note_parser)
 
@@ -763,16 +767,26 @@ async def dispatch(args: argparse.Namespace) -> int:
             return 0
 
         if args.action == "upload-note":
+            # 如果指定了 --notef，读取文件内容作为 note
+            note_content = args.note
+            if args.notef:
+                note_file = Path(args.notef)
+                if not note_file.exists():
+                    print(f"错误：文件不存在: {note_file}", file=sys.stderr)
+                    return 1
+                note_content = note_file.read_text(encoding="utf-8")
+
             request = DouyinNoteUploadRequest(
                 account_name=args.account,
                 image_files=parse_image_files(args.images),
                 title=args.title,
-                note=args.note,
+                note=note_content,
                 tags=parse_tags(args.tags),
                 publish_date=args.schedule or 0,
                 publish_strategy=publish_strategy,
                 debug=args.debug,
                 headless=args.headless,
+                bgm=args.bgm or "",
             )
             await upload_note(request)
             print(f"Douyin note upload submitted: {len(request.image_files)} images")
