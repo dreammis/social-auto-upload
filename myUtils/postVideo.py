@@ -120,7 +120,8 @@ def resolve_thumbnail_path(thumbnail_path):
 def post_video_tencent(title, files, tags, account_file, category=TencentZoneTypes.LIFESTYLE.value,
                         enableTimer=False, videos_per_day=1, daily_times=None, start_days=0,
                         is_draft=False, thumbnail_path='', desc='',
-                        collection: str | None = None):  # 合集名称
+                        collection: str | None = None,  # 合集名称
+                        declare_original: bool | None = None):
     """视频号视频发布
 
     Args:
@@ -137,6 +138,7 @@ def post_video_tencent(title, files, tags, account_file, category=TencentZoneTyp
         desc: 视频描述
         thumbnail_path: 封面图片路径
         collection: 合集名称（模糊匹配）
+        declare_original: 是否声明原创；None时兼容旧逻辑，按category是否有值判断
     """
     # 生成文件的完整路径
     account_file = [Path(BASE_DIR / "cookiesFile" / file) for file in account_file]
@@ -171,6 +173,7 @@ def post_video_tencent(title, files, tags, account_file, category=TencentZoneTyp
                 publish_datetimes[index],
                 cookie,
                 category=category,
+                declare_original=declare_original,
                 is_draft=is_draft,
                 desc=desc or None,
                 thumbnail_path=str(thumbnail) if thumbnail else None,

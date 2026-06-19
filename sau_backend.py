@@ -685,6 +685,7 @@ def postVideo():
     desc = data.get('desc', '')
     thumbnail_portrait = data.get('thumbnailPortrait', '')
     is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
+    tencent_declare_original = data.get('tencentDeclareOriginal', data.get('declareOriginal', False))
 
     declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
 
@@ -741,7 +742,8 @@ def postVideo():
                                    start_days, desc, thumbnail_path, collection=collection, declaration_info=xhs_declaration_info)
             case 2:
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                                   start_days, is_draft, thumbnail_path, desc, collection=collection)
+                                   start_days, is_draft, thumbnail_path, desc, collection=collection,
+                                   declare_original=tencent_declare_original)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days, thumbnail_path, thumbnail_portrait, productLink, productTitle, declaration_info, desc,
@@ -839,6 +841,7 @@ def postVideoBatch():
         productTitle = data.get('productTitle', '')
         desc = data.get('desc', '')
         is_draft = data.get('isDraft', False)
+        tencent_declare_original = data.get('tencentDeclareOriginal', data.get('declareOriginal', False))
         declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
 
         videos_per_day = data.get('videosPerDay')
@@ -876,7 +879,8 @@ def postVideoBatch():
                                start_days, desc, thumbnail_path, collection=collection, declaration_info=xhs_declaration_info)
             case 2:
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                                   start_days, is_draft, thumbnail_path, desc, collection=collection)
+                                   start_days, is_draft, thumbnail_path, desc, collection=collection,
+                                   declare_original=tencent_declare_original)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days, thumbnail_path, thumbnail_portrait, productLink, productTitle, declaration_info, desc,
@@ -1226,7 +1230,8 @@ def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, de
                 is_draft=is_draft,
                 thumbnail_path=coverPath,
                 desc=desc,
-                collection=collection
+                collection=collection,
+                declare_original=is_original
             )
 
         case 3:  # 抖音

@@ -2210,6 +2210,8 @@ const getPlatformSpecificConfig = (tab, platformId) => {
       return {
         isDraft: config.channels.isDraft,
         isOriginal: config.channels.isOriginal,
+        declareOriginal: config.channels.isOriginal,
+        tencentDeclareOriginal: config.channels.isOriginal,
         collection: common.collection  // 使用公共合集
       }
     case 1: // 小红书
@@ -2384,6 +2386,7 @@ const confirmPublish = async (tab) => {
     dailyTimes: tab.scheduleEnabled ? tab.dailyTimes || ['10:00'] : ['10:00'],
     startDays: tab.scheduleEnabled ? tab.startDays || 0 : 0,
     declareOriginal: tab.isOriginal, // 原创声明
+    tencentDeclareOriginal: tab.selectedPlatform === 2 ? tab.isOriginal : false, // 视频号原创声明
     productLink: tab.douyinProductLink.trim() || '',
     productTitle: tab.douyinProductTitle.trim() || '',
     thumbnail: tab.coverSingle?.path || '',

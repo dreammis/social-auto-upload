@@ -608,100 +608,81 @@ class TencentBaseUploader(BaseVideoUploader):
     async def set_original_declaration(self, page: Page) -> None:
         """视频号「声明原创」功能。
 
-        根据category参数决定是否声明原创：
-        - category为None或0: 不声明原创
-        - category为其他值: 声明原创
+        根据declare_original参数决定是否声明原创；category仅用于兼容旧调用。
         """
         # 检查是否需要声明原创
         category = getattr(self, "category", None)
-        if not category:
+        declare_original = getattr(self, "declare_original", bool(category))
+        if not declare_original:
             tencent_logger.info(_msg("🧾", "未勾选声明原创，跳过"))
             return
 
+        async def is_ant_checkbox_checked(label) -> bool:
+            return await label.evaluate(
+                """el => el.classList.contains("ant-checkbox-wrapper-checked")
+                    || !!el.querySelector(".ant-checkbox-checked")
+                    || !!el.querySelector("input.ant-checkbox-input")?.checked"""
+            )
+
         original_set = False
-        if await page.get_by_label("视频为原创").count():
-            await page.get_by_label("视频为原创").check()
-            original_set = True
 
         try:
-            label_locator = await page.locator('label:has-text("我已阅读并同意 《视频号原创声明使用条款》")').is_visible()
-        except Exception:
-            label_locator = False
+            original_form = page.locator(
+                'div.form-item:has(div.label span:has-text("声明原创"))'
+            ).first
 
-        if label_locator:
-            await page.get_by_label("我已阅读并同意 《视频号原创声明使用条款》").check()
-            await page.get_by_role("button", name="声明原创").click()
-            original_set = True
+            original_label = original_form.locator(
+                'div.declare-original-checkbox label.ant-checkbox-wrapper'
+            ).first
+            if not await original_label.count():
+                original_label = page.locator(
+                    'div.declare-original-checkbox label.ant-checkbox-wrapper'
+                ).first
 
-        declaration_entry = page.locator(
-            'div.label span:has-text("声明原创"), '
-            'div:has-text("声明原创"):has(input.ant-checkbox-input), '
-            'div:has-text("原创声明"):has(input.ant-checkbox-input)'
-        ).first
-        if await declaration_entry.count():
-            original_checkbox = page.locator("div.declare-original-checkbox input.ant-checkbox-input").first
-            if await original_checkbox.count() and not await original_checkbox.is_disabled():
-                await original_checkbox.click()
-                await page.wait_for_timeout(500)
-                checked_locator = page.locator(
-                    "div.declare-original-dialog "
-                    "label.ant-checkbox-wrapper.ant-checkbox-wrapper-checked:visible"
-                )
-                if not await checked_locator.count():
-                    await page.locator("div.declare-original-dialog input.ant-checkbox-input:visible").first.click()
-
-            original_type_form = page.locator('div.original-type-form > div.form-label:has-text("原创类型"):visible')
-            if await original_type_form.count():
-                await page.locator("div.form-content:visible").click()
-                option = None
-                if category:
-                    option = page.locator(
-                        "ul.weui-desktop-dropdown__list "
-                        f'li.weui-desktop-dropdown__list-ele:has-text("{category}")'
-                    ).first
-                    if not await option.count():
-                        option = None
-                if option is None:
-                    option = page.locator(
-                        "ul.weui-desktop-dropdown__list "
-                        "li.weui-desktop-dropdown__list-ele:visible"
-                    ).first
-                if await option.count():
-                    await option.click()
-                await page.wait_for_timeout(1000)
-
-            declare_button = page.locator('button:has-text("声明原创"):visible')
-            if await declare_button.count():
-                await declare_button.first.click()
+            if not await original_label.count():
+                tencent_logger.warning(_msg("📭", "未找到视频号原创声明复选框"))
+            elif await is_ant_checkbox_checked(original_label):
                 original_set = True
-                await page.wait_for_timeout(1000)
-
-        if not original_set:
-            for original_text in ("声明原创", "原创声明", "视频为原创"):
-                try:
-                    modern_original = page.locator(f'text="{original_text}"').first
-                    if await modern_original.count() and await modern_original.is_visible():
-                        await modern_original.click()
-                        original_set = True
-                        await page.wait_for_timeout(1000)
-                        break
-                except Exception:
-                    continue
-
-        content_declaration = page.locator('text="内容声明"').first
-        try:
-            if await content_declaration.count() and await content_declaration.is_visible():
-                await content_declaration.click()
-                for option_text in ("无需声明", "不声明", "无"):
-                    option = page.locator(f'text="{option_text}"').first
-                    if await option.count() and await option.is_visible():
-                        await option.click()
-                        tencent_logger.info(_msg("🧾", f"内容声明已选择: {option_text}"))
-                        break
+                tencent_logger.info(_msg("🧾", "视频号原创声明已勾选"))
             else:
-                tencent_logger.info(_msg("🧾", "当前页面未发现内容声明字段"))
+                tencent_logger.info(_msg("🧾", "小人正在勾选视频号原创声明"))
+                await original_label.click()
+                await page.wait_for_timeout(500)
+
+                dialog = page.locator(
+                    "div.declare-original-dialog div.weui-desktop-dialog__wrp:visible"
+                ).first
+                if not await dialog.count():
+                    original_set = await is_ant_checkbox_checked(original_label)
+                else:
+                    protocol_label = dialog.locator(
+                        "div.original-proto-wrapper label.ant-checkbox-wrapper"
+                    ).first
+                    if await protocol_label.count() and not await is_ant_checkbox_checked(protocol_label):
+                        tencent_logger.info(_msg("🧾", "小人正在勾选原创声明须知"))
+                        await protocol_label.click()
+                        await page.wait_for_timeout(500)
+
+                    declare_button = dialog.locator(
+                        'button.weui-desktop-btn_primary:has-text("声明原创")'
+                    ).first
+                    if await declare_button.count():
+                        for _ in range(10):
+                            button_class = await declare_button.get_attribute("class") or ""
+                            if "weui-desktop-btn_disabled" not in button_class:
+                                await declare_button.click()
+                                await page.wait_for_timeout(1000)
+                                original_set = True
+                                break
+                            await page.wait_for_timeout(300)
+
+                    if not original_set:
+                        tencent_logger.warning(_msg("😵", "声明原创按钮仍处于禁用状态或未找到按钮"))
+
+            if original_set:
+                tencent_logger.success(_msg("✅", "已完成视频号原创声明"))
         except Exception as exc:
-            tencent_logger.warning(_msg("😵", f"内容声明设置失败，继续前先人工确认页面: {exc}"))
+            tencent_logger.warning(_msg("😵", f"视频号原创声明设置失败: {exc}"))
 
         if not original_set:
             try:
@@ -810,6 +791,7 @@ class TencentVideo(TencentBaseUploader):
         publish_date: datetime | int,
         account_file,
         category=None,
+        declare_original: bool | None = None,
         is_draft=False,
         desc: str | None = None,
         thumbnail_path: str | None = None,
@@ -834,6 +816,7 @@ class TencentVideo(TencentBaseUploader):
         self.file_path = file_path
         self.tags = tags or []
         self.category = category
+        self.declare_original = bool(category) if declare_original is None else bool(declare_original)
         self.is_draft = is_draft
         self.desc = desc or ""
         self.thumbnail_path = thumbnail_path
