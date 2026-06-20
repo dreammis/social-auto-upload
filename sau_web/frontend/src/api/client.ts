@@ -1,13 +1,4 @@
 import axios, { type AxiosInstance } from 'axios'
-import {
-  BookOutlined,
-  CustomerServiceOutlined,
-  NotificationOutlined,
-  PlayCircleOutlined,
-  ReadOutlined,
-  ThunderboltOutlined,
-  VideoCameraOutlined,
-} from '@ant-design/icons'
 
 const baseURL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:5409'
@@ -29,7 +20,6 @@ export type PlatformOption = {
   label: string
   value: string
   color?: string
-  icon?: React.ReactNode
 }
 
 export const PLATFORMS: readonly PlatformOption[] = [
@@ -42,20 +32,7 @@ export const PLATFORMS: readonly PlatformOption[] = [
   { label: '百家号', value: 'baijiahao', color: 'gold' },
 ] as const
 
-const PLATFORM_ICONS: Record<string, React.ReactNode> = {
-  douyin: <CustomerServiceOutlined />,
-  kuaishou: <ThunderboltOutlined />,
-  xiaohongshu: <BookOutlined />,
-  tencent: <NotificationOutlined />,
-  bilibili: <PlayCircleOutlined />,
-  tiktok: <VideoCameraOutlined />,
-  baijiahao: <ReadOutlined />,
-}
-
-export const PLATFORMS_WITH_ICONS: readonly PlatformOption[] = PLATFORMS.map((p) => ({
-  ...p,
-  icon: PLATFORM_ICONS[p.value] ?? undefined,
-})) as typeof PLATFORMS
+export const PLATFORMS_WITH_ICONS = PLATFORMS
 
 export const LOGIN_PLATFORMS = PLATFORMS as readonly PlatformOption[]
 

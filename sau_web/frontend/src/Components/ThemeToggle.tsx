@@ -1,48 +1,37 @@
-import { Tooltip } from 'antd'
-import { DesktopOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Sun, Moon } from 'lucide-react'
 import { useTheme } from './ThemeProvider'
+import { Button } from '@/components/ui/button'
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
+  const { resolved, setTheme } = useTheme()
 
-  const next = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light'
+  const isDark = resolved === 'dark'
 
-  const icon = {
-    light: <SunOutlined />,
-    dark: <MoonOutlined />,
-    system: <DesktopOutlined />,
-  }[theme]
-
-  const label = {
-    light: '浅色模式',
-    dark: '深色模式',
-    system: '跟随系统',
-  }[theme]
+  const toggle = () => {
+    setTheme(isDark ? 'light' : 'dark')
+  }
 
   return (
-    <Tooltip title={`点击切换到${ { light: '深色', dark: '跟随系统', system: '浅色' }[theme] }`}>
-      <span
-        role="button"
-        tabIndex={0}
-        aria-label={label}
-        onClick={() => setTheme(next)}
-        onKeyDown={(e) => { if (e.key === 'Enter') setTheme(next) }}
-        style={{
-          cursor: 'pointer',
-          fontSize: 18,
-          lineHeight: 1,
-          padding: '6px 8px',
-          borderRadius: 6,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition: 'background-color 0.18s ease',
-          userSelect: 'none',
-        }}
-        className="theme-toggle-btn"
-      >
-        {icon}
-      </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggle}
+          aria-label={isDark ? '切换到浅色模式' : '切换到深色模式'}
+          className="btn-elegant h-8 w-8"
+        >
+          {isDark ? (
+            <Moon className="h-4 w-4" />
+          ) : (
+            <Sun className="h-4 w-4" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>{isDark ? '切换到浅色' : '切换到深色'}</p>
+      </TooltipContent>
     </Tooltip>
   )
 }

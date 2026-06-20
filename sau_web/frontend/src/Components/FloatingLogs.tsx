@@ -1,27 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CloseOutlined, ExpandOutlined, FileTextOutlined, ShrinkOutlined } from '@ant-design/icons'
-import { FloatButton, Input, Space, Tag, Tooltip } from 'antd'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { api, type LogEntry } from '../api/client'
 import { useTheme } from './ThemeProvider'
+import {
+  FileText,
+  Maximize2,
+  Minimize2,
+  X,
+} from 'lucide-react'
 
-type Position = {
-  x: number
-  y: number
-}
-
-type Size = {
-  width: number
-  height: number
-}
+type Position = { x: number; y: number }
+type Size = { width: number; height: number }
 
 function getInitialPosition(): Position {
-  if (typeof window === 'undefined') {
-    return { x: 24, y: 24 }
-  }
-  return {
-    x: window.innerWidth - 520,
-    y: window.innerHeight - 420,
-  }
+  if (typeof window === 'undefined') return { x: 24, y: 24 }
+  return { x: window.innerWidth - 520, y: window.innerHeight - 420 }
 }
 
 function getInitialSize(): Size {
@@ -29,24 +25,18 @@ function getInitialSize(): Size {
 }
 
 function getLogColor(message: string) {
-  if (/( error|失败|ERROR)/.test(message)) {
-    return 'red'
-  }
-  if (/( success|成功|finished|完成)/.test(message)) {
-    return 'green'
-  }
-  if (/( warn|警告|WARN)/.test(message)) {
-    return 'orange'
-  }
-  return undefined
+  if (/( error|失败|ERROR)/.test(message)) return 'text-red-400'
+  if (/( success|成功|finished|完成)/.test(message)) return 'text-emerald-400'
+  if (/( warn|警告|WARN)/.test(message)) return 'text-amber-400'
+  return ''
 }
 
-function LogLine({ entry, tsColor }: { entry: LogEntry; tsColor: string }) {
+function LogLine({ entry }: { entry: LogEntry }) {
   const color = getLogColor(entry.message)
   return (
-    <div style={{ padding: '2px 0', fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 12 }}>
-      <span style={{ color: tsColor, marginRight: 8 }}>{entry.ts}</span>
-      {color ? <Tag color={color} style={{ marginRight: 4 }}>{entry.message}</Tag> : <span>{entry.message}</span>}
+    <div className="py-0.5 font-mono text-xs">
+      <span className="mr-2 text-emerald-500">{entry.ts}</span>
+      <span className={color}>{entry.message}</span>
     </div>
   )
 }
@@ -60,7 +50,6 @@ function FloatingLogs() {
     containerBorder: isDark ? '#303030' : '#e8e8e8',
     logAreaBg: isDark ? '#141414' : '#fafafa',
     emptyText: isDark ? '#555' : '#bfbfbf',
-    logTs: isDark ? '#6a9955' : '#8c8c8c',
     shadow: isDark ? '0 12px 32px rgba(0,0,0,0.4)' : '0 12px 32px rgba(0,0,0,0.18)',
   }), [isDark])
 
@@ -70,7 +59,7 @@ function FloatingLogs() {
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
-      const hasOpenDrawer = document.querySelector('.ant-drawer-open') !== null
+      const hasOpenDrawer = document.querySelector('[data-state="open"]') !== null
       setDrawerOpen(hasOpenDrawer)
     })
 
@@ -78,14 +67,12 @@ function FloatingLogs() {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['class'],
+      attributeFilter: ['class', 'data-state'],
     })
-
-    const hasOpenDrawer = document.querySelector('.ant-drawer-open') !== null
-    setDrawerOpen(hasOpenDrawer)
 
     return () => observer.disconnect()
   }, [])
+
   const [filter, setFilter] = useState('')
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [size, setSize] = useState<Size>(getInitialSize)
@@ -112,7 +99,6 @@ function FloatingLogs() {
           map.set(item.ts, item)
         }
         const sorted = Array.from(map.values()).sort((a, b) => a.ts.localeCompare(b.ts))
-        // Cap to prevent unbounded memory growth
         return sorted.length > 2000 ? sorted.slice(-2000) : sorted
       })
       const payload = res.data
@@ -120,7 +106,7 @@ function FloatingLogs() {
         latestTsRef.current = payload[payload.length - 1].ts
       }
     } catch {
-      // ignore poll errors
+      // ignore
     }
   }, [])
 
@@ -212,118 +198,95 @@ function FloatingLogs() {
 
   if (!visible || drawerOpen) {
     return (
-      <FloatButton
-        icon={<FileTextOutlined style={{ fontSize: 18 }} />}
-        type="primary"
-        style={{ right: 24, bottom: 24 }}
+      <Button
+        className="fixed right-6 bottom-6 h-11 w-11 rounded-full shadow-md z-[9999] btn-elegant"
+        size="icon"
         onClick={() => setVisible(true)}
-      />
+      >
+        <FileText className="h-4 w-4" />
+      </Button>
     )
   }
 
   return (
     <div
       ref={containerRef}
+      className="fixed left-0 top-0 z-[9999] flex flex-col overflow-hidden rounded-lg border"
       style={{
-        position: 'fixed',
-        left: 0,
-        top: 0,
         transform: `translate(${position.x}px, ${position.y}px)`,
         willChange: 'transform',
         width: size.width,
         height: minimized ? 44 : size.height,
         minWidth: 320,
         minHeight: minimized ? 44 : 180,
-        zIndex: 9999,
-        display: 'flex',
-        flexDirection: 'column',
         background: themeColors.containerBg,
-        border: `1px solid ${themeColors.containerBorder}`,
-        borderRadius: 8,
+        borderColor: themeColors.containerBorder,
         boxShadow: themeColors.shadow,
-        overflow: 'hidden',
       }}
     >
       <div
         onMouseDown={handleDragStart}
-        style={{
-          padding: '10px 12px',
-          background: '#001529',
-          color: '#fff',
-          cursor: 'move',
-          userSelect: 'none',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 8,
-        }}
+        className="flex cursor-move items-center justify-between gap-2 bg-foreground px-3 py-2.5 text-background select-none"
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span><FileTextOutlined style={{ marginRight: 6 }} />运行日志</span>
-          <Tag color="blue" style={{ margin: 0, fontSize: 12 }}>{filteredLogs.length}</Tag>
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4" />
+          <span className="text-sm font-medium">运行日志</span>
+          <Badge className="bg-primary/20 text-primary-foreground">{filteredLogs.length}</Badge>
         </div>
-        <Space>
+        <div className="flex items-center gap-2">
           <Input
             placeholder="过滤..."
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
-            style={{ width: 140, height: 28, fontSize: 12 }}
+            className="h-7 w-[140px] text-xs bg-zinc-800 border-zinc-700"
           />
-          <Tooltip title={minimized ? '展开' : '收起'}>
-            <ExpandOutlined
-              style={{ cursor: 'pointer' }}
-              rotate={minimized ? 180 : 0}
-              onClick={(e) => {
-                e.stopPropagation()
-                setMinimized((v) => !v)
-              }}
-            />
-          </Tooltip>
-          <Tooltip title="关闭">
-            <CloseOutlined
-              style={{ cursor: 'pointer' }}
-              onClick={(e) => {
-                e.stopPropagation()
-                setVisible(false)
-              }}
-            />
-          </Tooltip>
-        </Space>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-white hover:text-white hover:bg-zinc-800"
+            onClick={(e) => {
+              e.stopPropagation()
+              setMinimized((v) => !v)
+            }}
+          >
+            {minimized ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-white hover:text-white hover:bg-zinc-800"
+            onClick={(e) => {
+              e.stopPropagation()
+              setVisible(false)
+            }}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {!minimized && (
-        <div style={{ flex: 1, overflow: 'auto', padding: 12, background: themeColors.logAreaBg }}>
-          {filteredLogs.length === 0 ? (
-            <div style={{ color: themeColors.emptyText, textAlign: 'center', marginTop: 60 }}>暂无日志</div>
-          ) : (
-            <div>
-              {filteredLogs.map((entry) => (
-                <LogLine key={entry.ts + entry.message} entry={entry} tsColor={themeColors.logTs} />
-              ))}
-            </div>
-          )}
-        </div>
+        <ScrollArea className="flex-1" style={{ background: themeColors.logAreaBg }}>
+          <div className="p-3">
+            {filteredLogs.length === 0 ? (
+              <div className="text-center mt-16" style={{ color: themeColors.emptyText }}>暂无日志</div>
+            ) : (
+              filteredLogs.map((entry) => (
+                <LogLine key={entry.ts + entry.message} entry={entry} />
+              ))
+            )}
+          </div>
+        </ScrollArea>
       )}
 
       {!minimized && (
         <div
           onMouseDown={handleResizeStart}
-          style={{
-            position: 'absolute',
-            right: 0,
-            bottom: 0,
-            width: 18,
-            height: 18,
-            cursor: 'nwse-resize',
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'flex-end',
-            padding: 2,
-          }}
+          className="absolute right-0 bottom-0 flex h-[18px] w-[18px] cursor-nwse-resize items-end justify-end p-0.5"
         >
-          <ShrinkOutlined style={{ fontSize: 12, color: themeColors.emptyText }} />
+          <Minimize2 className="h-3 w-3" style={{ color: themeColors.emptyText }} />
         </div>
       )}
     </div>

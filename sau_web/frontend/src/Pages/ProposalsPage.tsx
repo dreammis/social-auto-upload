@@ -1,13 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
-import { Card, Col, Row, Space, Spin, Tag, Timeline, Typography } from 'antd'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { PageHeader } from '@/components/ui/page-header'
+import { cn } from '@/lib/utils'
 import {
-  BranchesOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  ExperimentOutlined,
-  FileTextOutlined,
-  ProjectOutlined,
-} from '@ant-design/icons'
+  GitBranch,
+  CheckCircle,
+  Clock,
+  FlaskConical,
+  FileText,
+  FolderKanban,
+} from 'lucide-react'
 import request from 'axios'
 import { useMemo } from 'react'
 
@@ -36,16 +41,16 @@ type Proposal = {
 }
 
 const LAYER_COLORS: Record<string, string> = {
-  cli: 'blue',
-  api: 'geekblue',
-  frontend: 'purple',
+  cli: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+  api: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-400',
+  frontend: 'bg-purple-500/15 text-purple-700 dark:text-purple-400',
 }
 
 const STATUS_META: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
-  proposed: { color: 'default', icon: <ClockCircleOutlined />, label: '已提案' },
-  'in-progress': { color: 'processing', icon: <ExperimentOutlined />, label: '进行中' },
-  completed: { color: 'success', icon: <CheckCircleOutlined />, label: '已完成' },
-  archived: { color: 'default', icon: <BranchesOutlined />, label: '已归档' },
+  proposed: { color: 'bg-muted text-muted-foreground', icon: <Clock className="h-4 w-4" />, label: '已提案' },
+  'in-progress': { color: 'bg-blue-500/15 text-blue-700 dark:text-blue-400', icon: <FlaskConical className="h-4 w-4" />, label: '进行中' },
+  completed: { color: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400', icon: <CheckCircle className="h-4 w-4" />, label: '已完成' },
+  archived: { color: 'bg-muted text-muted-foreground', icon: <GitBranch className="h-4 w-4" />, label: '已归档' },
 }
 
 function ProposalsPage() {
@@ -64,91 +69,90 @@ function ProposalsPage() {
   )
 
   return (
-    <div style={{ padding: 0 }}>
-      <Row gutter={[16, 16]}>
-        <Col xs={24}>
-          <Card
-            title={
-              <Space>
-                <ProjectOutlined />
-                <span>变更提案</span>
-                <Tag>{proposals.length}</Tag>
-              </Space>
-            }
-          >
-            {isLoading ? (
-              <div style={{ textAlign: 'center', padding: 48 }}>
-                <Spin />
-              </div>
-            ) : sorted.length === 0 ? (
-              <Typography.Text type="secondary">
-                暂无提案。在终端运行 <Typography.Text code>/opsx-propose "你的想法"</Typography.Text> 来创建第一个提案。
-              </Typography.Text>
-            ) : (
-              <Timeline
-                items={sorted.map((p) => {
+    <div className="space-y-6 p-6">
+      <PageHeader
+        title="变更提案"
+        description="查看项目变更提案和进度"
+        icon={<FolderKanban className="h-5 w-5 text-muted-foreground" />}
+      />
+
+      <Card className="card-refined">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <span>提案列表</span>
+            <Badge variant="secondary">{proposals.length}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-5 w-[200px]" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-[150px]" />
+                </div>
+              ))}
+            </div>
+          ) : sorted.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              暂无提案。在终端运行 <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/opsx-propose "你的想法"</code> 来创建第一个提案。
+            </p>
+          ) : (
+            <ScrollArea className="h-[600px]">
+              <div className="space-y-4">
+                {sorted.map((p) => {
                   const meta = STATUS_META[p.status] ?? STATUS_META.proposed
-                  return {
-                    color: meta.color,
-                    children: (
-                      <Card
-                        size="small"
-                        style={{ marginBottom: 8 }}
-                        title={
-                          <Space>
+                  return (
+                    <div key={p.dir} className="relative pl-6 pb-4 border-l-2 border-border last:border-0">
+                      <div className={cn("absolute left-[-9px] top-0 h-4 w-4 rounded-full border-2 border-background", meta.color)}>
+                        {meta.icon}
+                      </div>
+                      <Card className="ml-4">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="flex items-center gap-2 text-base">
                             {meta.icon}
-                            <Typography.Text strong>{p.name}</Typography.Text>
-                            <Tag color={meta.color}>{meta.label}</Tag>
-                          </Space>
-                        }
-                      >
-                        <Space direction="vertical" style={{ width: '100%' }} size="small">
-                          {/* Summary */}
+                            <span>{p.name}</span>
+                            <Badge className={meta.color}>{meta.label}</Badge>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
                           {p.artifacts?.proposal && (
-                            <Typography.Paragraph
-                              type="secondary"
-                              ellipsis={{ rows: 2, expandable: true }}
-                              style={{ margin: 0, fontSize: 13 }}
-                            >
+                            <p className="text-sm text-muted-foreground line-clamp-2">
                               {p.artifacts.proposal}
-                            </Typography.Paragraph>
+                            </p>
                           )}
 
-                          {/* Layer tags */}
                           {p.layers && p.layers.length > 0 && (
-                            <Space size={4} wrap>
+                            <div className="flex flex-wrap gap-1">
                               {p.layers.map((layer) => (
-                                <Tag key={layer} color={LAYER_COLORS[layer] ?? 'default'}>
+                                <Badge key={layer} className={cn("text-xs", LAYER_COLORS[layer] ?? 'bg-muted text-muted-foreground')}>
                                   {layer}
-                                </Tag>
+                                </Badge>
                               ))}
-                            </Space>
+                            </div>
                           )}
 
-                          {/* Task progress */}
                           {p.artifacts?.tasks && (
-                            <Space>
-                              <FileTextOutlined />
-                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                                任务进度：{p.artifacts.tasks.completed}/{p.artifacts.tasks.total}
-                              </Typography.Text>
-                            </Space>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <FileText className="h-4 w-4" />
+                              <span>任务进度：{p.artifacts.tasks.completed}/{p.artifacts.tasks.total}</span>
+                            </div>
                           )}
 
-                          {/* Timestamp */}
-                          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                          <p className="text-xs text-muted-foreground">
                             创建时间：{new Date(p.created).toLocaleString('zh-CN', { hour12: false })}
-                          </Typography.Text>
-                        </Space>
+                          </p>
+                        </CardContent>
                       </Card>
-                    ),
-                  }
+                    </div>
+                  )
                 })}
-              />
-            )}
-          </Card>
-        </Col>
-      </Row>
+              </div>
+            </ScrollArea>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

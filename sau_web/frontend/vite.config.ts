@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
     open: true,
@@ -25,9 +26,6 @@ export default defineConfig({
         manualChunks(id: string) {
           if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/') || id.includes('node_modules/react-router')) {
             return 'vendor-react';
-          }
-          if (id.includes('node_modules/antd') || id.includes('node_modules/@ant-design')) {
-            return 'vendor-antd';
           }
           if (id.includes('node_modules/motion')) {
             return 'vendor-motion';

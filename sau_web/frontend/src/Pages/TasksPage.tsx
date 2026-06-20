@@ -1,30 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Badge,
-  Button,
-  Card,
-  Col,
-  Collapse,
-  Descriptions,
-  Drawer,
-  Form,
-  Input,
-  message,
-  Modal,
-  Popconfirm,
-  Row,
-  Select,
-  Space,
-  Statistic,
-  Table,
-  Tag,
-  Tooltip,
-  Typography,
-} from 'antd'
-import { BorderLeftOutlined, CopyOutlined, DeleteOutlined, FileTextOutlined, LoadingOutlined, PlusOutlined, RedoOutlined } from '@ant-design/icons'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Separator } from '@/components/ui/separator'
+import { EmptyState } from '@/components/ui/empty-state'
+import { PageHeader } from '@/components/ui/page-header'
 import { PLATFORMS, api, type TaskItem } from '../api/client'
 import { useTasks, useTaskLogs } from '../hooks/useTasks'
 import { useQueryClient } from '@tanstack/react-query'
+import { useToast } from '@/components/ui/toast'
+import {
+  Trash2,
+  FileText,
+  Loader2,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  BarChart3,
+} from 'lucide-react'
 
 type StatusType = 'all' | 'pending' | 'running' | 'success' | 'failed' | 'error'
 
@@ -37,12 +39,12 @@ const STATUS_OPTIONS: { label: string; value: StatusType }[] = [
   { label: '异常', value: 'error' },
 ]
 
-const STATUS_META: Record<string, { color: string; label: string }> = {
-  pending: { color: 'default', label: '等待中' },
-  running: { color: 'processing', label: '执行中' },
-  success: { color: 'success', label: '成功' },
-  failed: { color: 'error', label: '失败' },
-  error: { color: 'error', label: '异常' },
+const STATUS_META: Record<string, { className: string; label: string }> = {
+  pending: { className: 'bg-muted text-muted-foreground', label: '等待中' },
+  running: { className: 'bg-blue-500/15 text-blue-700 dark:text-blue-400', label: '执行中' },
+  success: { className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400', label: '成功' },
+  failed: { className: 'bg-red-500/15 text-red-700 dark:text-red-400', label: '失败' },
+  error: { className: 'bg-red-500/15 text-red-700 dark:text-red-400', label: '异常' },
 }
 
 function formatDateTime(value?: string) {
@@ -55,12 +57,11 @@ function formatDateTime(value?: string) {
 function shortenId(value?: string) {
   if (!value) return '-'
   if (value.length <= 16) return value
-  // Smart truncation: try to keep the action prefix, drop middle of the random suffix
   const lastDash = value.lastIndexOf('-')
   if (lastDash > 0) {
-    const prefix = value.slice(0, lastDash)      // e.g. "upload-video"
-    const suffix = value.slice(lastDash + 1)       // e.g. "292beaaec7ef"
-    const short = `${prefix}-${suffix.slice(-6)}`  // e.g. "upload-video-aec7ef"
+    const prefix = value.slice(0, lastDash)
+    const suffix = value.slice(lastDash + 1)
+    const short = `${prefix}-${suffix.slice(-6)}`
     return short.length <= 24 ? short : `${prefix.slice(0, 10)}-${suffix.slice(-6)}`
   }
   return `${value.slice(0, 8)}...${value.slice(-6)}`
@@ -71,46 +72,66 @@ function TaskDrawerContent({ task }: { task: TaskItem }) {
   const statusMeta = STATUS_META[task.status ?? 'pending'] ?? STATUS_META.pending
   const logsEndRef = useRef<HTMLDivElement | null>(null)
 
-  // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [taskLogs])
 
   return (
-    <Space direction="vertical" style={{ width: '100%' }} size="middle">
-      <Descriptions column={1} size="small" bordered>
-        <Descriptions.Item label="任务 ID">
-          <Typography.Text code copyable={{ text: task.task_id }} style={{ fontSize: 12, wordBreak: 'break-all' }}>
+    <div className="space-y-4">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">任务 ID</span>
+          <code className="text-xs bg-muted px-2 py-1 rounded max-w-[300px] truncate" title={task.task_id}>
             {task.task_id}
-          </Typography.Text>
-        </Descriptions.Item>
-        <Descriptions.Item label="平台">{task.platform || '-'}</Descriptions.Item>
-        <Descriptions.Item label="动作">{task.action || '-'}</Descriptions.Item>
-        <Descriptions.Item label="账号">{task.account || '-'}</Descriptions.Item>
-        <Descriptions.Item label="状态">
-          <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
-        </Descriptions.Item>
-        <Descriptions.Item label="创建时间">{formatDateTime(task.created)}</Descriptions.Item>
-        <Descriptions.Item label="退出码">
+          </code>
+        </div>
+        <Separator />
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">平台</span>
+          <span className="text-sm font-medium">{task.platform || '-'}</span>
+        </div>
+        <Separator />
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">动作</span>
+          <span className="text-sm font-medium">{task.action || '-'}</span>
+        </div>
+        <Separator />
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">账号</span>
+          <span className="text-sm font-medium">{task.account || '-'}</span>
+        </div>
+        <Separator />
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">状态</span>
+          <Badge className={statusMeta.className}>{statusMeta.label}</Badge>
+        </div>
+        <Separator />
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">创建时间</span>
+          <span className="text-sm">{formatDateTime(task.created)}</span>
+        </div>
+        <Separator />
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">退出码</span>
           {task.code !== undefined && task.code !== null ? (
-            <Tag color={task.code === 0 ? 'success' : 'error'}>{task.code}</Tag>
+            <Badge className={task.code === 0 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-red-500/15 text-red-700 dark:text-red-400'}>
+              {task.code}
+            </Badge>
           ) : (
-            '-'
+            <span className="text-sm">-</span>
           )}
-        </Descriptions.Item>
-        <Descriptions.Item label="错误信息">
-          {task.error ? (
-            <Typography.Paragraph
-              code
-              style={{ whiteSpace: 'pre-wrap', margin: 0, fontSize: 12, maxHeight: 200, overflow: 'auto' }}
-              copyable
-            >
-              {task.error}
-            </Typography.Paragraph>
-          ) : (
-            '-'
-          )}
-        </Descriptions.Item>
+        </div>
+        {task.error && (
+          <>
+            <Separator />
+            <div className="space-y-2">
+              <span className="text-sm text-muted-foreground">错误信息</span>
+              <pre className="text-xs bg-muted p-2 rounded-lg overflow-auto max-h-[200px] whitespace-pre-wrap">
+                {task.error}
+              </pre>
+            </div>
+          </>
+        )}
         {task.result && (() => {
           let resultData: Record<string, string>
           try { resultData = JSON.parse(task.result) } catch { return null }
@@ -122,143 +143,96 @@ function TaskDrawerContent({ task }: { task: TaskItem }) {
             else if (key === 'publish_status') label = '发布状态'
             else if (key === 'verified') label = '发布验证'
             return (
-              <Descriptions.Item label={label} key={key}>
-                {key === 'verified' ? (
-                  <Tag color={value === true || value === 'true' ? 'success' : 'warning'}>
-                    {value === true || value === 'true' ? '已验证' : '未验证'}
-                  </Tag>
-                ) : key === 'video_url' && value ? (
-                  <Typography.Link href={value} target="_blank" style={{ wordBreak: 'break-all' }}>
-                    {value}
-                  </Typography.Link>
-                ) : (
-                  <Typography.Text style={{ wordBreak: 'break-all' }}>{String(value)}</Typography.Text>
-                )}
-              </Descriptions.Item>
+              <div key={key}>
+                <Separator className="my-2" />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">{label}</span>
+                  {key === 'verified' ? (
+                    <Badge className={value === 'true' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-700 dark:text-amber-400'}>
+                      {value === 'true' ? '已验证' : '未验证'}
+                    </Badge>
+                  ) : key === 'video_url' && value ? (
+                    <a href={value} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline max-w-[200px] truncate block">
+                      {value}
+                    </a>
+                  ) : (
+                    <span className="text-sm max-w-[200px] truncate">{String(value)}</span>
+                  )}
+                </div>
+              </div>
             )
           })
         })()}
-        {task.status === 'success' && (() => {
-          try {
-            const resultData = task.result ? JSON.parse(task.result) : null
-            if (resultData && resultData.verified === false) {
-              return (
-                <Descriptions.Item label="⚠️ 提示">
-                  <Typography.Text type="warning">
-                    视频已提交但未在内容管理页验证成功。请检查平台后台确认视频状态（可能在审核中）。
-                  </Typography.Text>
-                </Descriptions.Item>
-              )
-            }
-          } catch { /* ignore */ }
-          return null
-        })()}
-        <Descriptions.Item label="执行命令">
-          {task.argv ? (
-            <Typography.Paragraph
-              code
-              style={{ whiteSpace: 'pre-wrap', margin: 0, fontSize: 12, maxHeight: 300, overflow: 'auto' }}
-              copyable
-            >
-              {(() => {
-                try {
-                  return JSON.parse(task.argv).join(' ')
-                } catch {
-                  return task.argv
-                }
-              })()}
-            </Typography.Paragraph>
-          ) : (
-            '-'
-          )}
-        </Descriptions.Item>
-      </Descriptions>
+        {task.argv && (
+          <>
+            <Separator />
+            <div className="space-y-2">
+              <span className="text-sm text-muted-foreground">执行命令</span>
+              <pre className="text-xs bg-muted p-2 rounded-lg overflow-auto max-h-[300px] whitespace-pre-wrap">
+                {(() => {
+                  try {
+                    return JSON.parse(task.argv).join(' ')
+                  } catch {
+                    return task.argv
+                  }
+                })()}
+              </pre>
+            </div>
+          </>
+        )}
+      </div>
 
-      {/* Running logs */}
-      <Collapse
-        defaultActiveKey={[]}
-        items={[
-          {
-            key: 'logs',
-            label: (
-              <Space>
-                <FileTextOutlined />
-                <Typography.Text strong>运行日志</Typography.Text>
-                <Tag>{taskLogs.length} 条</Tag>
-                {(task.status === 'pending' || task.status === 'running') && (
-                  <LoadingOutlined style={{ color: '#1890ff' }} />
-                )}
-                {taskLogs.length > 0 && (
-                  <Tooltip title="复制全部日志">
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<CopyOutlined />}
-                      onClick={async (e) => {
-                        e.stopPropagation()
-                        const text = taskLogs.map(e => `[${e.ts}] ${e.message}`).join('\n')
-                        await navigator.clipboard.writeText(text)
-                        message.success('日志已复制到剪贴板')
-                      }}
-                    />
-                  </Tooltip>
-                )}
-              </Space>
-            ),
-            children: (
-              <div
-                style={{
-                  background: '#1e1e1e',
-                  color: '#d4d4d4',
-                  borderRadius: 6,
-                  padding: '8px 12px',
-                  maxHeight: 400,
-                  overflow: 'auto',
-                  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                  fontSize: 12,
-                  lineHeight: 1.6,
-                }}
-              >
-                {logsLoading ? (
-                  <Typography.Text type="secondary" style={{ color: '#888' }}>
-                    加载中...
-                  </Typography.Text>
-                ) : taskLogs.length === 0 ? (
-                  <Typography.Text type="secondary" style={{ color: '#888' }}>
-                    暂无日志
-                  </Typography.Text>
-                ) : (
-                  <>
-                    {taskLogs.map((entry, idx) => (
-                      <div key={idx} style={{ marginBottom: 2 }}>
-                        <span style={{ color: '#6a9955', marginRight: 8 }}>{entry.ts}</span>
-                        <span>{entry.message}</span>
-                      </div>
-                    ))}
-                    <div ref={logsEndRef} />
-                  </>
-                )}
-              </div>
-            ),
-          },
-        ]}
-      />
-    </Space>
+      <Accordion type="single" collapsible>
+        <AccordionItem value="logs">
+          <AccordionTrigger>
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              <span className="font-medium">运行日志</span>
+              <Badge variant="secondary">{taskLogs.length} 条</Badge>
+              {(task.status === 'pending' || task.status === 'running') && (
+                <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+              )}
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="rounded-lg bg-zinc-950 p-3 font-mono text-xs leading-relaxed max-h-[400px] overflow-auto">
+              {logsLoading ? (
+                <p className="text-zinc-500">加载中...</p>
+              ) : taskLogs.length === 0 ? (
+                <p className="text-zinc-500">暂无日志</p>
+              ) : (
+                <>
+                  {taskLogs.map((entry, idx) => (
+                    <div key={idx} className="mb-0.5">
+                      <span className="mr-2 text-emerald-500">{entry.ts}</span>
+                      <span className="text-zinc-300">{entry.message}</span>
+                    </div>
+                  ))}
+                  <div ref={logsEndRef} />
+                </>
+              )}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </div>
   )
 }
 
-
 function TasksPage() {
   const qc = useQueryClient()
+  const { addToast } = useToast()
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState<StatusType>('all')
   const [drawerTask, setDrawerTask] = useState<TaskItem | null>(null)
   const [retrying, setRetrying] = useState<string | null>(null)
   const [manualRefreshing, setManualRefreshing] = useState(false)
   const [addModalOpen, setAddModalOpen] = useState(false)
-  const [addForm] = Form.useForm()
+  const [addPlatform, setAddPlatform] = useState('')
+  const [addAction, setAddAction] = useState('')
+  const [addAccount, setAddAccount] = useState('')
+  const [addTitle, setAddTitle] = useState('')
 
-  // TanStack Query: auto-polls every 3s
   const { data: tasks = [], isLoading, refetch } = useTasks()
 
   const filteredData = useMemo(() => {
@@ -291,434 +265,419 @@ function TasksPage() {
     try {
       const res = await api.retryTask(record.task_id)
       if (res.success && res.data?.task_id) {
-        message.success(`已创建重试任务：${shortenId(res.data.task_id)}`)
+        addToast(`已创建重试任务：${shortenId(res.data.task_id)}`, 'success')
         qc.invalidateQueries({ queryKey: ['tasks'] })
       } else {
-        message.error(res.message ?? '重试失败')
+        addToast(res.message ?? '重试失败', 'error')
       }
     } catch {
-      message.error('重试请求失败，请检查后端连接')
+      addToast('重试请求失败，请检查后端连接', 'error')
     } finally {
       setRetrying(null)
     }
-  }, [qc])
+  }, [qc, addToast])
 
   const handleDelete = useCallback(async (taskId: string) => {
     try {
       const res = await api.deleteTask(taskId)
       if (res.success) {
-        message.success('任务已删除')
+        addToast('任务已删除', 'success')
         qc.invalidateQueries({ queryKey: ['tasks'] })
       } else {
-        message.error(res.message ?? '删除失败')
+        addToast(res.message ?? '删除失败', 'error')
       }
     } catch {
-      message.error('删除请求失败')
+      addToast('删除请求失败', 'error')
     }
-  }, [qc])
+  }, [qc, addToast])
 
   const handleClear = useCallback(async () => {
     try {
       const res = await api.clearTasks(['success', 'failed', 'error'])
       if (res.success && res.data) {
-        message.success(`已清理 ${res.data.deleted} 个任务`)
+        addToast(`已清理 ${res.data.deleted} 个任务`, 'success')
         qc.invalidateQueries({ queryKey: ['tasks'] })
       } else {
-        message.error('清理失败')
+        addToast('清理失败', 'error')
       }
     } catch {
-      message.error('清理请求失败')
+      addToast('清理请求失败', 'error')
     }
-  }, [qc])
+  }, [qc, addToast])
 
-  const handleAddTask = useCallback(async (values: { platform: string; action: string; account: string; title?: string }) => {
+  const handleAddTask = useCallback(async () => {
+    if (!addPlatform || !addAction || !addAccount) {
+      addToast('请填写必填字段', 'warning')
+      return
+    }
     try {
       const res = await api.addTask({
-        platform: values.platform,
-        action: values.action,
-        account: values.account,
-        title: values.title || undefined,
+        platform: addPlatform,
+        action: addAction,
+        account: addAccount,
+        title: addTitle || undefined,
       })
       if (res.success && res.data) {
-        message.success(`任务已创建：${shortenId(res.data.task_id)}`)
+        addToast(`任务已创建：${shortenId(res.data.task_id)}`, 'success')
         setAddModalOpen(false)
-        addForm.resetFields()
+        setAddPlatform('')
+        setAddAction('')
+        setAddAccount('')
+        setAddTitle('')
         qc.invalidateQueries({ queryKey: ['tasks'] })
       } else {
-        message.error(res.message || '创建失败')
+        addToast(res.message || '创建失败', 'error')
       }
     } catch {
-      message.error('创建请求失败')
+      addToast('创建请求失败', 'error')
     }
-  }, [qc, addForm])
+  }, [addPlatform, addAction, addAccount, addTitle, qc, addToast])
 
   const canDelete = (status?: string) => status === 'success' || status === 'failed' || status === 'error'
-
-  const handleOpenDrawer = useCallback((record: TaskItem) => {
-    setDrawerTask(record)
-  }, [])
-
-  const handleCloseDrawer = useCallback(() => {
-    setDrawerTask(null)
-  }, [])
-
   const canRetry = (status?: string) => status === 'failed' || status === 'error'
 
-  const columns = [
-    {
-      title: '任务 ID',
-      dataIndex: 'task_id',
-      key: 'task_id',
-      width: 220,
-      render: (value: string) => (
-        <Tooltip title={value}>
-          <Typography.Text code copyable={{ text: value }}>
-            {shortenId(value)}
-          </Typography.Text>
-        </Tooltip>
-      ),
-    },
-    { title: '平台', dataIndex: 'platform', key: 'platform', width: 110 },
-    { title: '动作', dataIndex: 'action', key: 'action', width: 140 },
-    { title: '账号', dataIndex: 'account', key: 'account', width: 140 },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 110,
-      filters: STATUS_OPTIONS.filter((item) => item.value !== 'all').map((item) => ({ text: item.label, value: item.value })),
-      onFilter: (value: React.Key | boolean, record: TaskItem) => (value as string) === (record.status ?? 'pending'),
-      render: (value: string) => {
-        const meta = STATUS_META[value] ?? STATUS_META.pending
-        return <Tag color={meta.color}>{meta.label}</Tag>
-      },
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created',
-      key: 'created',
-      width: 180,
-      sorter: (a: TaskItem, b: TaskItem) => (a.created ?? '').localeCompare(b.created ?? ''),
-      render: (value: string) => <span style={{ whiteSpace: 'nowrap' }}>{formatDateTime(value)}</span>,
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 240,
-      fixed: 'right' as const,          render: (_: unknown, record: TaskItem) => (
-            <Space size="small" onClick={(e) => { e.stopPropagation() }}>
-              <Button type="link" size="small" onClick={(e) => { e.stopPropagation(); handleOpenDrawer(record) }}>
-                详情
-              </Button>
-              <Tooltip title="重新执行此任务">
-                <Button
-                  type="link"
-                  size="small"
-                  disabled={!canRetry(record.status)}
-                  loading={retrying === record.task_id}
-                  icon={<RedoOutlined />}
-                  onClick={(e) => { e.stopPropagation(); handleRetry(record) }}
-                >
-                  重试
-                </Button>
-              </Tooltip>
-              {canDelete(record.status) && (
-                <Popconfirm
-                  title="确认删除此任务？"
-                  onConfirm={(e) => { e?.stopPropagation?.(); handleDelete(record.task_id) }}
-                  onCancel={(e) => { e?.stopPropagation?.() }}
-                  okText="删除"
-                  cancelText="取消"
-                >
-                  <Tooltip title="删除任务">
-                    <Button
-                      type="link"
-                      danger
-                      size="small"
-                      icon={<DeleteOutlined />}
-                      onClick={(e) => { e.stopPropagation() }}
-                    />
-                  </Tooltip>
-                </Popconfirm>
-              )}
-            </Space>
-          ),
-    },
-  ]
-
-  const drawerStatusMeta = drawerTask ? STATUS_META[drawerTask.status ?? 'pending'] ?? STATUS_META.pending : null
-
-  // ---- Resizable drawer (direct DOM, kill transitions during drag) ----
-  const [drawerWidth, setDrawerWidth] = useState(520)
-  const drawerElRef = useRef<HTMLElement | null>(null)
-  const origTransitionRef = useRef('')
-  const resizeCleanupRef = useRef<(() => void) | null>(null)
-
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    const startX = e.clientX
-    const startW = drawerWidth
-
-    // Find the Drawer's content wrapper (Ant Design renders via portal)
-    const wrapper = document.querySelector('.ant-drawer-content-wrapper') as HTMLElement | null
-    drawerElRef.current = wrapper
-    const handleEl = e.currentTarget as HTMLElement
-
-    // Kill CSS transition on the drawer so width changes are instant
-    origTransitionRef.current = wrapper?.style.transition ?? ''
-    if (wrapper) wrapper.style.transition = 'none'
-
-    const handleMouseMove = (ev: MouseEvent) => {
-      const delta = startX - ev.clientX
-      const next = Math.min(Math.max(360, startW + delta), 960)
-
-      if (drawerElRef.current) {
-        drawerElRef.current.style.width = next + 'px'
-      }
-      handleEl.style.right = next + 'px'
-    }
-
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      resizeCleanupRef.current = null
-
-      // Restore CSS transition
-      if (drawerElRef.current) {
-        drawerElRef.current.style.transition = origTransitionRef.current
-      }
-
-      // Sync final width to React state (one render)
-      const final = drawerElRef.current
-        ? parseInt(drawerElRef.current.style.width, 10)
-        : startW
-      setDrawerWidth(final)
-      drawerElRef.current = null
-    }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-
-    resizeCleanupRef.current = () => {
-      if (drawerElRef.current) {
-        drawerElRef.current.style.transition = origTransitionRef.current
-      }
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      drawerElRef.current = null
-    }
-  }, [drawerWidth])
-
-  // Clean up resize listeners on unmount
-  useEffect(() => {
-    return () => {
-      resizeCleanupRef.current?.()
-    }
-  }, [])
-
   return (
-    <div style={{ padding: 0 }}>
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={6}>
-          <Card size="small">
-            <Statistic title="全部任务" value={counts.all} prefix={<Badge status="default" />} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={6}>
-          <Card size="small">
-            <Statistic title="执行中" value={counts.running ?? 0} prefix={<Badge status="processing" />} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={6}>
-          <Card size="small">
-            <Statistic
-              title="成功"
-              value={counts.success ?? 0}
-              valueStyle={{ color: '#3f8600' }}
-              prefix={<Badge status="success" />}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={6}>
-          <Card size="small">
-            <Statistic
-              title="失败 / 异常"
-              value={(counts.failed ?? 0) + (counts.error ?? 0)}
-              valueStyle={{ color: '#cf1322' }}
-              prefix={<Badge status="error" />}
-            />
-          </Card>
-        </Col>
-      </Row>
+    <div className="space-y-6 p-6">
+      <PageHeader
+        title="任务列表"
+        description="查看和管理所有上传任务"
+        icon={<BarChart3 className="h-5 w-5 text-muted-foreground" />}
+        actions={
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs">
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              轮询中
+            </Badge>
+            <Button variant="outline" size="sm" onClick={() => setAddModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              新建任务
+            </Button>
+          </div>
+        }
+      />
 
-      <Card>
-        <Row gutter={12} align="middle" style={{ marginBottom: 12 }}>
-          <Col xs={24} sm={12} md={10}>
-            <Input.Search
-              placeholder="搜索任务 ID、平台、账号"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              onSearch={(value) => setKeyword(value)}
-              allowClear
-            />
-          </Col>
-          <Col xs={24} sm={12} md={6}>
-            <Select<StatusType>
-              value={status}
-              onChange={(val) => setStatus(val)}
-              options={STATUS_OPTIONS}
-              style={{ width: '100%' }}
-            />
-          </Col>
-          <Col xs={24} sm={24} md={8} style={{ textAlign: 'right' }}>
-            <Space size="small" style={{ marginLeft: 'auto' }}>
-              <Popconfirm
-                title="清理所有已完成、失败、异常的任务？"
-                onConfirm={handleClear}
-                okText="清理"
-                cancelText="取消"
-              >
-                <Button icon={<DeleteOutlined />}>
-                  清理
-                </Button>
-              </Popconfirm>
-              <Button
-                icon={<PlusOutlined />}
-                onClick={() => setAddModalOpen(true)}
-              >
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Card className="card-refined">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">全部任务</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{counts.all}</div>
+          </CardContent>
+        </Card>
+        <Card className="card-refined">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">执行中</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <div className="text-2xl font-bold text-blue-600">{counts.running ?? 0}</div>
+              {(counts.running ?? 0) > 0 && (
+                <div className="relative h-2 w-2">
+                  <div className="absolute inset-0 rounded-full bg-blue-500 animate-pulse" />
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="card-refined">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">成功</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-600">{counts.success ?? 0}</div>
+          </CardContent>
+        </Card>
+        <Card className="card-refined">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">失败 / 异常</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{(counts.failed ?? 0) + (counts.error ?? 0)}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="card-refined">
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap items-center gap-4 mb-4">
+            <div className="flex-1 min-w-[200px]">
+              <Input
+                placeholder="搜索任务 ID、平台、账号"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+              />
+            </div>
+            <Select value={status} onValueChange={(v) => setStatus(v as StatusType)}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-2">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline">
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    清理
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>确认清理</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      清理所有已完成、失败、异常的任务？
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleClear}>清理</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <Button onClick={() => setAddModalOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" />
                 新建任务
               </Button>
               <Button
+                variant="outline"
                 onClick={async () => {
                   setManualRefreshing(true)
                   await refetch()
                   setManualRefreshing(false)
                 }}
-                loading={manualRefreshing}
               >
-                刷新
+                {manualRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               </Button>
-              <Tooltip title="每 3 秒自动刷新">
-                <Badge
-                  status="processing"
-                  text={
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      TanStack Query 轮询中
-                    </Typography.Text>
-                  }
-                />
-              </Tooltip>
-            </Space>
-          </Col>
-        </Row>
+              <Badge variant="secondary" className="text-xs">
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                轮询中
+              </Badge>
+            </div>
+          </div>
 
-        <Table<TaskItem>
-          rowKey={(record) => record.task_id}
-          loading={isLoading}
-          dataSource={filteredData}
-          pagination={{
-            showSizeChanger: true,
-            defaultPageSize: 10,
-            showTotal: (total) => `共 ${total} 条`,
-          }}
-          size="small"
-          scroll={{ x: 900 }}
-          columns={columns}
-          onRow={(record) => ({
-            style: { cursor: 'pointer' },
-            onClick: () => handleOpenDrawer(record),
-          })}
-        />
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[220px]">任务 ID</TableHead>
+                  <TableHead className="w-[110px]">平台</TableHead>
+                  <TableHead className="w-[140px]">动作</TableHead>
+                  <TableHead className="w-[140px]">账号</TableHead>
+                  <TableHead className="w-[110px]">状态</TableHead>
+                  <TableHead className="w-[180px]">创建时间</TableHead>
+                  <TableHead className="w-[240px]">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      {Array.from({ length: 7 }).map((_, j) => (
+                        <TableCell key={j}>
+                          <div className="h-4 bg-muted animate-pulse rounded" />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : filteredData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7}>
+                      <EmptyState
+                        icon={<BarChart3 className="h-6 w-6" />}
+                        title="暂无任务"
+                        description="创建任务后会在这里显示"
+                        action={
+                          <Button size="sm" onClick={() => setAddModalOpen(true)}>
+                            <Plus className="h-4 w-4 mr-1" />
+                            新建任务
+                          </Button>
+                        }
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredData.map((record) => {
+                    const meta = STATUS_META[record.status ?? 'pending'] ?? STATUS_META.pending
+                    return (
+                      <TableRow
+                        key={record.task_id}
+                        className="cursor-pointer table-row-refined"
+                        onClick={() => setDrawerTask(record)}
+                      >
+                        <TableCell>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <code className="text-xs bg-muted px-2 py-1 rounded">
+                                {shortenId(record.task_id)}
+                              </code>
+                            </TooltipTrigger>
+                            <TooltipContent>{record.task_id}</TooltipContent>
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell>{record.platform || '-'}</TableCell>
+                        <TableCell>{record.action || '-'}</TableCell>
+                        <TableCell>{record.account || '-'}</TableCell>
+                        <TableCell>
+                          <Badge className={meta.className}>{meta.label}</Badge>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {formatDateTime(record.created)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="sm" onClick={() => setDrawerTask(record)}>
+                              详情
+                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={!canRetry(record.status)}
+                                  onClick={() => handleRetry(record)}
+                                >
+                                  {retrying === record.task_id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <RotateCcw className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>重新执行此任务</TooltipContent>
+                            </Tooltip>
+                            {canDelete(record.status) && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>确认删除</AlertDialogTitle>
+                                    <AlertDialogDescription>确认删除此任务？</AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>取消</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDelete(record.task_id)}>删除</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
       </Card>
 
-      {/* Task Detail Drawer — resizable */}
-      {drawerTask && (
-        <div
-          onMouseDown={handleResizeStart}
-          style={{
-            position: 'fixed',
-            top: 0,
-            bottom: 0,
-            // Position handle at the left edge of the Drawer
-            right: drawerWidth,
-            width: 6,
-            zIndex: 1050,
-            cursor: 'col-resize',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'background-color 0.15s ease',
-          }}
-          className="drawer-resize-handle"
-        >
-          <BorderLeftOutlined style={{ fontSize: 10, color: '#888', opacity: 0.6 }} />
-        </div>
-      )}
-      <Drawer
-        title={
-          drawerTask ? (
-            <Space>
-              <span>任务详情</span>
-              {drawerStatusMeta && <Tag color={drawerStatusMeta.color}>{drawerStatusMeta.label}</Tag>}
-            </Space>
-          ) : (
-            '任务详情'
-          )
-        }
-        placement="right"
-        width={drawerWidth}
-        open={!!drawerTask}
-        onClose={handleCloseDrawer}
-        extra={
-          drawerTask && canRetry(drawerTask.status) ? (
-            <Button
-              type="primary"
-              icon={<RedoOutlined />}
-              loading={retrying === drawerTask.task_id}
-              onClick={() => {
-                const task = drawerTask
-                handleCloseDrawer()
-                handleRetry(task)
-              }}
-            >
-              重试此任务
-            </Button>
-          ) : undefined
-        }
-      >
-        {drawerTask && <TaskDrawerContent task={drawerTask} />}
-      </Drawer>
+      <Sheet open={!!drawerTask} onOpenChange={(open) => !open && setDrawerTask(null)}>
+        <SheetContent className="w-[520px] sm:max-w-[520px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              任务详情
+              {drawerTask && (
+                <Badge className={STATUS_META[drawerTask.status ?? 'pending']?.className ?? ''}>
+                  {STATUS_META[drawerTask.status ?? 'pending']?.label ?? ''}
+                </Badge>
+              )}
+            </SheetTitle>
+            <SheetDescription>
+              查看任务的详细信息和运行日志
+            </SheetDescription>
+          </SheetHeader>
+          {drawerTask && (
+            <div className="mt-4">
+              {canRetry(drawerTask.status) && (
+                <Button
+                  className="w-full mb-4"
+                  onClick={() => {
+                    const task = drawerTask
+                    setDrawerTask(null)
+                    handleRetry(task)
+                  }}
+                >
+                  {retrying === drawerTask.task_id ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                  )}
+                  重试此任务
+                </Button>
+              )}
+              <TaskDrawerContent task={drawerTask} />
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
-      <Modal
-        title="新建任务"
-        open={addModalOpen}
-        onCancel={() => { setAddModalOpen(false); addForm.resetFields() }}
-        onOk={() => addForm.submit()}
-      >
-        <Form form={addForm} layout="vertical" onFinish={handleAddTask}>
-          <Form.Item name="platform" label="平台" rules={[{ required: true, message: '请选择平台' }]}>
-            <Select placeholder="选择平台">
-              {PLATFORMS.map((p) => (
-                <Select.Option key={p.value} value={p.value}>{p.label}</Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="action" label="操作" rules={[{ required: true, message: '请选择操作' }]}>
-            <Select placeholder="选择操作">
-              <Select.Option value="login">登录</Select.Option>
-              <Select.Option value="check">检查</Select.Option>
-              <Select.Option value="upload-video">上传视频</Select.Option>
-              <Select.Option value="upload-note">上传图文</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="account" label="账号" rules={[{ required: true, message: '请输入账号' }]}>
-            <Input placeholder="输入账号名称" />
-          </Form.Item>
-          <Form.Item name="title" label="标题">
-            <Input placeholder="输入标题（上传操作需要）" />
-          </Form.Item>
-        </Form>
-      </Modal>
+      <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>新建任务</DialogTitle>
+            <DialogDescription>创建一个新的任务</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>平台</Label>
+              <Select value={addPlatform} onValueChange={setAddPlatform}>
+                <SelectTrigger>
+                  <SelectValue placeholder="选择平台" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PLATFORMS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>操作</Label>
+              <Select value={addAction} onValueChange={setAddAction}>
+                <SelectTrigger>
+                  <SelectValue placeholder="选择操作" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="login">登录</SelectItem>
+                  <SelectItem value="check">检查</SelectItem>
+                  <SelectItem value="upload-video">上传视频</SelectItem>
+                  <SelectItem value="upload-note">上传图文</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>账号</Label>
+              <Input
+                placeholder="输入账号名称"
+                value={addAccount}
+                onChange={(e) => setAddAccount(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>标题</Label>
+              <Input
+                placeholder="输入标题（上传操作需要）"
+                value={addTitle}
+                onChange={(e) => setAddTitle(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddModalOpen(false)}>取消</Button>
+            <Button onClick={handleAddTask}>创建</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

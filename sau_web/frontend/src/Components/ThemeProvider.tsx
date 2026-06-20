@@ -1,6 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { ConfigProvider, theme as antdTheme } from 'antd'
-import zhCN from 'antd/locale/zh_CN'
+import { ToastProvider } from './ui/toast'
 
 export type Theme = 'light' | 'dark' | 'system'
 
@@ -39,7 +38,6 @@ export function ThemeProvider({
     return window.matchMedia('(prefers-color-scheme: dark)').matches
   })
 
-  // Listen to system preference changes
   useEffect(() => {
     const mql = window.matchMedia('(prefers-color-scheme: dark)')
     const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches)
@@ -60,28 +58,21 @@ export function ThemeProvider({
     [storageKey],
   )
 
-  // Apply `.dark` class on <html> for CSS variable switching
   useEffect(() => {
     const root = document.documentElement
     root.classList.remove('light', 'dark')
     root.classList.add(resolved)
   }, [resolved])
 
-  const antdConfig = useMemo(() => ({
-    locale: zhCN,
-    theme: {
-      algorithm: resolved === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-    },
-  }), [resolved])
-
   return (
     <ThemeProviderContext.Provider {...props} value={{ theme, resolved, setTheme }}>
-      <ConfigProvider {...antdConfig}>{children}</ConfigProvider>
+      <ToastProvider>
+        {children}
+      </ToastProvider>
     </ThemeProviderContext.Provider>
   )
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
 export const useTheme = () => {
   const context = useContext(ThemeProviderContext)
   if (context === undefined) throw new Error('useTheme must be used within a ThemeProvider')
