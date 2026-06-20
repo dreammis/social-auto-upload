@@ -21,14 +21,23 @@ from utils.login_qrcode import remove_qrcode_file
 from utils.login_qrcode import save_data_url_image
 from utils.log import xiaohongshu_logger
 
-XHS_LOGIN_URL = "https://creator.xiaohongshu.com/login"
-XHS_PUBLISH_VIDEO_URL = "https://creator.xiaohongshu.com/publish/publish?from=homepage&target=video"
-XHS_PUBLISH_NOTE_URL = "https://creator.xiaohongshu.com/publish/publish?from=homepage&target=image"
+XHS_DEFAULT_CREATOR_BASE_URL = "https://creator.xiaohongshu.com"
+XHS_CREATOR_BASE_URL_ENV = "SAU_XHS_CREATOR_BASE_URL"
 XHS_PUBLISH_SUCCESS_URL_PATTERN = "**/publish/success?**"
 XHS_LOGIN_BOX_SELECTOR = "div[class*='login-box']"
 XHS_LOGIN_SWITCH_SELECTOR = "img.css-wemwzq"
 XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE = "immediate"
 XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED = "scheduled"
+
+
+def _build_xhs_creator_url(path: str) -> str:
+    base_url = os.getenv(
+        XHS_CREATOR_BASE_URL_ENV,
+        XHS_DEFAULT_CREATOR_BASE_URL,
+    ).strip().rstrip("/")
+    if not base_url:
+        base_url = XHS_DEFAULT_CREATOR_BASE_URL
+    return f"{base_url}/{path.lstrip('/')}"
 
 
 def _msg(emoji: str, text: str) -> str:
@@ -132,7 +141,7 @@ async def _save_xhs_qrcode(
 
 
 async def _is_xhs_login_completed(page: Page) -> bool:
-    if page.url.startswith(XHS_LOGIN_URL):
+    if page.url.startswith(_build_xhs_creator_url("/login")):
         return False
 
     login_box = page.locator(XHS_LOGIN_BOX_SELECTOR).first
@@ -158,10 +167,14 @@ async def cookie_auth(account_file):
             context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
             page = await context.new_page()
-            await page.goto(XHS_PUBLISH_VIDEO_URL)
+            await page.goto(
+                _build_xhs_creator_url(
+                    "/publish/publish?from=homepage&target=video"
+                )
+            )
             await page.wait_for_timeout(3000)
 
-            if page.url.startswith(XHS_LOGIN_URL):
+            if page.url.startswith(_build_xhs_creator_url("/login")):
                 xiaohongshu_logger.info(_msg("🥹", "cookie 已失效，得重新登录一下"))
                 return False
 
@@ -228,7 +241,7 @@ async def xiaohongshu_cookie_gen(
         result = _build_login_result(False, "failed", "小红书登录失败", account_file)
         try:
             page = await context.new_page()
-            await page.goto(XHS_LOGIN_URL)
+            await page.goto(_build_xhs_creator_url("/login"))
             qrcode_info = await _save_xhs_qrcode(page, account_file, qrcode_callback=qrcode_callback)
             qrcode_path = Path(qrcode_info["image_path"])
             xiaohongshu_logger.info(_msg("🧍", "请扫码，小人正在耐心等待登录完成"))
@@ -527,8 +540,11 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
     async def upload_video_content(self, page: Page) -> None:
         xiaohongshu_logger.info(_msg("🏃", f"小人开始搬运视频: {self.title}.mp4"))
         xiaohongshu_logger.info(_msg("🧭", "小人正在赶往视频发布页"))
-        await page.goto(XHS_PUBLISH_VIDEO_URL)
-        await page.wait_for_url(XHS_PUBLISH_VIDEO_URL)
+        publish_url = _build_xhs_creator_url(
+            "/publish/publish?from=homepage&target=video"
+        )
+        await page.goto(publish_url)
+        await page.wait_for_url(publish_url)
         await page.locator("div[class^='upload-content'] input[class='upload-input']").set_input_files(self.file_path)
 
         while True:
@@ -588,7 +604,7 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
                 else:
                     await page.locator('button:has-text("发布")').click()
                 await page.wait_for_url(
-                    "https://creator.xiaohongshu.com/publish/success?**",
+                    XHS_PUBLISH_SUCCESS_URL_PATTERN,
                     timeout=3000
                 )
                 xiaohongshu_logger.success(_msg("🥳", "视频发布成功，小人开心收工"))
@@ -672,8 +688,11 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
     async def upload_note_content(self, page: Page) -> None:
         xiaohongshu_logger.info(_msg("🏃", f"小人开始搬运图文，共 {len(self.image_paths)} 张图片"))
         xiaohongshu_logger.info(_msg("🧭", "小人正在赶往图文发布页"))
-        await page.goto(XHS_PUBLISH_NOTE_URL)
-        await page.wait_for_url(XHS_PUBLISH_NOTE_URL)
+        publish_url = _build_xhs_creator_url(
+            "/publish/publish?from=homepage&target=image"
+        )
+        await page.goto(publish_url)
+        await page.wait_for_url(publish_url)
 
         upload_input = page.locator('input[type="file"][accept*="image"]').first
         if not await upload_input.count():
