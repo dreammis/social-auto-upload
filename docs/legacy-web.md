@@ -1,49 +1,23 @@
 # 历史 Web 版本说明
 
-这套 Web 相关代码主要包括：
+历史 Web 代码（`sau_backend.py` + `sau_backend/` + `myUtils/`）已移至 `legacy/` 目录存放。
 
-- `sau_backend.py`
-- `sau_backend/`
-- `sau_frontend/`
-
-它们属于项目过去阶段的实现，当前已经不是主线维护方向。
+对应的 Vue 前端 `sau_frontend/` 已从当前工作区删除。
 
 ## 当前定位
 
-- 作为历史版本保留
+- 已移入 `legacy/` 目录作历史存档
 - 作为过去 API / Web 封装思路的参考
-- 不承诺当前一定可直接运行
-- 不承诺和当前 `uploader/`、`sau_cli.py` 的最新实现完全同步
-
-## 为什么单独拆出来说明
-
-当前工程正在整体重构，主线已经切到：
-
-- `uploader/`：核心平台实现
-- `sau_cli.py`：CLI 主入口
-- `skills/`：面向 agent 的 skill
-
-所以 README 不再把 Web 版本当成主入口来介绍，避免让新用户误以为这是当前最稳定的使用方式。
-
-## 如果你仍然想研究这套历史 Web 版本
-
-可以参考这些文件：
-
-- `sau_backend/README.md`
-- `sau_frontend/README.md`
-- `sau_backend.py`
-
-但请预期：
-
-- 接口契约可能与当前主线不一致
-- 平台能力覆盖可能落后于当前 `uploader/`
-- 依赖和运行方式可能需要自行排障
+- 不承诺当前可直接运行
+- 不承诺和当前 `uploader/`、`sau_cli.py`、`web_runner.py` 的最新实现完全同步
 
 ## 当前推荐入口
 
 如果你要使用当前主线能力，优先看：
 
-- `uploader/`
-- `sau_cli.py`
-- `docs/CLI.md`
-- `skills/douyin-upload/SKILL.md`
+- `uploader/` — 核心平台实现
+- `sau_cli.py` — CLI 主入口
+- `web_runner.py` + `sau_web/frontend` — Web Shell（React + Flask，封装 CLI）
+- `skills/` — 面向 agent 的 skill
+
+当前 Web Shell 统一通过 `web_runner.py` 提供服务，不再使用旧 `sau_backend.py`。

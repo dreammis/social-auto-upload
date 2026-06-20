@@ -60,15 +60,15 @@
 
 ## 💡功能特性
 
-| 平台 | 登录/账号准备 | 视频上传 | 图文上传 | 定时发布 | CLI | Skill | 说明 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 抖音 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 当前主线重构最完整 |
-| Bilibili | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | 运行时自动准备 `biliup` |
-| 小红书（浏览器版） | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 浏览器自动化，CLI/Skill 已接入 |
-| 快手 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 浏览器自动化，CLI/Skill 初版已接入 |
-| 视频号 | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 对应 `tencent_uploader` |
-| 百家号 | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 浏览器自动化 |
-| TikTok | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 当前示例走 Chrome 版实现 |
+| 平台 | 登录 | 视频上传 | 图文上传 | 定时发布 | CLI | Skill | Web Shell | 说明 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 抖音 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 当前主线重构最完整 |
+| Bilibili | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | 运行时自动准备 `biliup` |
+| 小红书 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 浏览器自动化 |
+| 快手 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 浏览器自动化 |
+| 视频号 | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | 对应 `tencent_uploader` |
+| 百家号 | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | 浏览器自动化 |
+| TikTok | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | 当前示例走 Chrome 版实现 |
 
 ### AI这么强，为什么还需要这个项目
 在你使用AI的能力，browser agent等等，每次都让 agent 重新解析网页、截图理解, 临场判断
@@ -148,12 +148,34 @@ AI的发展毋庸置疑，希望你遇到这种安装和使用，不要再怯场
 
 “无头模式（headless）”，指的是浏览器在后台运行，不弹出可见窗口，但自动化流程仍然会照常执行。这样更适合 CLI、服务端、自动任务和 agent 场景。
 
-Web 端相关代码仍然保留，但已经不是当前主线，不保证可直接运行，也不保证与当前 uploader/CLI 完全同步。
+历史 Vue Web 端代码已从仓库移除；当前主线提供可选的 Web Shell（React 前端 + Flask 后端），详见 [Web Shell 使用说明](./docs/web-shell.md)。
 
 
 ## 🏁快速开始
 
-### 方式 1：使用 CLI
+### 方式 1：使用 Web Shell（可选）
+
+项目提供了一个基于 React + Flask 的可视化 Web 界面，封装 CLI 能力。
+
+```bash
+# 安装 Web 依赖
+uv pip install -e ".[web]"
+
+# 启动后端 (http://localhost:5409)
+python web_runner.py
+
+# 另开终端，启动前端开发服务器 (http://localhost:5173)
+cd sau_web/frontend && npm install && npm run dev
+```
+
+或一键启动：
+```bash
+bash sau_web/start.sh
+```
+
+详见 [Web Shell 使用说明](./docs/web-shell.md)。
+
+### 方式 2：使用 CLI
 
 当前抖音、快手、小红书、Bilibili 已经接入 CLI：
 
@@ -190,7 +212,7 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 - 后续运行会自动检查上游 release 并更新
 - Bilibili 登录建议由用户自己在本地真实终端里执行；如果终端二维码显示不完整，可以直接打开当前目录下的 `qrcode.png` 扫码
 
-### 方式 2：使用 examples
+### 方式 3：使用 examples
 
 `examples/` 目录里同时存在两类脚本：
 

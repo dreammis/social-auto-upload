@@ -1,0 +1,58 @@
+schema: spec-driven
+
+context: |
+  Tech stack:
+    - Backend: Python 3.10+, Flask, SQLite
+    - CLI: Python, argparse, asyncio (sau_cli.py)
+    - Frontend: React 18, TypeScript, Vite, Ant Design 5, Zustand, TanStack Query
+    - Structure: sau_cli.py + uploader/ (Python CLI), web_runner.py (Flask), sau_web/frontend/ (React)
+
+  Project: social-auto-upload — automated video/note publishing to social media platforms.
+
+  Supported platforms (7): douyin, kuaishou, xiaohongshu, bilibili, tencent, tiktok, baijiahao
+
+  CLI entry: `sau <platform> <action> [--account <name>] [--file <path>] [--title <text>]`
+    - Actions: login, check, upload-video, upload-note
+    - upload-video args: --account, --file, --title, --desc, --tags, --schedule, --thumbnail, --headless/--headed
+    - upload-note args: --account, --images, --title, --note, --tags, --schedule, --headless/--headed
+
+  Web API (Flask on :5409):
+    - POST /api/accounts/login    -> CLI login
+    - POST /api/accounts/check    -> CLI check
+    - POST /api/upload/video      -> CLI upload-video
+    - POST /api/upload/note       -> CLI upload-note
+    - GET  /api/accounts          -> list cookie files
+    - GET  /api/tasks             -> task status DB
+    - GET  /api/logs              -> runtime logs
+    - POST /api/tasks/retry       -> re-run stored argv
+
+  Frontend routes (React + React Router):
+    - /          -> AccountsPage (login/check/delete accounts)
+    - /publish   -> PublishPage (video/note upload forms)
+    - /logs      -> LogsPage (runtime logs viewer)
+    - /tasks     -> TasksPage (task status, retry, detail drawer)
+
+  Conventions:
+    - Chinese (zh-CN) labels in frontend UI
+    - API response shape: { success: bool, data: T?, message: str? }
+    - Headless param: "true"/"false" string in multipart, boolean in JSON
+    - Schedule format: "YYYY-MM-DD HH:MM" (space separator)
+    - Account cookie files: cookies/{platform}_{account_name}.json
+    - Temp upload files: .sau_uploads/
+    - DB: db/database.db (SQLite)
+    - Platform capabilities defined in PLATFORM_CONFIG dict in web_runner.py
+
+rules:
+  proposal:
+    - Must identify which layers change: CLI (sau_cli.py), Web API (web_runner.py), Frontend (React)
+    - If adding a new platform: must add to PLATFORM_CONFIG in web_runner.py + frontend PLATFORMS list
+    - Must include frontend impact section even if "no frontend changes"
+    - 提案须同时指出 CLI/API/Frontend 三层的影响
+  design:
+    - Backend changes go in web_runner.py; do not duplicate CLI logic in Flask
+    - Frontend API calls go in src/api/client.ts; pages under src/Pages/
+    - State management with Zustand stores in src/stores/
+    - Data fetching with TanStack Query hooks in src/hooks/
+  tasks:
+    - Each task must be scoped to one layer (CLI / Web API / Frontend) or clearly state if cross-layer
+    - Prefer small focused tasks over large multi-file tasks

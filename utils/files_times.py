@@ -7,7 +7,9 @@ from conf import BASE_DIR
 
 
 def get_absolute_path(relative_path: str, base_dir: str = None) -> str:
-    # Convert the relative path to an absolute path
+    # If already absolute, return as-is instead of re-rooting under BASE_DIR/base_dir
+    if Path(relative_path).is_absolute():
+        return relative_path
     absolute_path = Path(BASE_DIR) / base_dir / relative_path
     return str(absolute_path)
 

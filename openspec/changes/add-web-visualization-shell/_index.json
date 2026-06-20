@@ -1,0 +1,13 @@
+{
+  "name": "add-web-visualization-shell",
+  "created": "2026-06-04T10:00:00",
+  "status": "completed",
+  "artifacts": {
+    "proposal": "新增最小 Web 壳，前端用 React + Vite + TypeScript + Ant Design，后端用 Flask 直接复用 sau_cli.py 能力，实现账号管理、视频/图文上传、定时发布、日志流等页面。",
+    "design": "React 前端 + Flask 后端，直接调用 sau_cli.dispatch 走 CLI 路径。任务状态存储在 SQLite ring buffer，日志用内存队列。",
+    "tasks": { "total": 20, "completed": 20 }
+  },
+  "layers": ["cli", "api", "frontend"],
+  "platforms": ["douyin", "kuaishou", "xiaohongshu", "bilibili"],
+  "applyReady": true
+}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,6 +11,7 @@ from typing import Iterable, Sequence
 
 from conf import BASE_DIR
 from uploader.bilibili_uploader.runtime import run_biliup_command
+from uploader.bilibili_uploader.note import BilibiliNote
 from uploader.douyin_uploader.main import (
     DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
     DOUYIN_PUBLISH_STRATEGY_SCHEDULED,
@@ -40,6 +42,16 @@ from uploader.xiaohongshu_uploader.main import (
     XiaoHongShuVideo,
     cookie_auth as xiaohongshu_cookie_auth,
     xiaohongshu_setup,
+)
+from uploader.tk_uploader.main import (
+    TiktokVideo,
+    cookie_auth as tiktok_cookie_auth,
+    tiktok_setup,
+)
+from uploader.baijiahao_uploader.main import (
+    BaiJiaHaoVideo,
+    cookie_auth as baijiahao_cookie_auth,
+    baijiahao_setup,
 )
 
 SCHEDULE_FORMAT = "%Y-%m-%d %H:%M"
@@ -142,6 +154,19 @@ class BilibiliVideoUploadRequest:
 
 
 @dataclass(slots=True)
+class BilibiliNoteUploadRequest:
+    account_name: str
+    image_files: list[Path]
+    title: str
+    note: str
+    tags: list[str]
+    publish_date: datetime | int
+    publish_strategy: str = "immediate"
+    debug: bool = True
+    headless: bool = True
+
+
+@dataclass(slots=True)
 class TencentVideoUploadRequest:
     account_name: str
     video_file: Path
@@ -156,6 +181,28 @@ class TencentVideoUploadRequest:
     category: str | None = None
     is_draft: bool = False
     publish_strategy: str = TENCENT_PUBLISH_STRATEGY_IMMEDIATE
+    debug: bool = True
+    headless: bool = True
+
+
+@dataclass(slots=True)
+class TiktokVideoUploadRequest:
+    account_name: str
+    video_file: Path
+    title: str
+    tags: list[str]
+    publish_date: datetime | int
+    debug: bool = True
+    headless: bool = True
+
+
+@dataclass(slots=True)
+class BaijiahaoVideoUploadRequest:
+    account_name: str
+    video_file: Path
+    title: str
+    tags: list[str]
+    publish_date: datetime | int
     debug: bool = True
     headless: bool = True
 
@@ -196,9 +243,9 @@ def parse_schedule(raw_schedule: str | None) -> datetime | int:
     return datetime.strptime(raw_schedule, SCHEDULE_FORMAT)
 
 
-async def login_douyin_account(account_name: str, headless: bool = True) -> dict:
+async def login_douyin_account(account_name: str, headless: bool = True, qrcode_callback=None) -> dict:
     account_file = resolve_account_file("douyin", account_name)
-    return await douyin_setup(str(account_file), handle=True, return_detail=True, headless=headless)
+    return await douyin_setup(str(account_file), handle=True, return_detail=True, headless=headless, qrcode_callback=qrcode_callback)
 
 
 async def check_douyin_account(account_name: str) -> bool:
@@ -208,9 +255,9 @@ async def check_douyin_account(account_name: str) -> bool:
     return await douyin_cookie_auth(str(account_file))
 
 
-async def login_kuaishou_account(account_name: str, headless: bool = True) -> dict:
+async def login_kuaishou_account(account_name: str, headless: bool = True, qrcode_callback=None) -> dict:
     account_file = resolve_account_file("kuaishou", account_name)
-    return await ks_setup(str(account_file), handle=True, return_detail=True, headless=headless)
+    return await ks_setup(str(account_file), handle=True, return_detail=True, headless=headless, qrcode_callback=qrcode_callback)
 
 
 async def check_kuaishou_account(account_name: str) -> bool:
@@ -220,9 +267,9 @@ async def check_kuaishou_account(account_name: str) -> bool:
     return await kuaishou_cookie_auth(str(account_file))
 
 
-async def login_xiaohongshu_account(account_name: str, headless: bool = True) -> dict:
+async def login_xiaohongshu_account(account_name: str, headless: bool = True, qrcode_callback=None) -> dict:
     account_file = resolve_account_file("xiaohongshu", account_name)
-    return await xiaohongshu_setup(str(account_file), handle=True, return_detail=True, headless=headless)
+    return await xiaohongshu_setup(str(account_file), handle=True, return_detail=True, headless=headless, qrcode_callback=qrcode_callback)
 
 
 async def check_xiaohongshu_account(account_name: str) -> bool:
@@ -262,9 +309,9 @@ async def check_bilibili_account(account_name: str) -> bool:
     return result.returncode == 0
 
 
-async def login_tencent_account(account_name: str, headless: bool = True) -> dict:
+async def login_tencent_account(account_name: str, headless: bool = True, qrcode_callback=None) -> dict:
     account_file = resolve_account_file("tencent", account_name)
-    return await tencent_setup(str(account_file), handle=True, return_detail=True, headless=headless)
+    return await tencent_setup(str(account_file), handle=True, return_detail=True, headless=headless, qrcode_callback=qrcode_callback)
 
 
 async def check_tencent_account(account_name: str) -> bool:
@@ -301,7 +348,9 @@ async def upload_video(request: DouyinVideoUploadRequest) -> Path:
         debug=request.debug,
         headless=request.headless,
     )
-    await app.douyin_upload_video()
+    result = await app.douyin_upload_video()
+    if result:
+        print(f"[UPLOAD_RESULT]{json.dumps(result, ensure_ascii=False)}")
     return account_file
 
 
@@ -324,7 +373,9 @@ async def upload_note(request: DouyinNoteUploadRequest) -> Path:
         debug=request.debug,
         headless=request.headless,
     )
-    await app.douyin_upload_note()
+    result = await app.douyin_upload_note()
+    if result:
+        print(f"[UPLOAD_RESULT]{json.dumps(result, ensure_ascii=False)}")
     return account_file
 
 
@@ -450,6 +501,100 @@ async def upload_bilibili_video(request: BilibiliVideoUploadRequest) -> Path:
     result = run_biliup_command(arguments)
     if result.returncode != 0:
         raise RuntimeError((result.stderr or result.stdout or "").strip() or "Bilibili upload failed")
+    return account_file
+
+
+async def upload_bilibili_note(request: BilibiliNoteUploadRequest) -> Path:
+    account_file = resolve_account_file("bilibili", request.account_name)
+    if not account_file.exists():
+        raise RuntimeError(
+            f"Bilibili cookie is missing or expired: {account_file}. Run `sau bilibili login --account {request.account_name}` first."
+        )
+
+    app = BilibiliNote(
+        image_paths=[str(path) for path in request.image_files],
+        title=request.title,
+        note=request.note,
+        tags=request.tags,
+        publish_date=request.publish_date,
+        account_file=str(account_file),
+        publish_strategy=request.publish_strategy,
+        debug=request.debug,
+        headless=request.headless,
+    )
+    await app.main()
+    return account_file
+
+
+async def login_tiktok_account(account_name: str, headless: bool = True, qrcode_callback=None) -> dict:
+    account_file = resolve_account_file("tiktok", account_name)
+    success = await tiktok_setup(str(account_file), handle=True)
+    return {
+        "success": success,
+        "message": "TikTok login flow completed" if success else "TikTok login failed",
+        "account_file": str(account_file),
+    }
+
+
+async def check_tiktok_account(account_name: str) -> bool:
+    account_file = resolve_account_file("tiktok", account_name)
+    if not account_file.exists():
+        return False
+    return await tiktok_cookie_auth(str(account_file))
+
+
+async def upload_tiktok_video(request: TiktokVideoUploadRequest) -> Path:
+    account_file = resolve_account_file("tiktok", request.account_name)
+    is_ready = await tiktok_setup(str(account_file), handle=False)
+    if not is_ready:
+        raise RuntimeError(
+            f"TikTok cookie is missing or expired: {account_file}. Run `sau tiktok login --account {request.account_name}` first."
+        )
+
+    app = TiktokVideo(
+        title=request.title,
+        file_path=str(request.video_file),
+        tags=request.tags,
+        publish_date=request.publish_date,
+        account_file=str(account_file),
+    )
+    await app.main()
+    return account_file
+
+
+async def login_baijiahao_account(account_name: str, headless: bool = True, qrcode_callback=None) -> dict:
+    account_file = resolve_account_file("baijiahao", account_name)
+    success = await baijiahao_setup(str(account_file), handle=True)
+    return {
+        "success": success,
+        "message": "Baijiahao login flow completed" if success else "Baijiahao login failed",
+        "account_file": str(account_file),
+    }
+
+
+async def check_baijiahao_account(account_name: str) -> bool:
+    account_file = resolve_account_file("baijiahao", account_name)
+    if not account_file.exists():
+        return False
+    return await baijiahao_cookie_auth(str(account_file))
+
+
+async def upload_baijiahao_video(request: BaijiahaoVideoUploadRequest) -> Path:
+    account_file = resolve_account_file("baijiahao", request.account_name)
+    is_ready = await baijiahao_setup(str(account_file), handle=False)
+    if not is_ready:
+        raise RuntimeError(
+            f"Baijiahao cookie is missing or expired: {account_file}. Run `sau baijiahao login --account {request.account_name}` first."
+        )
+
+    app = BaiJiaHaoVideo(
+        title=request.title,
+        file_path=str(request.video_file),
+        tags=request.tags,
+        publish_date=request.publish_date,
+        account_file=str(account_file),
+    )
+    await app.main()
     return account_file
 
 
@@ -613,6 +758,8 @@ def build_parser() -> argparse.ArgumentParser:
     for action_name in ("login", "check"):
         action_parser = bilibili_actions.add_parser(action_name, help=f"Bilibili {action_name}")
         action_parser.add_argument("--account", required=True, help="Bilibili user-defined account_name")
+        if action_name == "login":
+            add_runtime_flags(action_parser)
 
     bilibili_upload_video_parser = bilibili_actions.add_parser("upload-video", help="Upload one video to Bilibili")
     bilibili_upload_video_parser.add_argument("--account", required=True, help="Bilibili user-defined account_name")
@@ -622,6 +769,15 @@ def build_parser() -> argparse.ArgumentParser:
     bilibili_upload_video_parser.add_argument("--tid", required=True, type=int, help="Bilibili category id")
     bilibili_upload_video_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
     bilibili_upload_video_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
+
+    bilibili_upload_note_parser = bilibili_actions.add_parser("upload-note", help="Upload note with images to Bilibili")
+    bilibili_upload_note_parser.add_argument("--account", required=True, help="Bilibili user-defined account_name")
+    bilibili_upload_note_parser.add_argument("--images", nargs="+", required=True, type=existing_file_path, help="Image file paths")
+    bilibili_upload_note_parser.add_argument("--title", required=True, help="Note title")
+    bilibili_upload_note_parser.add_argument("--note", default="", help="Optional note content")
+    bilibili_upload_note_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
+    bilibili_upload_note_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
+    add_runtime_flags(bilibili_upload_note_parser)
 
     tencent_parser = platform_parsers.add_parser("tencent", help="Tencent/WeChat Channels operations")
     tencent_actions = tencent_parser.add_subparsers(dest="action", required=True)
@@ -646,6 +802,41 @@ def build_parser() -> argparse.ArgumentParser:
     tencent_upload_video_parser.add_argument("--category", help="Optional original content category")
     tencent_upload_video_parser.add_argument("--draft", action="store_true", help="Save as draft instead of publishing")
     add_runtime_flags(tencent_upload_video_parser)
+
+    tiktok_parser = platform_parsers.add_parser("tiktok", help="TikTok operations")
+    tiktok_actions = tiktok_parser.add_subparsers(dest="action", required=True)
+
+    for action_name in ("login", "check"):
+        action_parser = tiktok_actions.add_parser(action_name, help=f"TikTok {action_name}")
+        action_parser.add_argument("--account", required=True, help="TikTok user-defined account_name")
+        if action_name == "login":
+            add_runtime_flags(action_parser)
+
+    tiktok_upload_video_parser = tiktok_actions.add_parser("upload-video", help="Upload one video to TikTok")
+    tiktok_upload_video_parser.add_argument("--account", required=True, help="TikTok user-defined account_name")
+    tiktok_upload_video_parser.add_argument("--file", required=True, type=existing_file_path, help="Video file path")
+    tiktok_upload_video_parser.add_argument("--title", required=True, help="Video title")
+    tiktok_upload_video_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
+    tiktok_upload_video_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
+    add_runtime_flags(tiktok_upload_video_parser)
+
+    baijiahao_parser = platform_parsers.add_parser("baijiahao", help="Baijiahao operations")
+    baijiahao_actions = baijiahao_parser.add_subparsers(dest="action", required=True)
+
+    for action_name in ("login", "check"):
+        action_parser = baijiahao_actions.add_parser(action_name, help=f"Baijiahao {action_name}")
+        action_parser.add_argument("--account", required=True, help="Baijiahao user-defined account_name")
+        if action_name == "login":
+            add_runtime_flags(action_parser)
+
+    baijiahao_upload_video_parser = baijiahao_actions.add_parser("upload-video", help="Upload one video to Baijiahao")
+    baijiahao_upload_video_parser.add_argument("--account", required=True, help="Baijiahao user-defined account_name")
+    baijiahao_upload_video_parser.add_argument("--file", required=True, type=existing_file_path, help="Video file path")
+    baijiahao_upload_video_parser.add_argument("--title", required=True, help="Video title")
+    baijiahao_upload_video_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
+    baijiahao_upload_video_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
+    add_runtime_flags(baijiahao_upload_video_parser)
+
     return parser
 
 
@@ -841,6 +1032,23 @@ async def dispatch(args: argparse.Namespace) -> int:
             print(f"Bilibili video upload submitted: {request.video_file}")
             return 0
 
+        if args.action == "upload-note":
+            parsed_tags = parse_tags(args.tags)
+            request = BilibiliNoteUploadRequest(
+                account_name=args.account,
+                image_files=parse_image_files(args.images),
+                title=args.title,
+                note=args.note,
+                tags=parsed_tags,
+                publish_date=args.schedule or 0,
+                publish_strategy="scheduled" if args.schedule else "immediate",
+                debug=args.debug,
+                headless=args.headless,
+            )
+            await upload_bilibili_note(request)
+            print(f"Bilibili note upload submitted: {len(request.image_files)} images")
+            return 0
+
         raise RuntimeError(f"Unsupported Bilibili action: {args.action}")
 
     if args.platform == "tencent":
@@ -881,6 +1089,64 @@ async def dispatch(args: argparse.Namespace) -> int:
             return 0
 
         raise RuntimeError(f"Unsupported Tencent/WeChat Channels action: {args.action}")
+
+    if args.platform == "tiktok":
+        if args.action == "login":
+            result = await login_tiktok_account(args.account, headless=args.headless)
+            if not result["success"]:
+                raise RuntimeError(result["message"])
+            print(f"TikTok login flow completed: {result['account_file']}")
+            return 0
+
+        if args.action == "check":
+            is_valid = await check_tiktok_account(args.account)
+            print("valid" if is_valid else "invalid")
+            return 0 if is_valid else 1
+
+        if args.action == "upload-video":
+            request = TiktokVideoUploadRequest(
+                account_name=args.account,
+                video_file=args.file,
+                title=args.title,
+                tags=parse_tags(args.tags),
+                publish_date=args.schedule or 0,
+                debug=args.debug,
+                headless=args.headless,
+            )
+            await upload_tiktok_video(request)
+            print(f"TikTok video upload submitted: {request.video_file}")
+            return 0
+
+        raise RuntimeError(f"Unsupported TikTok action: {args.action}")
+
+    if args.platform == "baijiahao":
+        if args.action == "login":
+            result = await login_baijiahao_account(args.account, headless=args.headless)
+            if not result["success"]:
+                raise RuntimeError(result["message"])
+            print(f"Baijiahao login flow completed: {result['account_file']}")
+            return 0
+
+        if args.action == "check":
+            is_valid = await check_baijiahao_account(args.account)
+            print("valid" if is_valid else "invalid")
+            return 0 if is_valid else 1
+
+        if args.action == "upload-video":
+            request = BaijiahaoVideoUploadRequest(
+                account_name=args.account,
+                video_file=args.file,
+                title=args.title,
+                tags=parse_tags(args.tags),
+                publish_date=args.schedule or 0,
+                debug=args.debug,
+                headless=args.headless,
+            )
+            await upload_baijiahao_video(request)
+            print(f"Baijiahao video upload submitted: {request.video_file}")
+            return 0
+
+        raise RuntimeError(f"Unsupported Baijiahao action: {args.action}")
 
     raise RuntimeError(f"Unsupported platform: {args.platform}")
 

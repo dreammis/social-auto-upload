@@ -2,7 +2,7 @@
 import re
 from datetime import datetime
 
-from playwright.async_api import Playwright, async_playwright
+from patchright.async_api import Playwright, async_playwright
 import os
 import asyncio
 from uploader.tk_uploader.tk_config import Tk_Locator
@@ -219,7 +219,9 @@ class TiktokVideo(object):
 
     async def click_publish(self, page):
         success_flag_div = '#\\:r9\\:'
-        while True:
+        max_retries = 120
+        retries = 0
+        while retries < max_retries:
             try:
                 publish_button = self.locator_base.locator('div.btn-post')
                 if await publish_button.count():
@@ -227,39 +229,47 @@ class TiktokVideo(object):
 
                 await self.locator_base.locator(success_flag_div).wait_for(state="visible", timeout=3000)
                 tiktok_logger.success("  [-] video published success")
-                break
+                return
             except Exception as e:
                 if await self.locator_base.locator(success_flag_div).count():
                     tiktok_logger.success("  [-]video published success")
-                    break
+                    return
                 else:
                     tiktok_logger.exception(f"  [-] Exception: {e}")
                     tiktok_logger.info("  [-] video publishing")
                     await page.screenshot(full_page=True)
                     await asyncio.sleep(0.5)
+                    retries += 1
+        raise TimeoutError("click_publish timed out after waiting for success flag")
 
     async def detect_upload_status(self, page):
-        while True:
+        max_retries = 180  # ~6 minutes at 2s intervals
+        retries = 0
+        while retries < max_retries:
             try:
                 if await self.locator_base.locator('div.btn-post > button').get_attribute("disabled") is None:
                     tiktok_logger.info("  [-]video uploaded.")
-                    break
+                    return
                 else:
                     tiktok_logger.info("  [-] video uploading...")
                     await asyncio.sleep(2)
                     if await self.locator_base.locator('button[aria-label="Select file"]').count():
                         tiktok_logger.info("  [-] found some error while uploading now retry...")
                         await self.handle_upload_error(page)
-            except:
+                    retries += 1
+            except Exception as e:
+                tiktok_logger.warning(f"  [-] detect_upload_status error: {e}")
                 tiktok_logger.info("  [-] video uploading...")
                 await asyncio.sleep(2)
+                retries += 1
+        raise TimeoutError("detect_upload_status timed out waiting for upload to complete")
 
     async def choose_base_locator(self, page):
         # await page.wait_for_selector('div.upload-container')
         if await page.locator('iframe[data-tt="Upload_index_iframe"]').count():
-            self.locator_base = self.locator_base
+            self.locator_base = page.frame_locator(Tk_Locator.tk_iframe)
         else:
-            self.locator_base = page.locator(Tk_Locator.default) 
+            self.locator_base = page.locator(Tk_Locator.default)
 
     async def main(self):
         async with async_playwright() as playwright:

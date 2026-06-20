@@ -1,29 +1,18 @@
 ## Project Overview
 
-This project, `social-auto-upload`, is a powerful automation tool designed to help content creators and operators efficiently publish video content to multiple domestic and international mainstream social media platforms in one click. The project implements video upload, scheduled release and other functions for platforms such as `Douyin`, `Bilibili`, `Xiaohongshu`, `Kuaishou`, `WeChat Channel`, `Baijiahao` and `TikTok`.
+This project, `social-auto-upload`, automates publishing video content to multiple domestic and international mainstream social media platforms.
 
-The project consists of a Python backend and a Vue.js frontend.
+The current mainline is the Python CLI/backend implementation under `sau_cli.py`, `uploader/`, and `skills/`. The legacy Web stack (`sau_backend.py`, `sau_backend/`) has been moved to `legacy/` and is not the active entrypoint.
 
-**Backend:**
+**Web Shell (optional React frontend):**
 
-*   Framework: Flask
-*   Core Functionality:
-    *   Handles file uploads and management.
-    *   Interacts with a SQLite database to store information about files and user accounts.
-    *   Uses `playwright` for browser automation to interact with social media platforms.
-    *   Provides a RESTful API for the frontend to consume.
-    *   Uses Server-Sent Events (SSE) for real-time communication with the frontend during the login process.
-
-**Frontend:**
-
-*   Framework: Vue.js
+*   Directory: `sau_web/frontend`
+*   Backend: `web_runner.py` (Flask, wraps CLI)
+*   Framework: React + TypeScript
 *   Build Tool: Vite
-*   UI Library: Element Plus
-*   State Management: Pinia
-*   Routing: Vue Router
-*   Core Functionality:
-    *   Provides a web interface for managing social media accounts, video files, and publishing videos.
-    *   Communicates with the backend via a RESTful API.
+*   Start: `bash sau_web/start.sh`
+*   Docs: `docs/web-shell.md`
+*   Note: prefer the CLI unless you are actively working on the React frontend.
 
 **Command-line Interface:**
 
@@ -52,17 +41,21 @@ The project also provides a command-line interface (CLI) for users who prefer to
     python db/createTable.py
     ```
 
-4.  **Run the backend server:**
+4.  **Run the Web Shell (React + Flask UI):**
     ```bash
-    python sau_backend.py
+    bash sau_web/start.sh
     ```
-    The backend server will start on `http://localhost:5409`.
+    Or start the Python backend separately:
+    ```bash
+    python web_runner.py
+    ```
+    The Web Shell runs on `http://localhost:5173` (frontend) with API proxy to backend on port 5409.
 
-### Frontend
+### Frontend (optional React web UI)
 
 1.  **Navigate to the frontend directory:**
     ```bash
-    cd sau_frontend
+    cd sau_web/frontend
     ```
 
 2.  **Install dependencies:**
@@ -106,9 +99,10 @@ sau skill install
 
 ## Development Conventions
 
-*   The backend code is located in the root directory and the `myUtils` and `uploader` directories.
-*   The frontend code is located in the `sau_frontend` directory.
+*   Current mainline code is in `sau_cli.py`, `uploader/`, `skills/`, and `docs/CLI.md`.
+*   The optional React frontend is located in `sau_web/frontend`.
+*   The historical Vue frontend `sau_frontend/` has been removed.
 *   The project uses a SQLite database for data storage. The database file is located at `db/database.db`.
 *   The `conf.example.py` file should be copied to `conf.py` and configured with the appropriate settings.
 *   The `requirements.txt` file lists the Python dependencies.
-*   The `package.json` file in the `sau_frontend` directory lists the frontend dependencies.
+*   The `sau_web/frontend/package.json` file lists the React frontend dependencies.

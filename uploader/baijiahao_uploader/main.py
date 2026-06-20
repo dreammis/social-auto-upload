@@ -2,7 +2,7 @@
 import random
 from datetime import datetime
 
-from playwright.async_api import Playwright, async_playwright, Page
+from patchright.async_api import Playwright, async_playwright, Page
 import os
 import time
 import asyncio

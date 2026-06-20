@@ -1,0 +1,13 @@
+{
+  "name": "add-bilibili-note-support",
+  "created": "2026-06-19T16:00:00",
+  "status": "completed",
+  "artifacts": {
+    "proposal": "Bilibili 是唯一不支持图文笔记上传的主流平台。通过浏览器自动化（patchright）新增 bilibili upload-note 子命令，支持 --images、--title、--note、--tags、--schedule 等参数。",
+    "design": "biliup CLI 无图文能力，采用浏览器自动化方案。参考 DouYinNote 模式：独立 BilibiliNote 类，继承轻量基类，实现 validate_upload_args + upload_note_content(page)。发布入口：创作中心-发布图文。",
+    "tasks": { "total": 14, "completed": 14 }
+  },
+  "layers": ["cli", "api", "frontend"],
+  "platforms": ["bilibili"],
+  "applyReady": true
+}
