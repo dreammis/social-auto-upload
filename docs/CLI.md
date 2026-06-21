@@ -70,6 +70,12 @@ sau xiaohongshu upload-video --account <account_name> --file videos/demo.mp4 --t
 sau xiaohongshu upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文示例" --tags 图文,测试
 ```
 
+海外环境如果无法登录默认创作者后台，可以通过环境变量切换到 RedNote 域名。该设置同时作用于登录、cookie 校验、视频发布和图文发布：
+
+```bash
+SAU_XHS_CREATOR_BASE_URL=https://creator.rednote.com sau xiaohongshu login --account <account_name>
+```
+
 ## Bilibili CLI 子命令
 
 ```bash
