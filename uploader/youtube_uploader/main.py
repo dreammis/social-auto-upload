@@ -107,15 +107,41 @@ async def youtube_setup(account_file, handle: bool = False, return_detail: bool 
     return result if return_detail else True
 
 
+async def _dismiss_autocomplete(page: Page):
+    """关掉 # 话题 / @ 提及 自动补全下拉浮层（会挡住后续“继续/发布”按钮）。
+
+    先 blur 失焦；若浮层仍可见再补一次 Escape——仅在检测到浮层时才按，
+    避免在没有浮层时误关掉整个上传对话框。"""
+    try:
+        await page.evaluate("() => { const a = document.activeElement; if (a && a.blur) a.blur(); }")
+    except Exception:
+        pass
+    try:
+        dropdown = page.locator("tp-yt-iron-dropdown:visible")
+        if await dropdown.count() > 0:
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(200)
+    except Exception:
+        pass
+
+
 async def _fill_editable(page: Page, selector: str, text: str):
-    """填 YouTube Studio 的 contenteditable 富文本框（标题/简介），先清空再输入。"""
+    """填 YouTube Studio 的 contenteditable 富文本框（标题/简介），先清空再输入。
+
+    用 fill() 一次性灌入而非逐字 type()：标题/简介里的 # 字符（如 #Shorts）会触发
+    YouTube 的话题自动补全下拉浮层；逐字输入会让浮层持续跟随光标弹出、盖住输入框与
+    后续“继续/发布”按钮，导致上传流程卡死。fill() 一次性写入不会逐字触发补全。"""
     box = page.locator(selector).first
     await box.wait_for(state="visible", timeout=30000)
     await box.click()
     await page.keyboard.press("Control+A")
     await page.keyboard.press("Delete")
-    await box.type(text, delay=6)
+    try:
+        await box.fill(text)            # 一次性灌入，不逐字触发 # 话题自动补全
+    except Exception:
+        await box.type(text, delay=6)   # 个别 contenteditable 不支持 fill 时退回逐字输入
     await page.wait_for_timeout(400)
+    await _dismiss_autocomplete(page)   # 收尾关掉可能弹出的补全浮层
 
 
 async def _click_if_present(page: Page, selector: str, timeout: int = 4000) -> bool:
