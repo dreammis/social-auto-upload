@@ -187,5 +187,6 @@ db/database.db
 cookiesFile
 uploadFile
 videoFile
+.sau_uploads/
 
 /uploader/bilibili_uploader/qrcode.png
