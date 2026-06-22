@@ -1,0 +1,37 @@
+FROM mcr.microsoft.com/playwright/python:v1.52.0-jammy
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    FLASK_PORT=5000
+
+RUN pip install --no-cache-dir \
+    "Flask[async]==3.1.1" \
+    flask-cors==6.0.0 \
+    SQLAlchemy==2.0.41 \
+    psycopg2-binary \
+    cryptography \
+    playwright==1.52.0 \
+    requests==2.32.3 \
+    PyYAML==6.0.2 \
+    qrcode==8.2 \
+    xhs \
+    edge-tts \
+    openai \
+    loguru \
+    patchright \
+    opencv-python-headless \
+    numpy \
+    Pillow \
+    segno
+
+COPY . .
+
+RUN if [ ! -f conf.py ] && [ -f conf.example.py ]; then cp conf.example.py conf.py; fi \
+    && mkdir -p /app/videoFile /app/cookiesFile /app/error_logs
+
+EXPOSE 5000
+
+CMD ["python", "sau_backend.py"]

@@ -1,20 +1,30 @@
 <template>
-  <div id="app">
-    <h1>SocialFlow AI</h1>
-    <p>Frontend initialized</p>
+  <div class="app-wrapper">
+    <router-view />
   </div>
 </template>
 
 <script setup lang="ts">
 </script>
 
-<style scoped>
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
+<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: #0f172a;
+  color: #f1f5f9;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-  margin-top: 60px;
+}
+
+.app-wrapper {
+  min-height: 100vh;
 }
 </style>

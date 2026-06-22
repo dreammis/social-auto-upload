@@ -5,17 +5,19 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "socialflow-ai-worker"
 version = "0.0.1"
-description = "SocialFlow AI - AI Worker Service"
+description = "SocialFlow AI - Trend Engine Worker Service"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.104.1",
     "uvicorn[standard]>=0.24.0",
     "pydantic>=2.5.0",
-    "redis>=5.0.0",
-    "psycopg2-binary>=2.9.9",
     "sqlalchemy>=2.0.23",
+    "psycopg2-binary>=2.9.9",
+    "apscheduler>=3.10.4",
+    "playwright>=1.40.0",
     "openai>=1.3.0",
     "anthropic>=0.7.0",
+    "redis>=5.0.0",
 ]
 
 [project.optional-dependencies]

@@ -13,12 +13,20 @@ from werkzeug.utils import secure_filename
 from conf import BASE_DIR
 from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
 from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs
+from uploader.facebook_uploader.main import facebook_bp
 
 active_queues = {}
 app = Flask(__name__)
 
 #允许所有来源跨域访问
 CORS(app)
+
+# Register Phase 5 Upload Engine blueprint
+app.register_blueprint(facebook_bp)
+
+@app.route('/health')
+def health():
+    return jsonify({"status": "ok", "service": "flask_uploader"}), 200
 
 # 限制上传文件大小为160MB
 app.config['MAX_CONTENT_LENGTH'] = 160 * 1024 * 1024
@@ -720,4 +728,4 @@ def sse_stream(status_queue):
             time.sleep(0.1)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0' ,port=5409)
+    app.run(host='0.0.0.0', port=int(os.getenv('FLASK_PORT', '5409')))

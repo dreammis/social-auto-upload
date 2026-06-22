@@ -11,7 +11,6 @@ from sqlalchemy import (
     String,
     Text,
     DateTime,
-    ForeignKey,
     Enum as SAEnum,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -40,17 +39,17 @@ class UploadJob(UploadBase):
         primary_key=True,
         default=uuid.uuid4,
     )
-    # FK to ai-worker's video_jobs table (Phase 4)
+    # References NestJS/FastAPI video_jobs.id (UUID).
+    # Keep as raw ID here to avoid cross-service metadata dependency.
     video_job_id = Column(
-        Integer,
-        ForeignKey("video_jobs.id", ondelete="CASCADE"),
+        PG_UUID(as_uuid=True),
         nullable=False,
         index=True,
     )
-    # FK to NestJS accounts table (Phase 2)
+    # References NestJS accounts table (Phase 2).
+    # Keep as raw ID here to avoid SQLAlchemy metadata boot dependency.
     account_id = Column(
         Integer,
-        ForeignKey("accounts.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -58,6 +57,11 @@ class UploadJob(UploadBase):
         Text,
         nullable=True,
         comment="Post caption including affiliate links",
+    )
+    proxy_url = Column(
+        String(500),
+        nullable=True,
+        comment="Optional static residential proxy URL for this account/job",
     )
     affiliate_comment = Column(
         Text,

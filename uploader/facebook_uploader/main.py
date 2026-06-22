@@ -14,6 +14,7 @@ from datetime import datetime
 
 from flask import Blueprint, request, jsonify
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import sessionmaker
 
 from uploader.facebook_uploader.upload_models import (
@@ -21,6 +22,7 @@ from uploader.facebook_uploader.upload_models import (
     UploadJob,
     UploadJobStatus,
 )
+from uploader.core.browser_manager import redact_sensitive
 from uploader.facebook_uploader.crypto_utils import decrypt_session_data
 from uploader.facebook_uploader.playwright_engine import (
     FacebookPlaywrightUploader,
@@ -44,14 +46,41 @@ engine = create_engine(DATABASE_URL, pool_size=5, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Ensure upload_jobs table exists (safe for shared DB — only adds if missing)
-UploadBase.metadata.create_all(bind=engine)
-with engine.begin() as conn:
-    conn.execute(
-        text(
-            "ALTER TABLE upload_jobs "
-            "ADD COLUMN IF NOT EXISTS affiliate_comment TEXT"
+try:
+    UploadBase.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE upload_jobs "
+                "ADD COLUMN IF NOT EXISTS affiliate_comment TEXT"
+            )
         )
+        conn.execute(
+            text(
+                "ALTER TABLE upload_jobs "
+                "ADD COLUMN IF NOT EXISTS proxy_url VARCHAR(500)"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE upload_jobs "
+                "ALTER COLUMN video_job_id TYPE UUID "
+                "USING video_job_id::text::uuid"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE accounts "
+                "ADD COLUMN IF NOT EXISTS proxy_url VARCHAR(500)"
+            )
+        )
+except (ProgrammingError, OperationalError) as exc:
+    logger.warning(
+        "Database migration skipped (tables might not be initialized by NestJS yet): %s",
+        redact_sensitive(exc),
     )
+except Exception as exc:
+    logger.error("Unexpected error during DB migration: %s", redact_sensitive(exc))
 
 # ── Blueprint ─────────────────────────────────────────────────────
 facebook_bp = Blueprint("facebook_upload", __name__)
@@ -75,7 +104,7 @@ def _update_upload_status(
             logger.info("UploadJob %s → %s", job_id, status.value)
     except Exception as exc:
         db.rollback()
-        logger.error("DB update failed for upload %s: %s", job_id, exc)
+        logger.error("DB update failed for upload %s: %s", job_id, redact_sensitive(exc))
     finally:
         db.close()
 
@@ -116,7 +145,7 @@ def _do_facebook_upload(upload_job_id: str) -> None:
         # ── Step 3: Decrypt Facebook session ──
         acct_row = db.execute(
             text(
-                "SELECT session_data, account_name, platform "
+                "SELECT session_data, account_name, platform, proxy_url "
                 "FROM accounts WHERE id = :aid"
             ),
             {"aid": upload_job.account_id},
@@ -135,15 +164,19 @@ def _do_facebook_upload(upload_job_id: str) -> None:
 
         # ── Step 4: Upload to Facebook via Playwright ──
         account_name = acct_row[1]
+        proxy_url = upload_job.proxy_url or acct_row[3]
         logger.info(
-            "Starting Playwright upload — video=%s, account=%s",
+            "Starting Playwright upload — video=%s, account=%s proxy=%s",
             video_path,
             account_name,
+            "configured" if proxy_url else "none",
         )
 
         uploader = FacebookPlaywrightUploader(
             cookies=session_data,
             page_name=account_name,
+            proxy_url=proxy_url,
+            account_id=upload_job.account_id,
         )
         post_url = uploader.upload(
             video_path=video_path,
@@ -178,7 +211,7 @@ def _do_facebook_upload(upload_job_id: str) -> None:
                 logger.error(
                     "Affiliate comment seeding failed — job=%s: %s",
                     upload_job_id,
-                    exc,
+                    redact_sensitive(exc),
                     exc_info=True,
                 )
         elif upload_job.affiliate_comment:
@@ -217,12 +250,12 @@ def _do_facebook_upload(upload_job_id: str) -> None:
 
     except Exception as exc:
         logger.error(
-            "Upload failed — job=%s: %s", upload_job_id, exc, exc_info=True
+            "Upload failed — job=%s: %s", upload_job_id, redact_sensitive(exc), exc_info=True
         )
         _update_upload_status(
             upload_job_id,
             UploadJobStatus.FAILED,
-            error_log=str(exc),
+            error_log=redact_sensitive(exc),
         )
     finally:
         db.close()
@@ -252,6 +285,7 @@ def upload_facebook():
     account_id = data.get("account_id")
     caption = data.get("caption", "")
     affiliate_comment = data.get("affiliate_comment")
+    proxy_url = data.get("proxy_url")
 
     if not video_job_id or not account_id:
         return jsonify({"error": "video_job_id and account_id required"}), 400
@@ -263,6 +297,7 @@ def upload_facebook():
             video_job_id=video_job_id,
             account_id=account_id,
             caption=caption,
+            proxy_url=proxy_url,
             affiliate_comment=affiliate_comment,
             status=UploadJobStatus.PENDING,
         )
@@ -272,8 +307,8 @@ def upload_facebook():
         logger.info("UploadJob created: %s", job_id)
     except Exception as exc:
         db.rollback()
-        logger.error("Failed to create UploadJob: %s", exc)
-        return jsonify({"error": str(exc)}), 500
+        logger.error("Failed to create UploadJob: %s", redact_sensitive(exc))
+        return jsonify({"error": redact_sensitive(exc)}), 500
     finally:
         db.close()
 

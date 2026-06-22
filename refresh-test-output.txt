@@ -1,0 +1,84 @@
+  console.log
+    REFRESH STATUS: 400
+
+      at Object.<anonymous> (auth.e2e-spec.ts:194:15)
+
+  console.log
+    REFRESH BODY: {
+      "message": [
+        "refreshToken must be a string"
+      ],
+      "error": "Bad Request",
+      "statusCode": 400
+    }
+
+      at Object.<anonymous> (auth.e2e-spec.ts:195:15)
+
+FAIL test/auth.e2e-spec.ts (9.316 s)
+  AuthController (e2e)
+    POST /auth/register
+      ○ skipped should register new user and return tokens without password_hash
+      ○ skipped should reject duplicate email with 409
+      ○ skipped should reject weak password with 400
+    POST /auth/login
+      ○ skipped should login with valid credentials and return tokens
+      ○ skipped should return 401 for invalid credentials
+      ○ skipped should rate limit after 5 failed attempts in 15 minutes (429)
+    Token rotation & replay attack
+      × should refresh token and return new pair (674 ms)
+      × should reject replay of already-used refresh token with 401 (540 ms)
+      ○ skipped should allow access to protected endpoint with valid access token
+    Public endpoint access
+      ○ skipped should access /health without token
+      ○ skipped should access /auth/register without token
+    Role-based guards
+      ○ skipped should block viewer from admin-only license create endpoint
+      ○ skipped should allow admin to create license
+    License validation & device binding
+      ○ skipped should activate device A with valid license key
+      ○ skipped should reject device B when using same key beyond max activations
+      ○ skipped should rate limit validate license endpoint after 3 attempts per minute
+
+  ● AuthController (e2e) › Token rotation & replay attack › should refresh token and return new pair
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 201
+    Received: 400
+
+      195 |       console.log('REFRESH BODY:', JSON.stringify(response.body, null, 2));
+      196 |
+    > 197 |       expect(response.status).toBe(201);
+          |                               ^
+      198 |
+      199 |       expect(response.body).toHaveProperty('accessToken');
+      200 |       expect(response.body).toHaveProperty('refreshToken');
+
+      at Object.<anonymous> (auth.e2e-spec.ts:197:31)
+
+  ● AuthController (e2e) › Token rotation & replay attack › should reject replay of already-used refresh token with 401
+
+    expected 201 "Created", got 400 "Bad Request"
+
+      213 |         .post('/auth/refresh')
+      214 |         .send({ refreshToken })
+    > 215 |         .expect(201);
+          |          ^
+      216 |
+      217 |       // Replay attack: send same old token again
+      218 |       await request(app.getHttpServer())
+
+      at Object.<anonymous> (auth.e2e-spec.ts:215:10)
+      ----
+      at Test._assertStatus (../node_modules/supertest/lib/test.js:252:14)
+      at ../node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (../node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (../node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (../node_modules/supertest/lib/test.js:120:14)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 14 skipped, 16 total
+Snapshots:   0 total
+Time:        9.94 s, estimated 10 s
+Ran all test suites with tests matching "refresh token".
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

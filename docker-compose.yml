@@ -1,10 +1,8 @@
-version: '3.8'
-
 services:
-  # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
     container_name: socialflow-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER:-socialflow}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-socialflow_dev}
@@ -14,15 +12,15 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-socialflow}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-socialflow} -d ${DB_NAME:-socialflow}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: socialflow-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
@@ -33,40 +31,26 @@ services:
       timeout: 5s
       retries: 5
 
-  # MinIO S3-compatible Storage
-  minio:
-    image: minio/minio:latest
-    container_name: socialflow-minio
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/minio_data
-    command: server /minio_data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # NestJS Backend
-  backend:
+  nestjs_backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: socialflow-backend
+    container_name: socialflow-nestjs-backend
+    restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      DATABASE_URL: postgresql://${DB_USER:-socialflow}:${DB_PASSWORD:-socialflow_dev}@postgres:5432/${DB_NAME:-socialflow}
-      REDIS_URL: redis://redis:6379
-      MINIO_URL: http://minio:9000
-      MINIO_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-socialflow}
+      DB_PASSWORD: ${DB_PASSWORD:-socialflow_dev}
+      DB_NAME: ${DB_NAME:-socialflow}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET:-dev_secret_key_change_in_prod}
-      LICENSE_KEY: ${LICENSE_KEY:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev_encryption_key_change_in_prod}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    command: npm run start:dev
     ports:
       - "3000:3000"
     depends_on:
@@ -74,73 +58,94 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 10s
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
       timeout: 5s
-      retries: 5
+      retries: 10
 
-  # Vue 3 Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: socialflow-frontend
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
-
-  # Python AI Worker
-  ai-worker:
+  fastapi_worker:
     build:
       context: ./ai-worker
       dockerfile: Dockerfile
-    container_name: socialflow-ai-worker
+    container_name: socialflow-fastapi-worker
+    restart: unless-stopped
     environment:
-      REDIS_URL: redis://redis:6379
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-socialflow}
+      DB_PASSWORD: ${DB_PASSWORD:-socialflow_dev}
+      DB_NAME: ${DB_NAME:-socialflow}
       DATABASE_URL: postgresql://${DB_USER:-socialflow}:${DB_PASSWORD:-socialflow_dev}@postgres:5432/${DB_NAME:-socialflow}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_URL: redis://redis:6379
+      TREND_TEST_MODE: ${TREND_TEST_MODE:-1}
+      VIDEO_OUTPUT_DIR: /app/output
+      STOCK_VIDEO_PATH: /app/assets/stock_background.mp4
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8001:8001"
+    volumes:
+      - ai_worker_output:/app/output
     depends_on:
-      - redis
-      - postgres
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 10s
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)\""]
+      interval: 15s
       timeout: 5s
-      retries: 5
+      retries: 10
 
-  # Python Upload Engine
-  upload-engine:
+  flask_uploader:
     build:
-      context: ./upload-engine
-      dockerfile: Dockerfile
-    container_name: socialflow-upload-engine
+      context: .
+      dockerfile: Dockerfile.flask
+    container_name: socialflow-flask-uploader
+    restart: unless-stopped
     environment:
-      REDIS_URL: redis://redis:6379
+      FLASK_PORT: 5000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-socialflow}
+      DB_PASSWORD: ${DB_PASSWORD:-socialflow_dev}
+      DB_NAME: ${DB_NAME:-socialflow}
       DATABASE_URL: postgresql://${DB_USER:-socialflow}:${DB_PASSWORD:-socialflow_dev}@postgres:5432/${DB_NAME:-socialflow}
-      MINIO_URL: http://minio:9000
-      MINIO_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_URL: redis://redis:6379
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev_encryption_key_change_in_prod}
+      FB_HEADLESS: ${FB_HEADLESS:-1}
+      FB_UPLOAD_TIMEOUT_MS: ${FB_UPLOAD_TIMEOUT_MS:-300000}
+      FB_ACTION_TIMEOUT_MS: ${FB_ACTION_TIMEOUT_MS:-30000}
+      ERROR_LOGS_DIR: /app/error_logs
+    ports:
+      - "5000:5000"
+    volumes:
+      - flask_error_logs:/app/error_logs
+      - flask_video_files:/app/videoFile
+      - flask_cookie_files:/app/cookiesFile
     depends_on:
-      - redis
-      - postgres
-      - minio
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
-      interval: 10s
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)\""]
+      interval: 15s
       timeout: 5s
-      retries: 5
+      retries: 10
 
 volumes:
   postgres_data:
   redis_data:
-  minio_data:
+  ai_worker_output:
+  flask_error_logs:
+  flask_video_files:
+  flask_cookie_files:
 
 networks:
   default:

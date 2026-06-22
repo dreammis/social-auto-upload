@@ -1,0 +1,10 @@
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+sqlalchemy>=2.0.23
+psycopg2-binary>=2.9.9
+apscheduler>=3.10.4
+playwright>=1.40.0
+ffmpeg-python>=0.2.0
+edge-tts>=6.1.0
+openai>=1.6.0

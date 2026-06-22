@@ -2,8 +2,8 @@
 Playwright-based Facebook Page video uploader.
 
 Uses sync_api (runs inside a background thread) to:
-  1. Launch Chromium with stealth settings
-  2. Inject decrypted cookies into a browser context
+  1. Launch Chromium with persistent account profile
+  2. Load decrypted cookies into browser context
   3. Navigate to Facebook Page composer / Meta Business Suite
   4. Upload video, fill caption, publish
   5. Capture post URL or confirm success
@@ -18,6 +18,7 @@ from pathlib import Path
 from datetime import datetime
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+from uploader.core.browser_manager import BrowserManager, redact_sensitive
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,10 @@ class FacebookPlaywrightUploader:
         cookies: list[dict],
         page_name: str | None = None,
         headless: bool = HEADLESS,
+        proxy_url: str | None = None,
+        account_id: str | int | None = None,
+        locale: str | None = None,
+        timezone_id: str | None = None,
     ):
         """
         Args:
@@ -62,14 +67,20 @@ class FacebookPlaywrightUploader:
                      Each must have: name, value, domain, path.
             page_name: Facebook Page name (for URL routing).
             headless: Run browser headlessly (True for prod).
+            proxy_url: Optional static proxy URL, e.g. http://user:pass@ip:port.
         """
         self.cookies = self._normalize_cookies(cookies)
         self.page_name = page_name
+        self.account_id = account_id or page_name or "facebook_default"
         self.headless = headless
+        self.proxy_url = proxy_url
+        self.locale = locale
+        self.timezone_id = timezone_id
         self._playwright = None
         self._browser = None
         self._context = None
         self._page = None
+        self._session = None
 
     @staticmethod
     def _normalize_cookies(cookies: list[dict]) -> list[dict]:
@@ -98,6 +109,23 @@ class FacebookPlaywrightUploader:
                     cookie["sameSite"] = ss_map.get(ss.lower(), "Lax")
             normalized.append(cookie)
         return normalized
+
+    @staticmethod
+    def _is_proxy_error(exc: Exception) -> bool:
+        """Identify network/proxy failures separately from Facebook DOM failures."""
+        message = str(exc).lower()
+        markers = (
+            "proxy",
+            "net::err_proxy",
+            "err_tunnel_connection_failed",
+            "err_proxy_connection_failed",
+            "tunnel connection failed",
+            "socks",
+            "407",
+            "connection refused",
+            "connection timed out",
+        )
+        return any(marker in message for marker in markers)
 
     def _take_screenshot(self, upload_job_id: str, step: str) -> str:
         """Capture current page state for debugging."""
@@ -144,29 +172,18 @@ class FacebookPlaywrightUploader:
 
         try:
             self._playwright = sync_playwright().start()
-
-            self._browser = self._playwright.chromium.launch(
+            manager = BrowserManager(
+                playwright=self._playwright,
+                account_id=self.account_id,
+                proxy_url=self.proxy_url,
                 headless=self.headless,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                ],
+                locale=self.locale,
+                timezone_id=self.timezone_id,
+                action_timeout_ms=ACTION_TIMEOUT_MS,
             )
-
-            self._context = self._browser.new_context(
-                user_agent=DEFAULT_USER_AGENT,
-                viewport=DEFAULT_VIEWPORT,
-                locale="en-US",
-                timezone_id="Asia/Ho_Chi_Minh",
-            )
-
-            # Inject cookies
-            self._context.add_cookies(self.cookies)
-            logger.info("Injected %d cookies into browser context", len(self.cookies))
-
-            self._page = self._context.new_page()
-            self._page.set_default_timeout(ACTION_TIMEOUT_MS)
+            self._session = manager.launch_persistent_session(cookies=self.cookies)
+            self._context = self._session.context
+            self._page = self._session.page
 
             # ── Step 1: Navigate to Facebook ──
             logger.info("Navigating to Facebook...")
@@ -201,10 +218,14 @@ class FacebookPlaywrightUploader:
         except FacebookUploadError:
             raise  # Already has screenshot
         except Exception as exc:
-            screenshot = self._take_screenshot(upload_job_id, "unexpected_error")
-            raise FacebookUploadError(
-                f"Unexpected error: {exc}", screenshot_path=screenshot
-            ) from exc
+            step = "proxy_connection_failed" if self._is_proxy_error(exc) else "unexpected_error"
+            screenshot = self._take_screenshot(upload_job_id, step)
+            message = (
+                f"Proxy connection failed: {exc}"
+                if self._is_proxy_error(exc)
+                else f"Unexpected error: {exc}"
+            )
+            raise FacebookUploadError(message, screenshot_path=screenshot) from exc
         finally:
             self._cleanup()
 
@@ -396,27 +417,18 @@ class FacebookPlaywrightUploader:
 
         try:
             self._playwright = sync_playwright().start()
-
-            self._browser = self._playwright.chromium.launch(
+            manager = BrowserManager(
+                playwright=self._playwright,
+                account_id=self.account_id,
+                proxy_url=self.proxy_url,
                 headless=self.headless,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                ],
+                locale=self.locale,
+                timezone_id=self.timezone_id,
+                action_timeout_ms=ACTION_TIMEOUT_MS,
             )
-
-            self._context = self._browser.new_context(
-                user_agent=DEFAULT_USER_AGENT,
-                viewport=DEFAULT_VIEWPORT,
-                locale="en-US",
-                timezone_id="Asia/Ho_Chi_Minh",
-            )
-            self._context.add_cookies(self.cookies)
-            logger.info("Injected %d cookies for affiliate comment", len(self.cookies))
-
-            self._page = self._context.new_page()
-            self._page.set_default_timeout(ACTION_TIMEOUT_MS)
+            self._session = manager.launch_persistent_session(cookies=self.cookies)
+            self._context = self._session.context
+            self._page = self._session.page
             page = self._page
 
             logger.info("Navigating to Facebook post for comment: %s", post_url)
@@ -445,9 +457,12 @@ class FacebookPlaywrightUploader:
             logger.info("Affiliate comment submitted (%d chars)", len(comment_text))
 
         except Exception as exc:
-            screenshot = self._take_screenshot(upload_job_id, "comment_failed")
+            is_proxy_error = self._is_proxy_error(exc)
+            step = "comment_proxy_failed" if is_proxy_error else "comment_failed"
+            screenshot = self._take_screenshot(upload_job_id, step)
             logger.error(
-                "Affiliate comment failed — job=%s: %s (screenshot=%s)",
+                "%s — job=%s: %s (screenshot=%s)",
+                "Affiliate comment proxy failed" if is_proxy_error else "Affiliate comment failed",
                 upload_job_id,
                 exc,
                 screenshot,
@@ -539,11 +554,14 @@ class FacebookPlaywrightUploader:
     def _cleanup(self) -> None:
         """Close browser resources."""
         try:
-            if self._context:
-                self._context.close()
-            if self._browser:
-                self._browser.close()
-            if self._playwright:
+            if self._session:
+                self._session.close()
+            elif self._playwright:
                 self._playwright.stop()
         except Exception as exc:
-            logger.warning("Cleanup error: %s", exc)
+            logger.warning("Cleanup error: %s", redact_sensitive(exc))
+        finally:
+            self._session = None
+            self._context = None
+            self._page = None
+            self._playwright = None
