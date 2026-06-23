@@ -5,8 +5,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -43,95 +43,172 @@
 }
 
 :root {
+  /* ============================================================
+   * DESIGN.md (Linear) — fonts
+   * Inter: display + body (substitute for Linear Display / Linear Text)
+   * JetBrains Mono: code, log IDs, timeline titles (substitute for Linear Mono)
+   * ============================================================ */
+  --font-inter: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-jetbrains-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Linear radii: button-md is 8px, card lg is 12px */
   --radius: 0.5rem;
 
-  /* Refined color palette - muted, sophisticated */
-  --background: oklch(0.99 0.002 240);
-  --foreground: oklch(0.15 0.01 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.01 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.01 260);
+  /* ============================================================
+   * DESIGN.md (Linear) — light theme (inverse of dark canvas)
+   * Linear ships dark-first; light mapped for shadcn parity.
+   * ============================================================ */
+  --background: oklch(0.99 0.002 240);             /* inverse-canvas #ffffff with trace warmth */
+  --foreground: oklch(0.13 0.005 264);             /* inverse-ink #171717 */
+  --card: oklch(0.97 0.003 240);                   /* inverse-surface-1 #f7f8f8 */
+  --card-foreground: oklch(0.13 0.005 264);
+  --popover: oklch(0.97 0.003 240);
+  --popover-foreground: oklch(0.13 0.005 264);
 
-  /* Primary: sophisticated blue-gray, not garish blue */
-  --primary: oklch(0.35 0.04 250);
-  --primary-foreground: oklch(0.98 0 0);
+  /* Linear Lavender: #5e6ad2 — same hue on light bg */
+  --primary: oklch(0.55 0.16 264);
+  --primary-foreground: oklch(1 0 0);
 
-  --secondary: oklch(0.96 0.005 240);
-  --secondary-foreground: oklch(0.25 0.02 250);
+  --secondary: oklch(0.95 0.005 240);
+  --secondary-foreground: oklch(0.20 0.005 264);
 
-  --muted: oklch(0.96 0.005 240);
-  --muted-foreground: oklch(0.5 0.02 250);
+  --muted: oklch(0.95 0.005 240);
+  --muted-foreground: oklch(0.45 0.005 264);
 
-  --accent: oklch(0.96 0.005 240);
-  --accent-foreground: oklch(0.25 0.02 250);
+  --accent: oklch(0.93 0.008 264);
+  --accent-foreground: oklch(0.13 0.005 264);
 
-  --destructive: oklch(0.55 0.18 25);
+  --destructive: oklch(0.55 0.22 25);
 
-  /* Borders: barely visible, elegant */
-  --border: oklch(0.92 0.005 240);
-  --input: oklch(0.92 0.005 240);
-  --ring: oklch(0.35 0.04 250);
+  /* hairline (light inverse of #23252a) */
+  --border: oklch(0.90 0.005 264);
+  --input: oklch(0.90 0.005 264);
+  --ring: oklch(0.55 0.16 264);
 
   /* Charts */
-  --chart-1: oklch(0.55 0.12 250);
-  --chart-2: oklch(0.6 0.12 160);
-  --chart-3: oklch(0.55 0.08 250);
-  --chart-4: oklch(0.65 0.1 50);
-  --chart-5: oklch(0.6 0.12 160);
+  --chart-1: oklch(0.55 0.16 264);                 /* primary lavender */
+  --chart-2: oklch(0.60 0.16 145);                 /* semantic-success */
+  --chart-3: oklch(0.60 0.12 75);                  /* amber */
+  --chart-4: oklch(0.55 0.20 25);                  /* red */
+  --chart-5: oklch(0.50 0.10 264);                 /* muted accent */
 
-  /* Sidebar */
-  --sidebar: oklch(0.99 0.002 240);
-  --sidebar-foreground: oklch(0.15 0.01 260);
-  --sidebar-primary: oklch(0.35 0.04 250);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.96 0.005 240);
-  --sidebar-accent-foreground: oklch(0.25 0.02 250);
-  --sidebar-border: oklch(0.92 0.005 240);
-  --sidebar-ring: oklch(0.35 0.04 250);
+  /* Focus ring alpha — primary at 18% for both modes */
+  --ring-alpha: oklch(0.55 0.16 264 / 0.18);
+
+  /* ============================================================
+   * Status semantic palette (DESIGN.md Linear)
+   * Surfaces (-bg) are pale tinted fills for Badge backgrounds.
+   * Foregrounds (-fg) are mid-saturation colors that read on
+   * either light or dark surfaces.
+   * Borders (-border) are the 30% fg mix that wraps Alert/Toast
+   * banners and modal notices — single source of truth so we can
+   * tune the bounding-box weight in one place.
+   * ============================================================ */
+  --status-success-bg: oklch(0.95 0.04 145);
+  --status-success-fg: oklch(0.45 0.14 145);
+  --status-warning-bg: oklch(0.96 0.04 75);
+  --status-warning-fg: oklch(0.50 0.14 75);
+  --status-info-bg: oklch(0.95 0.04 264);          /* pale lavender (Linear primary) */
+  --status-info-fg: oklch(0.45 0.14 264);
+  --status-error-bg: oklch(0.96 0.03 25);
+  --status-error-fg: oklch(0.52 0.18 25);
+  --status-success-border: color-mix(in oklab, var(--status-success-fg) 40%, transparent);
+  --status-warning-border: color-mix(in oklab, var(--status-warning-fg) 40%, transparent);
+  --status-info-border: color-mix(in oklab, var(--status-info-fg) 40%, transparent);
+  --status-error-border: color-mix(in oklab, var(--status-error-fg) 40%, transparent);
+  /* Sidebar (light) */
+  --sidebar: oklch(0.97 0.003 240);
+  --sidebar-foreground: oklch(0.13 0.005 264);
+  --sidebar-primary: oklch(0.55 0.16 264);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.95 0.005 240);
+  --sidebar-accent-foreground: oklch(0.13 0.005 264);
+  --sidebar-border: oklch(0.90 0.005 264);
+  --sidebar-ring: oklch(0.55 0.16 264);
 }
 
 .dark {
-  --background: oklch(0.13 0.01 260);
-  --foreground: oklch(0.93 0.005 240);
-  --card: oklch(0.16 0.01 260);
-  --card-foreground: oklch(0.93 0.005 240);
-  --popover: oklch(0.16 0.01 260);
-  --popover-foreground: oklch(0.93 0.005 240);
+  /* ============================================================
+   * DESIGN.md (Linear) — dark canvas (primary surface for this app)
+   *   canvas       #010102 — deepest dark, faint blue tint
+   *   surface-1    #0f1011 — cards
+   *   surface-2    #141516 — popovers, FloatingLogs panel
+   *   surface-3    #18191a — secondary fills (chips, table headers)
+   *   surface-4    #191a1b — deepest lifted
+   *   hairline     #23252a — 1px borders
+   *   hairline-strong #34343a — focus / pressed borders
+   *   ink          #f7f8f8 — primary text
+   *   ink-muted    #d0d6e0 — secondary text
+   *   ink-subtle   #8a8f98 — tertiary text, timestamps
+   *   ink-tertiary #62666d — disabled, footnotes
+   *   primary      #5e6ad2 — Linear Lavender (CTA, brand mark, focus)
+   *   primary-hover #828fff
+   *   primary-focus #5e69d1
+   *   semantic-success #27a644
+   * ============================================================ */
+  --background: oklch(0.10 0.008 264);             /* canvas ~#010102 */
+  --foreground: oklch(0.97 0.005 264);             /* ink #f7f8f8 */
 
-  /* Primary in dark: soft off-white, not harsh white */
-  --primary: oklch(0.9 0.01 240);
-  --primary-foreground: oklch(0.15 0.01 260);
+  --card: oklch(0.16 0.005 264);                   /* surface-1 #0f1011 */
+  --card-foreground: oklch(0.97 0.005 264);
+  --popover: oklch(0.18 0.005 264);                /* surface-2 #141516 */
+  --popover-foreground: oklch(0.97 0.005 264);
 
-  --secondary: oklch(0.2 0.01 260);
-  --secondary-foreground: oklch(0.9 0.01 240);
+  --primary: oklch(0.58 0.16 264);                 /* lavender #5e6ad2 */
+  --primary-foreground: oklch(1 0 0);
 
-  --muted: oklch(0.2 0.01 260);
-  --muted-foreground: oklch(0.55 0.02 250);
+  --secondary: oklch(0.20 0.005 264);              /* surface-3 #18191a */
+  --secondary-foreground: oklch(0.97 0.005 264);
 
-  --accent: oklch(0.2 0.01 260);
-  --accent-foreground: oklch(0.9 0.01 240);
+  --muted: oklch(0.20 0.005 264);
+  --muted-foreground: oklch(0.60 0.01 264);        /* ink-subtle #8a8f98 */
 
-  --destructive: oklch(0.5 0.16 25);
+  --accent: oklch(0.22 0.008 264);
+  --accent-foreground: oklch(0.97 0.005 264);
 
-  --border: oklch(0.22 0.01 260);
-  --input: oklch(0.22 0.01 260);
-  --ring: oklch(0.5 0.04 250);
+  --destructive: oklch(0.62 0.20 25);
 
-  --chart-1: oklch(0.6 0.14 250);
-  --chart-2: oklch(0.65 0.14 160);
-  --chart-3: oklch(0.6 0.1 250);
-  --chart-4: oklch(0.7 0.12 50);
-  --chart-5: oklch(0.65 0.14 160);
+  /* hairline #23252a */
+  --border: oklch(0.27 0.008 264);
+  --input: oklch(0.27 0.008 264);
+  --ring: oklch(0.58 0.16 264);                    /* primary-focus for focus rings */
 
-  --sidebar: oklch(0.15 0.01 260);
-  --sidebar-foreground: oklch(0.93 0.005 240);
-  --sidebar-primary: oklch(0.7 0.08 250);
-  --sidebar-primary-foreground: oklch(0.15 0.01 260);
-  --sidebar-accent: oklch(0.2 0.01 260);
-  --sidebar-accent-foreground: oklch(0.9 0.01 240);
-  --sidebar-border: oklch(0.22 0.01 260);
-  --sidebar-ring: oklch(0.5 0.04 250);
+  /* Charts */
+  --chart-1: oklch(0.58 0.16 264);                 /* primary lavender */
+  --chart-2: oklch(0.65 0.16 145);                 /* success #27a644 family */
+  --chart-3: oklch(0.72 0.12 75);                  /* amber */
+  --chart-4: oklch(0.62 0.20 25);                  /* red */
+  --chart-5: oklch(0.50 0.10 264);                 /* muted accent */
+
+  /* Focus ring alpha — primary at 18% for both modes */
+  --ring-alpha: oklch(0.58 0.16 264 / 0.20);
+
+  /* ============================================================
+   * Status semantic palette (DESIGN.md Linear)
+   * Mirror of :root with surface-tinted backgrounds.
+   * Borders mirror the light block — same 30% fg mix recipe.
+   * ============================================================ */
+  --status-success-bg: oklch(0.20 0.06 145);
+  --status-success-fg: oklch(0.78 0.16 145);
+  --status-warning-bg: oklch(0.20 0.06 75);
+  --status-warning-fg: oklch(0.80 0.12 75);
+  --status-info-bg: oklch(0.22 0.05 264);          /* lavender-tinted surface */
+  --status-info-fg: oklch(0.78 0.12 264);
+  --status-error-bg: oklch(0.22 0.08 25);
+  --status-error-fg: oklch(0.72 0.18 25);  --status-success-border: color-mix(in oklab, var(--status-success-fg) 40%, transparent);
+  --status-warning-border: color-mix(in oklab, var(--status-warning-fg) 40%, transparent);
+  --status-info-border: color-mix(in oklab, var(--status-info-fg) 40%, transparent);
+  --status-error-border: color-mix(in oklab, var(--status-error-fg) 40%, transparent);
+
+  /* Sidebar (dark) — one step above canvas, sits between bg and surface-1 */
+  --sidebar: oklch(0.13 0.008 264);
+  --sidebar-foreground: oklch(0.97 0.005 264);
+  --sidebar-primary: oklch(0.58 0.16 264);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.20 0.005 264);
+  --sidebar-accent-foreground: oklch(0.97 0.005 264);
+  --sidebar-border: oklch(0.27 0.008 264);
+  --sidebar-ring: oklch(0.58 0.16 264);
 }
 
 @layer base {
@@ -140,24 +217,28 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: var(--font-inter);
+    font-feature-settings: 'cv11', 'ss03';
+  }
+
+  /* Linear: mono only in code contexts */
+  code, kbd, pre, samp {
+    font-family: var(--font-jetbrains-mono);
   }
 }
 
-/* ===== Refined Animations ===== */
+/* ===== Animations ===== */
 
-/* Subtle page entrance */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Elegant pulse for status */
 @keyframes subtle-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
 
-/* Smooth accordion */
 @keyframes accordion-down {
   from { height: 0; opacity: 0; }
   to { height: var(--radix-accordion-content-height); opacity: 1; }
@@ -175,27 +256,39 @@
   .animate-accordion-up {
     animation: accordion-up 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
+  /* Linear: hairline via inset shadow for true dark-mode blending */
+  .hairline-border {
+    border: none;
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
 }
 
-/* ===== Refined Card ===== */
-/* No heavy shadows, just subtle border shift on hover */
+/* ===== Card (Linear: 1px hairline border, hover = lift + glow) ===== */
 .card-refined {
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  color: var(--card-foreground);
+  border-radius: 0.75rem;                           /* rounded.lg 12px */
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
 }
 
 .card-refined:hover {
-  border-color: oklch(0.88 0.01 250);
-  box-shadow: 0 1px 3px 0 oklch(0 0 0 / 0.04);
+  transform: translateY(-2px);
+  border-color: color-mix(in oklab, var(--primary) 20%, transparent);
+  box-shadow:
+    0 8px 25px oklch(0 0 0 / 0.08),
+    0 0 0 1px color-mix(in oklab, var(--primary) 6%, transparent);
 }
 
 .dark .card-refined:hover {
-  border-color: oklch(0.28 0.015 260);
-  box-shadow: 0 1px 3px 0 oklch(0 0 0 / 0.2);
+  border-color: color-mix(in oklab, var(--primary) 25%, transparent);
+  box-shadow:
+    0 8px 25px oklch(0 0 0 / 0.30),
+    0 0 0 1px color-mix(in oklab, var(--primary) 10%, transparent),
+    0 0 40px color-mix(in oklab, var(--primary) 4%, transparent);
 }
 
-/* ===== Elegant Button ===== */
+/* ===== Button (Linear: 8px radius, primary lavender, surface-1 secondary) ===== */
 .btn-elegant {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-elegant:active {
@@ -203,7 +296,7 @@
   transition-duration: 0.1s;
 }
 
-/* ===== Status Indicators ===== */
+/* ===== Status indicators (Linear: status noise uses subtle-pulse) ===== */
 .status-running {
   position: relative;
 }
@@ -217,7 +310,7 @@
   animation: subtle-pulse 2s ease-in-out infinite;
 }
 
-/* ===== Refined Table ===== */
+/* ===== Data Tables (Linear: dense, mono caption headers, ink-subtle text) ===== */
 .table-refined {
   border-collapse: separate;
   border-spacing: 0;
@@ -228,23 +321,14 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: oklch(0.5 0.02 250);
-  border-bottom: 1px solid oklch(0.92 0.005 240);
-  background: oklch(0.97 0.003 240);
-}
-
-.dark .table-refined th {
-  color: oklch(0.5 0.02 250);
-  border-bottom-color: oklch(0.22 0.01 260);
-  background: oklch(0.15 0.01 260);
+  color: oklch(0.60 0.01 264);                    /* ink-subtle on dark */
+  border-bottom: 1px solid var(--border);
+  background: var(--secondary);                   /* surface-3 */
 }
 
 .table-refined td {
-  border-bottom: 1px solid oklch(0.95 0.003 240);
-}
-
-.dark .table-refined td {
-  border-bottom-color: oklch(0.2 0.01 260);
+  border-bottom: 1px solid var(--border);
+  color: var(--foreground);
 }
 
 .table-row-refined {
@@ -252,52 +336,40 @@
 }
 
 .table-row-refined:hover {
-  background-color: oklch(0.97 0.003 240);
+  background-color: var(--secondary);             /* surface-3 */
 }
 
-.dark .table-row-refined:hover {
-  background-color: oklch(0.18 0.01 260);
-}
-
-/* ===== Refined Form Inputs ===== */
+/* ===== Form Inputs (Linear: surface-1, 8px radius, hairline border, lavender focus ring) ===== */
 .input-refined {
   height: 36px;
-  border-radius: 0.5rem;
-  border: 1px solid oklch(0.9 0.005 240);
-  background: oklch(1 0 0);
+  border-radius: 0.5rem;                         /* rounded.md 8px */
+  border: 1px solid var(--border);
+  background: var(--card);                        /* surface-1 */
+  color: var(--foreground);
   padding: 0 0.75rem;
   font-size: 0.875rem;
-  transition: all 0.2s ease;
+  font-family: var(--font-inter);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .input-refined:focus {
   outline: none;
-  border-color: oklch(0.4 0.06 250);
-  box-shadow: 0 0 0 3px oklch(0.4 0.06 250 / 0.08);
-}
-
-.dark .input-refined {
-  border-color: oklch(0.22 0.01 260);
-  background: oklch(0.16 0.01 260);
-}
-
-.dark .input-refined:focus {
-  border-color: oklch(0.55 0.08 250);
-  box-shadow: 0 0 0 3px oklch(0.55 0.08 250 / 0.12);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px var(--ring-alpha);            /* primary at 18-20% */
 }
 
 .input-refined::placeholder {
-  color: oklch(0.6 0.01 250);
+  color: var(--muted-foreground);
 }
 
-/* ===== Empty State - Minimal ===== */
+/* ===== Empty states (Linear: minimal, ink-muted) ===== */
 .empty-minimal {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 4rem 2rem;
-  color: oklch(0.5 0.02 250);
+  color: var(--muted-foreground);
 }
 
 .empty-minimal-icon {
@@ -307,22 +379,17 @@
   opacity: 0.4;
 }
 
-/* ===== Input Focus - Elegant Ring ===== */
+/* ===== Input focus ring helper (Linear uses lavender primary) ===== */
 .input-elegant {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .input-elegant:focus {
-  border-color: oklch(0.4 0.06 250);
-  box-shadow: 0 0 0 3px oklch(0.4 0.06 250 / 0.08);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px var(--ring-alpha);
 }
 
-.dark .input-elegant:focus {
-  border-color: oklch(0.55 0.08 250);
-  box-shadow: 0 0 0 3px oklch(0.55 0.08 250 / 0.12);
-}
-
-/* ===== Scrollbar - Minimal ===== */
+/* ===== Scrollbar (Linear: minimal, hairline-strong thumb) ===== */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -342,98 +409,243 @@
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: oklch(0.3 0 0);
+  background: oklch(0.32 0.008 264);               /* hairline-strong on dark */
+  border-radius: 3px;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.4 0 0);
+  background: oklch(0.42 0.01 264);
 }
 
-/* ===== Selection ===== */
+/* ===== Selection (Linear: primary at low alpha) ===== */
 ::selection {
-  background: oklch(0.4 0.08 250 / 0.15);
+  background: color-mix(in oklab, var(--primary) 22%, transparent);
 }
 
-/* ===== Badge Refinement ===== */
+/* ===== Badge (Linear: surface-3 background, ink-muted foreground, full pill) ===== */
 .badge-subtle {
-  background: oklch(0.96 0.01 250);
-  color: oklch(0.35 0.04 250);
+  background: var(--secondary);
+  color: var(--foreground);
   font-weight: 500;
   font-size: 0.75rem;
+  border-radius: 9999px;
+  padding: 2px 8px;
 }
 
-.dark .badge-subtle {
-  background: oklch(0.18 0.015 260);
-  color: oklch(0.7 0.06 250);
-}
-
-/* ===== Status Badges ===== */
+/* ===== Status badges (Linear semantic palette adapted for shadcn parity) ===== */
 .badge-success {
-  background: oklch(0.95 0.03 150);
-  color: oklch(0.4 0.12 150);
+  background: oklch(0.95 0.04 145);
+  color: oklch(0.45 0.14 145);
+  font-weight: 500;
 }
 
 .dark .badge-success {
-  background: oklch(0.2 0.04 150);
-  color: oklch(0.7 0.12 150);
+  background: oklch(0.20 0.06 145);               /* surface w/ success low-alpha */
+  color: oklch(0.75 0.16 145);                    /* mint-green darkmode */
 }
 
 .badge-warning {
-  background: oklch(0.95 0.04 70);
-  color: oklch(0.45 0.12 70);
+  background: oklch(0.96 0.04 75);
+  color: oklch(0.50 0.14 75);
 }
 
 .dark .badge-warning {
-  background: oklch(0.2 0.04 70);
-  color: oklch(0.75 0.1 70);
+  background: oklch(0.20 0.06 75);
+  color: oklch(0.78 0.12 75);
 }
 
 .badge-error {
-  background: oklch(0.95 0.03 25);
-  color: oklch(0.5 0.16 25);
+  background: oklch(0.96 0.03 25);
+  color: oklch(0.52 0.18 25);
 }
 
 .dark .badge-error {
-  background: oklch(0.2 0.04 25);
-  color: oklch(0.7 0.12 25);
+  background: oklch(0.22 0.08 25);
+  color: oklch(0.72 0.18 25);
 }
 
 .badge-info {
-  background: oklch(0.95 0.02 250);
-  color: oklch(0.4 0.08 250);
+  background: oklch(0.96 0.02 264);
+  color: oklch(0.45 0.10 264);
 }
 
 .dark .badge-info {
-  background: oklch(0.18 0.02 250);
-  color: oklch(0.7 0.08 250);
+  background: oklch(0.22 0.05 264);               /* surface w/ lavender low-alpha */
+  color: oklch(0.75 0.12 264);
 }
 
-/* ===== Tooltip Refinement ===== */
+/* ===== Tooltip (Linear: ink-canvas with on-ink text) ===== */
 .tooltip-refined {
-  background: oklch(0.15 0.01 260);
-  color: oklch(0.93 0.005 240);
+  background: oklch(0.95 0.005 240);              /* inverse-canvas: white chip on dark */
+  color: oklch(0.13 0.005 264);
   font-size: 0.75rem;
   padding: 0.375rem 0.625rem;
   border-radius: 0.375rem;
-  box-shadow: 0 4px 12px oklch(0 0 0 / 0.15);
+  border: 1px solid oklch(0.90 0.005 264);
+  box-shadow: 0 4px 12px oklch(0 0 0 / 0.2);
   max-width: 280px;
 }
 
 .dark .tooltip-refined {
-  background: oklch(0.9 0.01 240);
-  color: oklch(0.15 0.01 260);
+  background: var(--foreground);                  /* ink-tooltip: ink on dark text */
+  color: var(--background);
 }
 
-/* ===== Dialog Refinement ===== */
+/* ===== Dialog (Linear: surface-2 with hairline border, no heavy shadow) ===== */
 .dialog-refined {
+  background: var(--popover);                     /* surface-2 */
   border-radius: 0.75rem;
-  border: 1px solid oklch(0.92 0.005 240);
-  box-shadow: 0 20px 60px oklch(0 0 0 / 0.1);
+  border: 1px solid var(--border);
+  box-shadow: 0 16px 48px oklch(0 0 0 / 0.4);
+  color: var(--foreground);
 }
 
-.dark .dialog-refined {
-  border-color: oklch(0.22 0.01 260);
-  box-shadow: 0 20px 60px oklch(0 0 0 / 0.4);
+/* ===== Token expiry indicator ===== */
+.token-indicator {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--muted);
+  overflow: hidden;
+  position: relative;
+}
+.token-indicator-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
+}
+
+/* ===== Dashed add button ===== */
+.btn-dashed {
+  border: 1.5px dashed oklch(0.27 0.008 264);
+  background: transparent;
+  color: var(--muted-foreground);
+  border-radius: 0.5rem;
+  padding: 0.625rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.btn-dashed:hover {
+  border-color: color-mix(in oklab, var(--primary) 60%, transparent);
+  background: color-mix(in oklab, var(--primary) 5%, transparent);
+  color: var(--primary);
+}
+
+.dark .btn-dashed {
+  border-color: oklch(0.32 0.008 264);
+}
+.dark .btn-dashed:hover {
+  border-color: color-mix(in oklab, var(--primary) 50%, transparent);
+  background: color-mix(in oklab, var(--primary) 6%, transparent);
+  color: color-mix(in oklab, var(--primary) 78%, white);
+}
+
+/* ===== Kbd shortcut hint ===== */
+.kbd-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--font-jetbrains-mono);
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  opacity: 0.7;
+}
+
+/* ===== Auth item row ===== */
+.auth-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.625rem;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  background: oklch(0.20 0.005 264 / 0.40);
+}
+.auth-row:hover {
+  border-color: color-mix(in oklab, var(--primary) 15%, transparent);
+  background: oklch(0.20 0.005 264 / 0.60);
+}
+
+/* ===== Status dot ===== */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot-valid {
+  background: oklch(0.65 0.16 145);
+  box-shadow: 0 0 6px oklch(0.65 0.16 145 / 0.40);
+}
+.status-dot-invalid {
+  background: oklch(0.72 0.18 25);
+  box-shadow: 0 0 6px oklch(0.72 0.18 25 / 0.40);
+}
+
+/* ===== Light-mode overrides for new components ===== */
+.card-refined {
+  background: var(--card);                          /* opaque for light mode */
+  border: 1px solid var(--border);
+}
+.dark .card-refined {
+  background: oklch(0.16 0.005 264 / 0.60);        /* semi-transparent glass on dark */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid oklch(1 0 0 / 0.06);           /* ultra-subtle white hairline */
+}
+
+.auth-row {
+  background: var(--muted);
+}
+.dark .auth-row {
+  background: oklch(0.20 0.005 264 / 0.40);
+}
+.auth-row:hover {
+  background: var(--accent);
+  border-color: var(--border);
+}
+.dark .auth-row:hover {
+  background: oklch(0.20 0.005 264 / 0.60);
+  border-color: color-mix(in oklab, var(--primary) 15%, transparent);
+}
+
+.btn-dashed {
+  border-color: var(--border);
+}
+.dark .btn-dashed {
+  border-color: oklch(0.32 0.008 264);
+}
+.btn-dashed:hover {
+  border-color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 5%, transparent);
+  color: var(--primary);
+}
+.dark .btn-dashed:hover {
+  border-color: color-mix(in oklab, var(--primary) 50%, transparent);
+  background: color-mix(in oklab, var(--primary) 6%, transparent);
+  color: color-mix(in oklab, var(--primary) 78%, white);
+}
+
+.status-dot-valid {
+  background: var(--status-success-fg);
+  box-shadow: 0 0 6px oklch(0.65 0.16 145 / 0.30);
+}
+.status-dot-invalid {
+  background: var(--status-error-fg);
+  box-shadow: 0 0 6px oklch(0.62 0.20 25 / 0.30);
 }
 
 /* ===== Print ===== */
@@ -441,7 +653,7 @@
   .no-print { display: none !important; }
 }
 
-/* ===== Dark mode sidebar gradient ===== */
-.dark aside {
-  background: linear-gradient(180deg, oklch(0.16 0.012 260) 0%, oklch(0.14 0.012 260) 100%) !important;
+/* ===== App canvas paint ===== */
+.app-main {
+  background: var(--background);
 }
