@@ -49,7 +49,7 @@ The project also provides a command-line interface (CLI) for users who prefer to
     ```bash
     python web_runner.py
     ```
-    The Web Shell runs on `http://localhost:5173` (frontend) with API proxy to backend on port 5409.
+    The Web Shell runs on `http://localhost:5174` (frontend) with API proxy to backend on port 6001.
 
 ### Frontend (optional React web UI)
 
@@ -67,7 +67,7 @@ The project also provides a command-line interface (CLI) for users who prefer to
     ```bash
     npm run dev
     ```
-    The frontend development server will start on `http://localhost:5173`.
+    The frontend development server will start on `http://localhost:5174`.
 
 ### Command-line Interface
 

@@ -30,7 +30,20 @@ cd sau_web/frontend && npm install
 python web_runner.py
 ```
 
-后端运行在 `http://localhost:5409`。
+后端运行在 `http://localhost:6001`。
+
+##### CORS 配置（必读）
+
+后端默认 **禁用** CORS。前端跨域访问 `/api/*` 必须显式设置环境变量 `SAU_CORS_ALLOWED_ORIGINS`，值为逗号分隔的 来源 列表（包含 scheme 与端口，例如 `http://localhost:5174`）。
+
+本地开发示例（在 shell 启动后端前设置）：
+
+```bash
+export SAU_CORS_ALLOWED_ORIGINS="http://localhost:5173,http://localhost:5174"
+python web_runner.py
+```
+
+未设置（或值为空）时，后端只会记录一条 warning 并拒绝所有跨域请求，前端 API 调用会报 CORS 错误。
 
 #### 3. 启动前端（开发模式）
 
@@ -38,7 +51,7 @@ python web_runner.py
 cd sau_web/frontend && npm run dev
 ```
 
-前端运行在 `http://localhost:5173`，自动代理 API 到后端。
+前端运行在 `http://localhost:5174`，自动代理 API 到后端。
 
 #### 4. 生产构建
 

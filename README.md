@@ -161,10 +161,10 @@ AI的发展毋庸置疑，希望你遇到这种安装和使用，不要再怯场
 # 安装 Web 依赖
 uv pip install -e ".[web]"
 
-# 启动后端 (http://localhost:5409)
+# 启动后端 (http://localhost:6001)
 python web_runner.py
 
-# 另开终端，启动前端开发服务器 (http://localhost:5173)
+# 另开终端，启动前端开发服务器 (http://localhost:5174)
 cd sau_web/frontend && npm install && npm run dev
 ```
 
@@ -212,23 +212,7 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 - 后续运行会自动检查上游 release 并更新
 - Bilibili 登录建议由用户自己在本地真实终端里执行；如果终端二维码显示不完整，可以直接打开当前目录下的 `qrcode.png` 扫码
 
-### 方式 3：使用 examples
 
-`examples/` 目录里同时存在两类脚本：
-
-- 当前主线 CLI 包装示例
-- 历史直连 uploader 示例
-
-对抖音、快手、小红书、Bilibili 来说，当前主线优先使用上面的 `sau ...` CLI。
-下面这些脚本主要是历史直连 uploader 示例或调试入口：
-
-- `examples/upload_to_douyin.py`
-- `examples/upload_video_to_bilibili.py`
-- `examples/upload_to_kuaishou.py`
-- `examples/upload_video_to_tencent.py`
-- `examples/upload_video_to_baijiahao.py`
-- `examples/upload_video_to_tiktok.py`
-- `examples/upload_video_to_xiaohongshu.py`
 
 ## 🐇项目背景
 
