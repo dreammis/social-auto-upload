@@ -1,29 +1,34 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import FloatingLogs from './components/FloatingLogs'
 import { ThemeToggle } from './components/ThemeToggle'
 import { ThemeProvider } from './components/ThemeProvider'
+import { ToastProvider } from '@/components/ui/toast'
+import { CommandPalette } from './components/CommandPalette'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { NotFound } from './components/NotFound'
+import { OnboardingTour, resetOnboardingTour } from './components/OnboardingTour'
 import { cn } from '@/lib/utils'
 import {
   BarChart3,
   FileText,
+  HelpCircle,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  Search,
   Send,
-  Settings,
   Users,
   Zap,
 } from 'lucide-react'
 
-const AccountsPage = lazy(() => import('./Pages/AccountsPage'))
-const PublishPage = lazy(() => import('./Pages/PublishPage'))
-const LogsPage = lazy(() => import('./Pages/LogsPage'))
-const TasksPage = lazy(() => import('./Pages/TasksPage'))
-const ProposalsPage = lazy(() => import('./Pages/ProposalsPage'))
+import AccountsPage from '@/features/accounts/AccountsPage'
+import PublishPage from './Pages/PublishPage'
+import LogsPage from './Pages/LogsPage'
+import TasksPage from './Pages/TasksPage'
 
 const MOBILE_BREAKPOINT = 768
 const COLLAPSE_BREAKPOINT = 1024
@@ -62,17 +67,9 @@ const navItems = [
   { path: '/publish', label: '发布中心', icon: Send },
   { path: '/tasks', label: '任务列表', icon: BarChart3 },
   { path: '/logs', label: '运行日志', icon: FileText },
-  { path: '/proposals', label: '变更提案', icon: Settings },
 ]
 
-function PageLoading() {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[300px] gap-4">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      <div className="text-sm text-muted-foreground">加载中...</div>
-    </div>
-  )
-}
+// TODO re-add suspense around non-page chrome (command palette, floating logs, etc.) if needed.
 
 function AppShell() {
   const { isMobile, shouldAutoCollapse } = useViewport()
@@ -101,9 +98,54 @@ function AppShell() {
     })
   }, [])
 
-  const current = navItems.find((item) => item.path === location.pathname)
-  const pageTitle = current?.label ?? 'SAU Shell'
+  const navigate = useNavigate()
+  const [paletteOpen, setPaletteOpen] = useState(false)
 
+  // Global keyboard shortcuts. ⌘K / Ctrl-K opens the command palette from any
+  // focus state; "/" and "n" are gated on `isTyping` so they only fire when
+  // the user is not actively typing into an input/textarea/contenteditable.
+  //   "/" → focus the current page's [data-search-input]
+  //   "n" → navigate to /publish
+  // Both `setPaletteOpen` (from `useState`) and `navigate` (from `useNavigate`)
+  // are stable across renders, so an empty dependency array is correct.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.key.toLowerCase() === 'k' &&
+        !e.shiftKey &&
+        !e.altKey
+      ) {
+        e.preventDefault()
+        setPaletteOpen((v) => !v)
+        return
+      }
+
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      const isTyping =
+        tag === 'input' || tag === 'textarea' || target?.isContentEditable === true
+      if (isTyping) return
+
+      if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        const el = document.querySelector<HTMLInputElement>('[data-search-input]')
+        el?.focus()
+        return
+      }
+
+      if (e.key === 'n' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        navigate('/publish')
+        return
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setPaletteOpen and navigate are both stable
+  }, [])
+
+  // Top header omits the page label — sidebar nav + in-content PageHeader already convey identity (avoids triple "账号管理" on the Accounts route).
   if (isMobile) {
     return (
       <div className="flex flex-col min-h-screen bg-background">
@@ -112,24 +154,23 @@ function AppShell() {
             <div className="flex h-7 w-7 items-center justify-center rounded-md bg-foreground">
               <Zap className="h-3.5 w-3.5 text-background" />
             </div>
-            <span className="text-sm font-semibold">{pageTitle}</span>
           </div>
           <ThemeToggle />
         </header>
 
         <main className="flex-1 p-4 pb-20">
-          <Suspense fallback={<PageLoading />}>
-            <Routes location={location}>
-              <Route path="/" element={<AccountsPage />} />
-              <Route path="/publish" element={<PublishPage />} />
-              <Route path="/logs" element={<LogsPage />} />
-              <Route path="/tasks" element={<TasksPage />} />
-              <Route path="/proposals" element={<ProposalsPage />} />
-            </Routes>
-          </Suspense>
+          <Routes location={location}>
+            <Route path="/" element={<AccountsPage />} />
+            <Route path="/publish" element={<PublishPage />} />
+            <Route path="/logs" element={<LogsPage />} />
+            <Route path="/tasks" element={<TasksPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
         </main>
 
         <FloatingLogs />
+
+        <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
 
         <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/30 bg-background/80 backdrop-blur-xl">
           <div className="flex items-center justify-around py-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
@@ -180,13 +221,10 @@ function AppShell() {
       <aside
         ref={sidebarRef}
         className={cn(
-          "flex flex-col border-r border-border/40 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+          "flex flex-col border-r border-border/40 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] bg-sidebar",
           isCollapsed ? "w-[60px]" : "w-[220px]",
           isTabletMode && !isCollapsed && "fixed inset-y-0 left-0 z-50 shadow-2xl"
         )}
-        style={{
-          background: 'linear-gradient(180deg, oklch(0.98 0.003 240) 0%, oklch(0.97 0.003 240) 100%)',
-        }}
       >
         {/* Logo */}
         <div className={cn(
@@ -206,6 +244,7 @@ function AppShell() {
             <button
               className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors"
               onClick={toggleSidebar}
+              aria-label="Collapse sidebar"
             >
               <PanelLeftClose className="h-4 w-4" />
             </button>
@@ -218,6 +257,7 @@ function AppShell() {
             <button
               className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors"
               onClick={toggleSidebar}
+              aria-label="Expand sidebar"
             >
               <PanelLeftOpen className="h-4 w-4" />
             </button>
@@ -251,6 +291,7 @@ function AppShell() {
                     )}
                     to={item.path}
                     onClick={isTabletMode ? () => setSidebarCollapsed(true) : undefined}
+                    data-tour={item.path === '/publish' ? 'nav-publish' : undefined}
                   >
                     {/* Active indicator */}
                     {active && (
@@ -293,6 +334,14 @@ function AppShell() {
                 <span className="text-xs font-medium text-muted-foreground">S</span>
               </div>
               <ThemeToggle />
+              <button
+                onClick={resetOnboardingTour}
+                className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors"
+                aria-label="重新引导"
+                title="重新引导"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </button>
             </div>
           ) : (
             <div className="flex items-center gap-2.5 px-1">
@@ -303,6 +352,15 @@ function AppShell() {
                 <span className="text-xs font-medium text-foreground truncate">SAU Admin</span>
                 <span className="text-[10px] text-muted-foreground/60">v1.0.0</span>
               </div>
+              <button
+                onClick={resetOnboardingTour}
+                className="h-7 px-2 flex items-center gap-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors text-xs"
+                aria-label="重新引导"
+                title="重新触发新手引导"
+              >
+                <HelpCircle className="h-3.5 w-3.5" />
+                <span>重新引导</span>
+              </button>
               <ThemeToggle />
             </div>
           )}
@@ -311,33 +369,37 @@ function AppShell() {
 
       {/* Main Content */}
       <div className="flex flex-1 flex-col min-w-0">
-        <header className="flex h-14 items-center justify-between border-b border-border/50 bg-background/80 backdrop-blur-xl px-6">
-          <div className="flex items-center gap-3">
-            {isTabletMode && (
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleSidebar}>
-                <Menu className="h-4 w-4" />
-              </Button>
-            )}
-            {current && <current.icon className="h-4 w-4 text-muted-foreground" />}
-            <span className="text-sm font-medium">{pageTitle}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <ThemeToggle />
-          </div>
+        <header className="flex h-14 items-center justify-end gap-2 border-b border-border/50 bg-background/80 backdrop-blur-xl px-6">
+          {isTabletMode && (
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleSidebar} aria-label="Toggle sidebar">
+              <Menu className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPaletteOpen(true)}
+            className="gap-2 text-muted-foreground hover:text-foreground btn-elegant"
+          >
+            <Search className="h-3.5 w-3.5" />
+            <span>搜索</span>
+            <kbd className="ml-1 hidden sm:inline-flex h-5 items-center px-1.5 rounded border border-border/40 bg-muted/40 text-[10px] font-mono text-muted-foreground">
+              ⌘K
+            </kbd>
+          </Button>
         </header>
 
         <main className="flex-1 overflow-auto">
-          <Suspense fallback={<PageLoading />}>
-            <Routes location={location}>
-              <Route path="/" element={<AccountsPage />} />
-              <Route path="/publish" element={<PublishPage />} />
-              <Route path="/logs" element={<LogsPage />} />
-              <Route path="/tasks" element={<TasksPage />} />
-              <Route path="/proposals" element={<ProposalsPage />} />
-            </Routes>
-          </Suspense>
+          <Routes location={location}>
+            <Route path="/" element={<AccountsPage />} />
+            <Route path="/publish" element={<PublishPage />} />
+            <Route path="/logs" element={<LogsPage />} />
+            <Route path="/tasks" element={<TasksPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
         </main>
       </div>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <FloatingLogs />
     </div>
   )
@@ -348,7 +410,13 @@ function App() {
     <BrowserRouter>
       <ThemeProvider defaultTheme="system" storageKey="sau-ui-theme">
         <TooltipProvider>
-          <AppShell />
+          <ToastProvider>
+            <OnboardingTour>
+              <ErrorBoundary>
+                <AppShell />
+              </ErrorBoundary>
+            </OnboardingTour>
+          </ToastProvider>
         </TooltipProvider>
       </ThemeProvider>
     </BrowserRouter>
