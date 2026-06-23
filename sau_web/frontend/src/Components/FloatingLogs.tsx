@@ -26,7 +26,7 @@ function getInitialSize(): Size {
 
 function getLogColor(message: string) {
   if (/( error|失败|ERROR)/.test(message)) return 'text-red-400'
-  if (/( success|成功|finished|完成)/.test(message)) return 'text-emerald-400'
+  if (/( success|成功|finished|完成)/.test(message)) return 'text-emerald-500'
   if (/( warn|警告|WARN)/.test(message)) return 'text-amber-400'
   return ''
 }
@@ -35,7 +35,7 @@ function LogLine({ entry }: { entry: LogEntry }) {
   const color = getLogColor(entry.message)
   return (
     <div className="py-0.5 font-mono text-xs">
-      <span className="mr-2 text-emerald-500">{entry.ts}</span>
+      <span className="mr-2 text-emerald-600 dark:text-emerald-400">{entry.ts}</span>
       <span className={color}>{entry.message}</span>
     </div>
   )
@@ -46,30 +46,31 @@ function FloatingLogs() {
   const isDark = resolved === 'dark'
 
   const themeColors = useMemo(() => ({
-    containerBg: isDark ? '#1f1f1f' : '#fff',
-    containerBorder: isDark ? '#303030' : '#e8e8e8',
-    logAreaBg: isDark ? '#141414' : '#fafafa',
-    emptyText: isDark ? '#555' : '#bfbfbf',
-    shadow: isDark ? '0 12px 32px rgba(0,0,0,0.4)' : '0 12px 32px rgba(0,0,0,0.18)',
+    containerBg: 'var(--card)',
+    containerBorder: 'var(--border)',
+    logAreaBg: 'var(--muted)',
+    emptyText: 'var(--muted-foreground)',
+    shadow: isDark ? '0 12px 32px rgba(0,0,0,0.4)' : '0 12px 32px rgba(0,0,0,0.1)',
   }), [isDark])
 
   const [visible, setVisible] = useState(true)
   const [minimized, setMinimized] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
+  // Detect open Radix dialogs/drawers — only react when the value changes.
+  // Bare DOM-events are skipped: only the actual data-state transition matters.
   useEffect(() => {
-    const observer = new MutationObserver(() => {
-      const hasOpenDrawer = document.querySelector('[data-state="open"]') !== null
-      setDrawerOpen(hasOpenDrawer)
-    })
-
+    const check = () => {
+      const hasOpen = document.querySelector('[data-state="open"]') !== null
+      setDrawerOpen((prev) => (prev === hasOpen ? prev : hasOpen))
+    }
+    const observer = new MutationObserver(check)
     observer.observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['class', 'data-state'],
+      attributeFilter: ['data-state'],
     })
-
     return () => observer.disconnect()
   }, [])
 
@@ -202,6 +203,7 @@ function FloatingLogs() {
         className="fixed right-6 bottom-6 h-11 w-11 rounded-full shadow-md z-[9999] btn-elegant"
         size="icon"
         onClick={() => setVisible(true)}
+        aria-label="Show logs"
       >
         <FileText className="h-4 w-4" />
       </Button>
@@ -226,12 +228,12 @@ function FloatingLogs() {
     >
       <div
         onMouseDown={handleDragStart}
-        className="flex cursor-move items-center justify-between gap-2 bg-foreground px-3 py-2.5 text-background select-none"
+        className="flex cursor-move items-center justify-between gap-2 px-3 py-2.5 text-background select-none bg-foreground"
       >
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4" />
           <span className="text-sm font-medium">运行日志</span>
-          <Badge className="bg-primary/20 text-primary-foreground">{filteredLogs.length}</Badge>
+          <Badge className="bg-background/20 text-background">{filteredLogs.length}</Badge>
         </div>
         <div className="flex items-center gap-2">
           <Input
@@ -240,27 +242,29 @@ function FloatingLogs() {
             onChange={(e) => setFilter(e.target.value)}
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
-            className="h-7 w-[140px] text-xs bg-zinc-800 border-zinc-700"
+            className="h-7 w-[140px] text-xs bg-background/20 border-background/30 text-background placeholder:text-background/50"
           />
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 text-white hover:text-white hover:bg-zinc-800"
+            className="h-7 w-7 text-background hover:text-background hover:bg-background/20"
             onClick={(e) => {
               e.stopPropagation()
               setMinimized((v) => !v)
             }}
+            aria-label={minimized ? 'Maximize logs' : 'Minimize logs'}
           >
             {minimized ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 text-white hover:text-white hover:bg-zinc-800"
+            className="h-7 w-7 text-background hover:text-background hover:bg-background/20"
             onClick={(e) => {
               e.stopPropagation()
               setVisible(false)
             }}
+            aria-label="Close logs"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -271,7 +275,7 @@ function FloatingLogs() {
         <ScrollArea className="flex-1" style={{ background: themeColors.logAreaBg }}>
           <div className="p-3">
             {filteredLogs.length === 0 ? (
-              <div className="text-center mt-16" style={{ color: themeColors.emptyText }}>暂无日志</div>
+              <div className="text-center mt-16 text-muted-foreground">暂无日志</div>
             ) : (
               filteredLogs.map((entry) => (
                 <LogLine key={entry.ts + entry.message} entry={entry} />
@@ -286,7 +290,7 @@ function FloatingLogs() {
           onMouseDown={handleResizeStart}
           className="absolute right-0 bottom-0 flex h-[18px] w-[18px] cursor-nwse-resize items-end justify-end p-0.5"
         >
-          <Minimize2 className="h-3 w-3" style={{ color: themeColors.emptyText }} />
+          <Minimize2 className="h-3 w-3 text-muted-foreground" />
         </div>
       )}
     </div>
