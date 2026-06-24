@@ -1,4 +1,5 @@
 import asyncio
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -89,6 +90,29 @@ class RecordingPage:
 
 
 class XiaohongshuUploaderTests(unittest.TestCase):
+    def test_creator_urls_keep_xiaohongshu_domain_by_default(self):
+        with patch.dict(os.environ, {"SAU_XHS_CREATOR_BASE_URL": ""}):
+            self.assertEqual(
+                xhs_main._build_xhs_creator_url("/login"),
+                "https://creator.xiaohongshu.com/login",
+            )
+
+    def test_creator_urls_use_configured_rednote_domain(self):
+        with patch.dict(
+            os.environ,
+            {"SAU_XHS_CREATOR_BASE_URL": "https://creator.rednote.com/"},
+        ):
+            self.assertEqual(
+                xhs_main._build_xhs_creator_url("/login"),
+                "https://creator.rednote.com/login",
+            )
+            self.assertEqual(
+                xhs_main._build_xhs_creator_url(
+                    "/publish/publish?from=homepage&target=video"
+                ),
+                "https://creator.rednote.com/publish/publish?from=homepage&target=video",
+            )
+
     def test_find_xhs_qrcode_locator_prefers_scan_sibling_inside_login_box(self):
         qrcode_locator = FakeLocator("qrcode", count=1, src="data:image/png;base64,abc")
         scan_text_locator = FakeLocator(
