@@ -1,0 +1,13 @@
+{
+  "name": "ai-sidebar-enhancements",
+  "created": "2026-06-21T23:38:15+08:00",
+  "status": "proposed",
+  "artifacts": {
+    "proposal": "增强AI侧边栏：平台感知prompt、生成历史、自定义模板、一键优化、SSE流式响应",
+    "design": "配置表驱动平台prompt、SSE流式响应、localStorage存储历史和模板、优化复用generate端点",
+    "tasks": { "total": 18, "completed": 0 }
+  },
+  "layers": ["api", "frontend"],
+  "platforms": [],
+  "applyReady": true
+}

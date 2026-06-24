@@ -1,0 +1,13 @@
+{
+  "name": "publish-page-ai-sidebar-layout",
+  "created": "2026-06-24T12:43:42+08:00",
+  "status": "proposed",
+  "artifacts": {
+    "proposal": "将 AI 助手从底部抽屉改为右侧常驻面板，左 2 右 3 比例，移动端底部抽屉",
+    "design": "CSS Grid 双栏布局，新建 PublishAiSidebar 容器，预览整合到 AI 面板内，移动端复用 drawer hook",
+    "tasks": { "total": 14, "completed": 0 }
+  },
+  "layers": ["frontend"],
+  "platforms": [],
+  "applyReady": true
+}

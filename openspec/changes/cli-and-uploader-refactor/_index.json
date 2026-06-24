@@ -1,0 +1,13 @@
+{
+  "name": "cli-and-uploader-refactor",
+  "created": "2026-06-24T00:00:00Z",
+  "status": "proposed",
+  "artifacts": {
+    "proposal": "CLI 分发器/模型去重、Uploader 浏览器生命周期抽象、web_runner 子模块提取、日志统一",
+    "design": "配置驱动通用分发器、BaseUploadRequest 继承、managed_browser 上下文管理器、AI/调度/错误处理模块化",
+    "tasks": { "total": 25, "completed": 0 }
+  },
+  "layers": ["cli", "api"],
+  "platforms": ["douyin", "kuaishou", "xiaohongshu", "bilibili", "tencent", "tiktok", "baijiahao"],
+  "applyReady": true
+}

@@ -1,0 +1,13 @@
+{
+  "name": "ai-sidebar-content-generation",
+  "created": "2026-06-21T23:10:35+08:00",
+  "status": "proposed",
+  "artifacts": {
+    "proposal": "集成AI内容生成模块到PublishPage右侧边栏，支持OpenRoute API、模型选择、轮询请求管理",
+    "design": "后端代理模式保护API密钥，请求队列+速率限制管理并发，Zustand store管理前端状态",
+    "tasks": { "total": 16, "completed": 0 }
+  },
+  "layers": ["api", "frontend"],
+  "platforms": [],
+  "applyReady": true
+}

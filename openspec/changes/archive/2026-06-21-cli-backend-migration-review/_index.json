@@ -1,0 +1,13 @@
+{
+  "name": "cli-backend-migration-review",
+  "created": "2026-06-20T21:16:09+08:00",
+  "status": "proposed",
+  "artifacts": {
+    "proposal": "CLI→Web后端迁移审查：系统性识别和修复CLI、API、Frontend三层的28+12+30个问题，包括无限循环、线程安全、死代码清理、拖拽上传等",
+    "design": "8项技术决策：共享模块提取、表驱动dispatch、无限循环修复策略、线程安全方案、SSE进度推送、死代码清理、表单状态管理、日志分页",
+    "tasks": { "total": 49, "completed": 0 }
+  },
+  "layers": ["cli", "api", "frontend"],
+  "platforms": ["douyin", "kuaishou", "xiaohongshu", "bilibili", "tencent", "tiktok", "baijiahao"],
+  "applyReady": true
+}

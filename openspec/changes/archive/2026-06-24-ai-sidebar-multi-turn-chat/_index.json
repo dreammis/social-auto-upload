@@ -1,0 +1,16 @@
+{
+  "name": "ai-sidebar-multi-turn-chat",
+  "created": "2026-06-24T00:00:00Z",
+  "status": "proposed",
+  "artifacts": {
+    "proposal": "Reframe the AI sidebar in PublishPage as a multi-turn chat co-pilot; ship the underlying primitive (Zustand chat store + form bridge + persistence interface + SSE multi-messages endpoint) and its 66-case unit suite. Wiring the existing AiSidebar.tsx onto the primitive, the backend SSE multi-messages entry-point, and the Dexie adapter are follow-up scope.",
+    "design": "UseChatStore + ChatStorage DI seam; streaming command trio (append / commit / cancel); form bridge via imperative ref with safe degradation (null ref → structured null result, throwing handle → caught). Two-phase pruner (TTL → quota, strict less-than at boundaries). Backend: backward-compatible `messages` array entry-point on existing /api/ai/generate/stream, no new endpoint or SSE protocol.",
+    "tasks": {
+      "total": 25,
+      "completed": 17
+    }
+  },
+  "layers": ["frontend", "api"],
+  "platforms": ["douyin", "kuaishou", "xiaohongshu", "bilibili", "tencent", "tiktok", "baijiahao"],
+  "applyReady": false
+}

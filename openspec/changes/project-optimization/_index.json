@@ -1,0 +1,16 @@
+{
+  "name": "project-optimization",
+  "created": "2025-01-24T00:00:00Z",
+  "status": "proposed",
+  "artifacts": {
+    "proposal": "系统性优化项目：拆分 web_runner.py、前端懒加载、添加 CI/CD、环境变量文档化",
+    "design": "Flask App Factory + Blueprint 路由、React.lazy 代码分割、GitHub Actions CI",
+    "tasks": {
+      "total": 20,
+      "completed": 0
+    }
+  },
+  "layers": ["api", "frontend", "cross-layer"],
+  "platforms": [],
+  "applyReady": true
+}
