@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader } from '@/components/ui/page-header'
+import { cn } from '@/lib/utils'
 import { api, type LogEntry } from '../api/client'
 import { useToast } from '@/components/ui/toast'
 import {
@@ -18,16 +20,57 @@ import {
   AlertTriangle,
   FileText,
 } from 'lucide-react'
+import { ChipBar, type ChipBarVariant } from '@/components/ui/chip-bar'
+import { toneFillBgClass, toneTextClass, type Tone } from '@/lib/tone'
 
 type Level = 'all' | 'info' | 'warn' | 'error'
+type ResolvedLevel = Exclude<Level, 'all'>
 
-const MAX_LOGS = 5000
-
-function classifyLevel(message: string): Level {
+function classifyLevel(message: string): ResolvedLevel {
   if (/error|失败|ERROR|Exception/.test(message)) return 'error'
   if (/warn|警告|WARN|注意/.test(message)) return 'warn'
   return 'info'
 }
+
+// Syslog-style channel naming diverges from the project's `Tone` vocabulary
+// (ResLevel `warn` ↦ Tone `warning`). Adapter kept LOCAL here so the API
+// contract stays syslog-shaped while the rendering tier talks `Tone`.
+// Single source of truth for status colors stays in `@/lib/tone`.
+function levelToTone(level: ResolvedLevel): Tone {
+  return level === 'warn' ? 'warning' : level
+}
+
+// Linear DESIGN.md — semantic dot replaces the prior emoji prefix (🔴🟡).
+// Colored via the status palette composed through `@/lib/tone` so it tracks
+// the design system in both themes (and shares vocabulary with Badge / Alert
+// / Toast / ValidityBadge). Records route through `levelToTone()` so the
+// syslog→Tone rename happens once here, not at every call site.
+const LEVEL_DOT_CLASS: Record<ResolvedLevel, string> = {
+  info: toneFillBgClass(levelToTone('info')),
+  warn: toneFillBgClass(levelToTone('warn')),
+  error: toneFillBgClass(levelToTone('error')),
+}
+
+const LEVEL_TEXT_CLASS: Record<ResolvedLevel, string> = {
+  // `info` channels stay neutral — they aren't a status warning, they're the
+  // baseline log voice, so `text-foreground` (compared to the colored
+  // `warning` / `error` text) is intentional.
+  info: 'text-foreground',
+  warn: toneTextClass(levelToTone('warn')),
+  error: toneTextClass(levelToTone('error')),
+}
+
+const LEVEL_CHIPS: ReadonlyArray<{
+  value: Level
+  label: string
+  icon: ReactNode
+  variant: ChipBarVariant
+}> = [
+  { value: 'all', label: '全部', icon: <FileText className="h-3.5 w-3.5" />, variant: 'neutral' },
+  { value: 'info', label: '信息', icon: <Info className="h-3.5 w-3.5" />, variant: 'info' },
+  { value: 'warn', label: '警告', icon: <AlertTriangle className="h-3.5 w-3.5" />, variant: 'warning' },
+  { value: 'error', label: '错误', icon: <AlertCircle className="h-3.5 w-3.5" />, variant: 'error' },
+]
 
 function parseDate(ts: string) {
   const d = new Date(ts)
@@ -40,43 +83,33 @@ function extractTaskId(message: string): string | null {
 }
 
 function LogsPage() {
+  const qc = useQueryClient()
   const { addToast } = useToast()
-  const [logs, setLogs] = useState<LogEntry[]>([])
   const [keyword, setKeyword] = useState('')
+  const [debouncedKeyword, setDebouncedKeyword] = useState('')
   const [level, setLevel] = useState<Level>('all')
   const [autoScroll, setAutoScroll] = useState(true)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
-  const latestTsRef = useRef<string | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  const loadLogs = useCallback(async () => {
-    try {
-      const res = await api.getLogs(latestTsRef.current || undefined)
-      const list = res.data ?? []
-      if (list.length === 0) return
-
-      setLogs((prev) => {
-        const map = new Map(prev.map((item) => [item.ts, item]))
-        for (const item of list) {
-          map.set(item.ts, item)
-        }
-        const sorted = Array.from(map.values()).sort((a, b) => a.ts.localeCompare(b.ts))
-        return sorted.length > MAX_LOGS ? sorted.slice(-MAX_LOGS) : sorted
-      })
-      latestTsRef.current = list[list.length - 1].ts
-    } catch {
-      // ignore poll errors
-    }
-  }, [])
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    loadLogs()
-    pollingRef.current = setInterval(loadLogs, 2000)
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedKeyword(keyword)
+    }, 300)
     return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current)
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
     }
-  }, [loadLogs])
+  }, [keyword])
+
+  const { data: logs = [] } = useQuery<LogEntry[]>({
+    queryKey: ['logs'],
+    queryFn: async () => {
+      const res = await api.getLogs()
+      return res.data ?? []
+    },
+    refetchInterval: 2000,
+  })
 
   useEffect(() => {
     if (autoScroll && containerRef.current) {
@@ -105,13 +138,13 @@ function LogsPage() {
       result = result.filter((item) => item.message.startsWith(prefix))
     }
 
-    const kw = keyword.trim().toLowerCase()
+    const kw = debouncedKeyword.trim().toLowerCase()
     if (kw) {
       result = result.filter((item) => item.message.toLowerCase().includes(kw))
     }
 
     return result
-  }, [logs, keyword, level, selectedTaskId])
+  }, [logs, debouncedKeyword, level, selectedTaskId])
 
   const summary = useMemo(() => {
     let info = 0
@@ -142,9 +175,7 @@ function LogsPage() {
   }
 
   const handleReset = () => {
-    latestTsRef.current = null
-    setLogs([])
-    loadLogs()
+    qc.invalidateQueries({ queryKey: ['logs'] })
   }
 
   return (
@@ -161,43 +192,12 @@ function LogsPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card className="card-refined">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">日志总量</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{summary.all}</div>
-          </CardContent>
-        </Card>
-        <Card className="card-refined">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">信息</CardTitle>
-            <Info className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{summary.info}</div>
-          </CardContent>
-        </Card>
-        <Card className="card-refined">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">警告</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-amber-600">{summary.warn}</div>
-          </CardContent>
-        </Card>
-        <Card className="card-refined">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">错误</CardTitle>
-            <AlertCircle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{summary.error}</div>
-          </CardContent>
-        </Card>
-      </div>
+      <ChipBar
+        options={LEVEL_CHIPS.map((c) => ({ ...c, count: summary[c.value] }))}
+        value={level}
+        onChange={(v) => setLevel(v as Level)}
+        className="mb-2"
+      />
 
       <Card className="card-refined">
         <CardContent className="pt-6">
@@ -210,20 +210,10 @@ function LogsPage() {
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
                   className="pl-8"
+                  data-search-input
                 />
               </div>
             </div>
-            <Select value={level} onValueChange={(v) => setLevel(v as Level)}>
-              <SelectTrigger className="w-[120px]">
-                <SelectValue placeholder="日志级别" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                <SelectItem value="info">信息</SelectItem>
-                <SelectItem value="warn">警告</SelectItem>
-                <SelectItem value="error">错误</SelectItem>
-              </SelectContent>
-            </Select>
             <Select value={selectedTaskId ?? ''} onValueChange={(v) => setSelectedTaskId(v || null)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="按任务筛选" />
@@ -258,7 +248,7 @@ function LogsPage() {
           </div>
 
           {filteredLogs.length === 0 ? (
-            <div className="flex h-[520px] items-center justify-center rounded-lg bg-muted/50">
+            <div className="flex h-[520px] items-center justify-center rounded-lg bg-muted">
               <p className="text-sm text-muted-foreground">
                 {logs.length === 0 ? '等待日志...' : '无匹配日志'}
               </p>
@@ -266,28 +256,27 @@ function LogsPage() {
           ) : (
             <div
               ref={containerRef}
-              className="h-[520px] overflow-y-auto rounded-lg bg-zinc-950 p-4 font-mono text-xs leading-relaxed"
+              className="h-[520px] overflow-y-auto rounded-lg bg-muted p-4 font-mono text-xs leading-relaxed"
             >
               {filteredLogs.map((entry, idx) => {
                 const lv = classifyLevel(entry.message)
-                const color =
-                  lv === 'error' ? 'text-red-400' :
-                  lv === 'warn' ? 'text-yellow-400' :
-                  'text-zinc-300'
-                const badge =
-                  lv === 'error' ? '🔴' :
-                  lv === 'warn' ? '🟡' :
-                  '  '
                 return (
-                  <div key={`${entry.ts}-${idx}`} className="mb-0.5">
-                    <span className="mr-2 select-none text-emerald-500">
+                  <div key={`${entry.ts}-${idx}`} className="flex items-start gap-2 mb-0.5">
+                    <span
+                      className={cn(
+                        'mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full',
+                        LEVEL_DOT_CLASS[lv],
+                      )}
+                      aria-hidden
+                    />
+                    <span className="mr-1 select-none whitespace-nowrap text-emerald-600 dark:text-emerald-400">
                       {parseDate(entry.ts)}
                     </span>
-                    <span className={color}>{badge} {entry.message}</span>
+                    <span className={LEVEL_TEXT_CLASS[lv]}>{entry.message}</span>
                   </div>
                 )
               })}
-              <div className="flex items-center gap-2 mt-1 text-zinc-500">
+              <div className="flex items-center gap-2 mt-1 text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 <span className="text-[11px]">实时接收中...</span>
               </div>

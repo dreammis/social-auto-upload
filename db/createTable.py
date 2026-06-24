@@ -1,3 +1,9 @@
+"""
+DEPRECATED: This file is no longer the primary DB initialization entry point.
+
+All table creation and index management now lives in web_runner/db.py (init_db()).
+This file is kept for historical reference only. Do NOT run it directly.
+"""
 import sqlite3
 import json
 import os

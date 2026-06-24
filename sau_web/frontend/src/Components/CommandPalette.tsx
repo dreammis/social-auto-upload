@@ -4,6 +4,7 @@ import { Search } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { useTasks } from '@/hooks/useTasks'
 import { cn } from '@/lib/utils'
+import { toneChipClasses, type Tone } from '@/lib/tone'
 
 interface CommandPaletteProps {
   open: boolean
@@ -12,9 +13,9 @@ interface CommandPaletteProps {
 
 const MAX_RESULTS = 8
 
-function statusVariant(
-  status?: string,
-): 'info' | 'success' | 'warning' | 'error' | 'secondary' {
+type StatusVariant = 'info' | 'success' | 'warning' | 'error' | 'secondary'
+
+function statusVariant(status?: string): StatusVariant {
   switch (status) {
     case 'running':
       return 'info'
@@ -47,6 +48,18 @@ function statusLabel(status?: string): string {
     default:
       return status ?? '-'
   }
+}
+
+// Single source of truth for the status chip — the `secondary` branch
+// keeps the canonical shadcn secondary palette; the four Tone branches
+// route through `@/lib/tone` so they share the vocabulary with
+// Badge / Alert / Toast / ChipBar / StatusDots across the app.
+const STATUS_CHIP_CLASS: Record<StatusVariant, string> = {
+  info: toneChipClasses('info' satisfies Tone),
+  success: toneChipClasses('success' satisfies Tone),
+  warning: toneChipClasses('warning' satisfies Tone),
+  error: toneChipClasses('error' satisfies Tone),
+  secondary: 'bg-secondary text-secondary-foreground',
 }
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
@@ -139,16 +152,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                       <span
                         className={cn(
                           'inline-flex shrink-0 items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full',
-                          variant === 'info' &&
-                            'bg-[var(--status-info-bg)] text-[var(--status-info-fg)]',
-                          variant === 'success' &&
-                            'bg-[var(--status-success-bg)] text-[var(--status-success-fg)]',
-                          variant === 'warning' &&
-                            'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]',
-                          variant === 'error' &&
-                            'bg-[var(--status-error-bg)] text-[var(--status-error-fg)]',
-                          variant === 'secondary' &&
-                            'bg-secondary text-secondary-foreground',
+                          STATUS_CHIP_CLASS[variant],
                         )}
                       >
                         {statusLabel(t.status)}

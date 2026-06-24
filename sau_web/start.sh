@@ -28,15 +28,20 @@ kill_port() {
   fi
 }
 
-# Find python executable
+# Find python executable — prefer .venv
 PYTHON=""
-for candidate in python3 python; do
-  if command -v "$candidate" >/dev/null 2>&1; then
-    PYTHON="$candidate"
-    break
-  fi
-done
+if [ -x "$ROOT/.venv/bin/python" ]; then
+  PYTHON="$ROOT/.venv/bin/python"
+else
+  for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      PYTHON="$candidate"
+      break
+    fi
+  done
+fi
 [ -z "$PYTHON" ] && fail "python not found"
+echo "[info] using $PYTHON"
 
 # 1) 检查/安装 Python 依赖（Flask 壳）
 if ! "$PYTHON" -c "import flask" >/dev/null 2>&1; then
@@ -57,26 +62,27 @@ if [ ! -d "$ROOT/sau_web/frontend/node_modules" ]; then
 fi
 
 # 3) 关闭默认端口，再启动
-kill_port 5409
-kill_port 5173
+kill_port 6001
+kill_port 5174
 
 # 4) 启动后端
-echo "[start] backend -> http://localhost:5409"
+echo "[start] backend -> http://localhost:6001"
 cd "$ROOT"
-"$PYTHON" web_runner.py > "$LOG_DIR/backend.log" 2>&1 &
+export SAU_CORS_ALLOWED_ORIGINS="${SAU_CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174}"
+"$PYTHON" run.py > "$LOG_DIR/backend.log" 2>&1 &
 BACKEND_PID=$!
 echo "[start] backend pid=$BACKEND_PID"
 
 # 5) 启动前端
-echo "[start] frontend -> http://localhost:5173"
+echo "[start] frontend -> http://localhost:5174"
 cd "$ROOT/sau_web/frontend"
 npm run dev > "$LOG_DIR/frontend.log" 2>&1 &
 FRONTEND_PID=$!
 echo "[start] frontend pid=$FRONTEND_PID"
 
 echo
-echo "前端: http://localhost:5173"
-echo "后端: http://localhost:5409"
+echo "前端: http://localhost:5174"
+echo "后端: http://localhost:6001"
 echo "日志: $LOG_DIR"
 echo
 echo "停止: Ctrl+C 或 wait"

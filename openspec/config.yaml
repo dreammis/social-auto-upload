@@ -16,7 +16,7 @@ context: |
     - upload-video args: --account, --file, --title, --desc, --tags, --schedule, --thumbnail, --headless/--headed
     - upload-note args: --account, --images, --title, --note, --tags, --schedule, --headless/--headed
 
-  Web API (Flask on :5409):
+  Web API (Flask on :6001):
     - POST /api/accounts/login    -> CLI login
     - POST /api/accounts/check    -> CLI check
     - POST /api/upload/video      -> CLI upload-video

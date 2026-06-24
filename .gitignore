@@ -190,3 +190,19 @@ videoFile
 .sau_uploads/
 
 /uploader/bilibili_uploader/qrcode.png
+
+# ── AI Agent 工具 运行产物 (本地调试残留，应被忽略) ───────────────────
+.agents/
+.kilo/
+.kilocode/
+.omo/
+.opencode/
+.playwright-mcp/
+.skills-lock.json
+skills-lock.json
+
+# ── 本地运行时日志与开发缓存 ─────────────────────────────────────────
+console.publish.log
+.sau-logs/
+.sau-logs/*.log
+node_modules/.vite/

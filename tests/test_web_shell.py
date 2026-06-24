@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -51,22 +52,29 @@ class TestAccounts:
 
     def test_list_accounts_with_files(self, app):
         import web_runner as wr
+        from unittest.mock import patch
 
-        (wr.COOKIES_DIR / "douyin_testuser.json").write_text("{}")
-        (wr.COOKIES_DIR / "kuaishou_testuser.json").write_text("{}")
-        (wr.COOKIES_DIR / "other_file.json").write_text("{}")
+        mock_accounts = [
+            {"platform": "douyin", "account_name": "testuser", "path": "/fake/douyin_testuser.json"},
+            {"platform": "kuaishou", "account_name": "testuser", "path": "/fake/kuaishou_testuser.json"},
+        ]
+        def mock_account_files(platform=None):
+            if platform:
+                return [a for a in mock_accounts if a["platform"] == platform]
+            return mock_accounts
 
-        resp = app.get("/api/accounts")
-        data = resp.get_json()
-        accounts = data["data"]
-        assert len(accounts) == 3
+        with patch.object(wr, '_account_files', side_effect=mock_account_files):
+            resp = app.get("/api/accounts")
+            data = resp.get_json()
+            accounts = data["data"]
+            assert len(accounts) == 2
 
-        resp = app.get("/api/accounts?platform=douyin")
-        data = resp.get_json()
-        accounts = data["data"]
-        assert len(accounts) == 1
-        assert accounts[0]["platform"] == "douyin"
-        assert accounts[0]["account_name"] == "testuser"
+            resp = app.get("/api/accounts?platform=douyin")
+            data = resp.get_json()
+            accounts = data["data"]
+            assert len(accounts) == 1
+            assert accounts[0]["platform"] == "douyin"
+            assert accounts[0]["account_name"] == "testuser"
 
     def test_delete_account(self, app):
         import web_runner as wr
@@ -129,23 +137,22 @@ class TestUpload:
         assert resp.status_code == 400
 
     def test_upload_video_response_has_data_task_id(self, app):
-        with patch("web_runner._run_sau"):
+        with patch("web_runner._run_sau"), patch("web_runner.MIN_UPLOAD_BYTES", 0):
             resp = app.post(
                 "/api/upload/video",
-                data=json.dumps({
+                data={
                     "platform": "douyin",
                     "account": "test",
                     "title": "test",
                     "file_data": _data_uri_png(),
-                }),
-                content_type="application/json",
+                },
             )
         data = resp.get_json()
         assert data["success"] is True
         assert "task_id" in data["data"]
 
     def test_upload_note_with_data_uris(self, app):
-        with patch("web_runner._run_sau"):
+        with patch("web_runner._run_sau"), patch("web_runner.MIN_UPLOAD_BYTES", 0):
             resp = app.post(
                 "/api/upload/note",
                 data=json.dumps({

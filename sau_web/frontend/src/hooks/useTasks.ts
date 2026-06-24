@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { api, type AccountItem, type LogEntry, type TaskItem } from '../api/client'
+import { api, type LogEntry, type TaskItem } from '../api/client'
 
 const TASKS_QUERY_KEY = ['tasks'] as const
 
-/** Poll for all tasks every 3 s using TanStack Query */
+/** Poll for all tasks every 3 s, but only when there are running tasks */
 export function useTasks() {
   return useQuery<TaskItem[]>({
     queryKey: TASKS_QUERY_KEY,
@@ -11,14 +11,24 @@ export function useTasks() {
       const res = await api.getTasks()
       return res.data ?? []
     },
-    refetchInterval: 3_000,
+    refetchInterval: (query) => {
+      // Stop polling if no data or no running tasks
+      const tasks = query.state.data
+      if (!tasks || tasks.length === 0) return false
+      const hasRunningTasks = tasks.some(
+        (task) => task.status === 'pending' || task.status === 'running'
+      )
+      return hasRunningTasks ? 3_000 : false
+    },
   })
 }
 
-/** Fetch accounts list */
+/**
+ * Fetch accounts, optionally filtered by platform.
+ */
 export function useAccounts(platform?: string) {
-  return useQuery<AccountItem[]>({
-    queryKey: ['accounts', platform],
+  return useQuery({
+    queryKey: ['accounts', platform ?? 'all'] as const,
     queryFn: async () => {
       const res = await api.getAccounts(platform)
       return res.data ?? []

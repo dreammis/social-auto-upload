@@ -51,7 +51,6 @@ logger.add(sys.stdout, colorize=True, format=log_formatter)
 
 douyin_logger = create_logger('douyin', 'logs/douyin.log')
 tencent_logger = create_logger('tencent', 'logs/tencent.log')
-xhs_logger = create_logger('xhs', 'logs/xhs.log')
 tiktok_logger = create_logger('tiktok', 'logs/tiktok.log')
 bilibili_logger = create_logger('bilibili', 'logs/bilibili.log')
 kuaishou_logger = create_logger('kuaishou', 'logs/kuaishou.log')

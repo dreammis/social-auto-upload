@@ -33,13 +33,12 @@ class BilibiliCliTests(unittest.TestCase):
 
     def test_dispatch_bilibili_check_prints_valid(self):
         args = Namespace(platform="bilibili", action="check", account="creator")
-        with patch("sau_cli.check_bilibili_account", new=AsyncMock(return_value=True)):
+        with patch("cli.platforms.bilibili.check", new=AsyncMock(return_value=True)):
             code = asyncio.run(sau_cli.dispatch(args))
         self.assertEqual(code, 0)
 
-    def test_login_bilibili_account_returns_friendly_message_without_terminal(self):
-        with patch("sau_cli.has_interactive_terminal", return_value=False):
-            result = asyncio.run(sau_cli.login_bilibili_account("creator"))
-        self.assertFalse(result["success"])
-        self.assertIn("local interactive terminal", result["message"].lower())
-        self.assertIn("qrcode.png", result["message"].lower())
+    def test_login_bilibili_account_uses_playwright(self):
+        with patch("cli.platforms.bilibili.bilibili_setup", new=AsyncMock(return_value={"success": True, "message": "ok"})):
+            from cli.platforms.bilibili import login
+            result = asyncio.run(login("creator"))
+        self.assertTrue(result["success"])

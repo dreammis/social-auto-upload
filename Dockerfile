@@ -33,6 +33,6 @@ RUN cp conf.example.py conf.py
 RUN mkdir -p /app/videoFile
 RUN mkdir -p /app/cookiesFile
 
-EXPOSE 5409
+EXPOSE 6001
 
-CMD ["python", "sau_backend.py"]
+CMD ["python", "web_runner.py"]

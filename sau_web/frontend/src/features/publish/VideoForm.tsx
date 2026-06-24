@@ -8,9 +8,9 @@ import {
   useRef,
   useState,
 } from 'react'
-import type { AiGenerationResult } from '@/components/AiSidebar/AiSidebar'
 import type { FormPreviewData } from './PublishPreview'
 import type { GroupSelection } from './GroupPublishSelector'
+import type { FormHandle } from '@/lib/chat/chatFormBridge'
 import {
   Accordion,
   AccordionContent,
@@ -22,8 +22,6 @@ import {
   Checkbox,
   Input,
   Label,
-  MultiSelect,
-  type MultiSelectOption,
   Select,
   SelectContent,
   SelectItem,
@@ -38,17 +36,14 @@ import { motion } from 'motion/react'
 import { useToast } from '@/components/ui/toast'
 import {
   api,
-  PLATFORMS_WITH_ICONS,
   PLATFORMS,
-  type AccountItem,
 } from '../../api/client'
 import {
   FilePlus,
   Inbox,
   Loader2,
-  Send,
   Settings,
-  Users,
+  Wand2,
   X,
 } from 'lucide-react'
 import {
@@ -57,7 +52,8 @@ import {
   SectionHeader,
 } from './shared'
 import { SchedulePicker } from './SchedulePicker'
-import { formatFileSize, parseAccountKey } from '@/lib/features'
+import { formatFileSize } from '@/lib/features'
+import { Tip } from '@/lib/tip'
 
 /**
  * Staggered entrance for each animated card in the form. `custom={index}` (0..N)
@@ -100,17 +96,17 @@ const BILIBILI_TIDS = [
   { id: 11, name: '电视剧' },
 ] as const
 
-/** Imperative handle — parent calls `videoFormRef.current?.applyAiResult(r)` */
-export type VideoFormHandle = {
-  applyAiResult: (result: AiGenerationResult) => void
-}
+/** Imperative handle — parent calls `videoFormRef.current?.applyAiResult(r)`.
+ *  Aliased to `FormHandle` from the chat bridge so chatAction hooks can read
+ *  the same contract. `getFormSnapshot` lets the chat pipeline capture the
+ *  current form contents at send time so the AI sees the user's latest edits.
+ */
+export type VideoFormHandle = FormHandle
 
 type VideoFormProps = {
-  accountOptions: AccountItem[]
   /**
    * Pre-resolved group selection from GroupPublishSelector.
-   * When provided, the form skips manual platform/account picking
-   * and uses the group's cookie files directly for submission.
+   * The form uses the group's cookie files directly for submission.
    */
   groupSelection?: GroupSelection | null
   /**
@@ -121,17 +117,14 @@ type VideoFormProps = {
   onSuccess: (info: { count: number; taskIds: string[]; failedCount: number; mode: '视频' }) => void
   /** Internal exceptions (network failure, etc). The parent toasts accordingly. */
   onError: (label: '视频') => void
-  /** Called when the user selects a platform, so the parent can feed it to AiSidebar. */
-  onPlatformChange?: (platform: string) => void
   /** Called on every form-change so the parent can render a live preview. */
   onFormChange?: (data: FormPreviewData) => void
 }
 
 /**
- * Video publishing form — three-card layout (目标 / 素材 / 高级选项) stacked
- * as a fragment of `card-refined` Cards (no outer wrapper). The advanced
- * accordion additionally holds the schedule picker + headless toggle, since
- * both are "behavior" tweaks the majority of users don't touch.
+ * Video publishing form — content card (素材) + advanced options accordion,
+ * stacked as animated cards. The advanced accordion holds the schedule picker,
+ * headless toggle, and platform-specific fields (Douyin/Bilibili/Tencent).
  *
  * Owns 16+ fields locally so typing never re-renders the rest of PublishPage.
  *
@@ -141,13 +134,11 @@ type VideoFormProps = {
  */
 export const VideoForm = memo(
   forwardRef<VideoFormHandle, VideoFormProps>(function VideoForm(
-    { accountOptions, groupSelection, onSuccess, onError, onPlatformChange, onFormChange },
+    { groupSelection, onSuccess, onError, onFormChange },
     ref,
   ) {
     const { addToast } = useToast()
 
-    const [platforms, setPlatforms] = useState<string[]>([])
-    const [accounts, setAccounts] = useState<string[]>([])
     const [title, setTitle] = useState('')
     const [desc, setDesc] = useState('')
     const [tags, setTags] = useState('')
@@ -162,56 +153,71 @@ export const VideoForm = memo(
     const [shortTitle, setShortTitle] = useState('')
     const [category, setCategory] = useState('')
     const [isDraft, setIsDraft] = useState(false)
+    const [enhancingField, setEnhancingField] = useState<'title' | 'desc' | null>(null)
 
     const fileRef = useRef<File | null>(null)
     const [fileInfo, setFileInfo] = useState<{ name: string; size: number } | null>(null)
     const [dragOver, setDragOver] = useState(false)
     const [submitting, setSubmitting] = useState(false)
 
-    const isGroupMode = !!groupSelection
     const platformLabelMap = useMemo(
       () => Object.fromEntries(PLATFORMS.map((p) => [p.value, p.label])),
       [],
     )
 
-    /** Only show platforms that have at least one authorized account. */
-    const availablePlatforms = useMemo(
-      () =>
-        isGroupMode
-          ? new Set(groupSelection!.mappings.map((m) => m.platform))
-          : new Set(accountOptions.map((a) => a.platform)),
-      [isGroupMode, groupSelection, accountOptions],
-    )
-
     /** Currently selected/active platforms for conditional field rendering. */
     const activePlatforms = useMemo(
-      () => new Set(isGroupMode ? groupSelection!.platforms : platforms),
-      [isGroupMode, groupSelection, platforms],
+      () => new Set(groupSelection?.platforms ?? []),
+      [groupSelection],
     )
     const hasDouyin = activePlatforms.has('douyin')
     const hasBilibili = activePlatforms.has('bilibili')
     const hasTencent = activePlatforms.has('tencent')
     const hasAnyPlatformSpecific = hasDouyin || hasBilibili || hasTencent
 
-    /** Multi-select options for the platform picker, filtered to authorized platforms. */
-    const videoPlatformOptions: MultiSelectOption[] = useMemo(
-      () =>
-        PLATFORMS_WITH_ICONS.filter((p) => availablePlatforms.has(p.value)).map((p) => ({
-          label: p.label,
-          value: p.value,
-          icon: <PlatformIcon platform={p.value} className="h-4 w-4" />,
-        })),
-      [availablePlatforms],
-    )
+    const OPTIMIZE_MODEL = 'google/gemma-3-1b-it:free'
 
-    /** Filter accounts to only show those matching the selected platforms. */
-    const filteredAccounts = useMemo(
-      () =>
-        platforms.length === 0
-          ? accountOptions
-          : accountOptions.filter((a) => platforms.includes(a.platform)),
-      [accountOptions, platforms],
-    )
+    const enhanceField = useCallback(async (field: 'title' | 'desc') => {
+      const value = field === 'title' ? title : desc
+      if (!value.trim()) return
+      setEnhancingField(field)
+      const partName = field === 'title' ? '标题' : '视频简介'
+      const systemPrompt = `你是一个文案优化助手。请对用户提供的${partName}进行润色优化。
+
+严格规则：
+1. 只基于原文优化，不得添加原文中没有的新信息、新观点或新内容
+2. 可以优化：用词精准度、语句流畅度、排版格式、标点符号
+3. 不得改变原文的核心含义和关键信息
+4. 去除明显的 AI 生成痕迹，使文案读起来像人工撰写
+5. 只返回优化后的${partName}内容，不要添加任何解释、前缀或后缀`
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: value },
+      ]
+      let enhanced = ''
+      try {
+        await api.generateMessagesStream(
+          { messages, model: OPTIMIZE_MODEL },
+          (chunk) => { enhanced += chunk },
+          (final) => {
+            const result = (final || enhanced).trim()
+            if (result) {
+              if (field === 'title') setTitle(result)
+              else setDesc(result)
+              addToast(`${partName}已优化`, 'success')
+            }
+            setEnhancingField(null)
+          },
+          (err) => {
+            setEnhancingField(null)
+            addToast(err || '优化失败', 'error')
+          },
+        )
+      } catch {
+        setEnhancingField(null)
+        addToast('优化请求失败', 'error')
+      }
+    }, [title, desc, addToast])
 
     /**
      * Stable imperative handle. Setters returned by useState are reference-
@@ -226,8 +232,9 @@ export const VideoForm = memo(
           if (result.desc) setDesc(result.desc)
           if (result.tags) setTags(result.tags)
         },
+        getFormSnapshot: () => ({ title, desc, tags }),
       }),
-      [setTitle, setDesc, setTags],
+      [setTitle, setDesc, setTags, title, desc, tags],
     )
 
     /**
@@ -291,16 +298,9 @@ export const VideoForm = memo(
     }, [])
 
     const submit = useCallback(async () => {
-      if (isGroupMode) {
-        if (!groupSelection!.platforms.length) {
-          addToast('请至少选择一个发布平台', 'warning')
-          return
-        }
-      } else {
-        if (!platforms.length || !accounts.length) {
-          addToast('请选择平台和账号', 'warning')
-          return
-        }
+      if (!groupSelection?.platforms.length) {
+        addToast('请先在上方选择发布账号组和平台', 'warning')
+        return
       }
       if (!fileRef.current) {
         addToast('请选择视频文件', 'warning')
@@ -313,54 +313,13 @@ export const VideoForm = memo(
 
       setSubmitting(true)
       try {
-        let tasks: Promise<{
-          platform: string
-          accountKey: string
-          success: boolean
-          taskId: string | undefined
-        }>[]
-
-        if (isGroupMode) {
-          // Group mode: submit one task per selected platform using cookie files
-          tasks = groupSelection!.mappings
-            .filter((m) => groupSelection!.platforms.includes(m.platform))
-            .map((mapping) =>
-              api
-                .uploadVideo({
-                  platform: mapping.platform,
-                  account: mapping.cookieFile,
-                  title,
-                  file: fileRef.current!,
-                  desc: desc || undefined,
-                  tags: tags || undefined,
-                  schedule: schedule || undefined,
-                  headless: String(headless),
-                  thumbnail: thumbnail || undefined,
-                  thumbnail_landscape: thumbnailLandscape || undefined,
-                  thumbnail_portrait: thumbnailPortrait || undefined,
-                  product_link: productLink || undefined,
-                  product_title: productTitle || undefined,
-                  tid,
-                  short_title: shortTitle || undefined,
-                  category: category || undefined,
-                  is_draft: isDraft ? 'true' : undefined,
-                })
-                .then((res) => ({
-                  platform: mapping.platform,
-                  accountKey: `${mapping.platform}::${mapping.cookieFile}`,
-                  success: res.success,
-                  taskId: res.data?.task_id,
-                })),
-            )
-        } else {
-          // Legacy mode: one task per selected account
-          tasks = accounts.map((accountKey) => {
-            const accName = parseAccountKey(accountKey)
-            const accPlatform = accountKey.split('::')[0]
-            return api
+        const tasks = groupSelection.mappings
+          .filter((m) => groupSelection.platforms.includes(m.platform))
+          .map((mapping) =>
+            api
               .uploadVideo({
-                platform: accPlatform,
-                account: accName,
+                platform: mapping.platform,
+                account: mapping.cookieFile,
                 title,
                 file: fileRef.current!,
                 desc: desc || undefined,
@@ -378,13 +337,12 @@ export const VideoForm = memo(
                 is_draft: isDraft ? 'true' : undefined,
               })
               .then((res) => ({
-                platform: accPlatform,
-                accountKey,
+                platform: mapping.platform,
+                accountKey: `${mapping.platform}::${mapping.cookieFile}`,
                 success: res.success,
                 taskId: res.data?.task_id,
-              }))
-          })
-        }
+              })),
+          )
 
         const results = await Promise.all(tasks)
         const ids: string[] = []
@@ -407,10 +365,7 @@ export const VideoForm = memo(
         setSubmitting(false)
       }
     }, [
-      isGroupMode,
       groupSelection,
-      accounts,
-      platforms,
       title,
       desc,
       tags,
@@ -433,87 +388,9 @@ export const VideoForm = memo(
 
     return (
       <>
-        {/* ── 发布目标 ─────────────────────────────────────────── */}
-        <motion.div
-          custom={0}
-          variants={cardVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          <Card className="card-refined">
-            <CardContent className="p-5 space-y-4">
-              <SectionHeader icon={<Send className="h-4 w-4" />} title="发布目标" />
-              {isGroupMode ? (
-                <div className="flex items-center gap-3 rounded-lg bg-muted/40 border border-border/50 px-3 py-2.5">
-                  <Users className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-                    <span className="text-sm font-medium">{groupSelection!.groupName}</span>
-                    <span className="text-muted-foreground/40">·</span>
-                    {groupSelection!.platforms.map((p) => (
-                      <span
-                        key={p}
-                        className="inline-flex items-center gap-1 rounded bg-background border border-border/60 px-1.5 py-0.5 text-[11px] font-medium"
-                      >
-                        <PlatformIcon platform={p} className="h-3 w-3" />
-                        {platformLabelMap[p] ?? p}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>发布平台</Label>
-                    <MultiSelect
-                      options={videoPlatformOptions}
-                      value={platforms}
-                      onChange={(v) => {
-                        setPlatforms(v)
-                        onPlatformChange?.(v[0] || '')
-                        // Clear accounts that no longer match the selected platforms
-                        setAccounts((prev) =>
-                          prev.filter((a) => v.includes(a.split('::')[0])),
-                        )
-                      }}
-                      placeholder="选择发布平台（可多选）"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>发布账号</Label>
-                    <Select value={accounts[0] || ''} onValueChange={(v) => setAccounts(v ? [v] : [])}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="选择发布账号" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {filteredAccounts.length === 0 ? (
-                          <div className="px-2 py-4 text-sm text-muted-foreground text-center">
-                            所选平台暂无可用账号
-                          </div>
-                        ) : (
-                          filteredAccounts.map((item) => (
-                            <SelectItem
-                              key={`${item.platform}_${item.account_name}`}
-                              value={`${item.platform}::${item.account_name}`}
-                            >
-                              <span className="flex items-center gap-2">
-                                <PlatformIcon platform={item.platform} className="h-4 w-4" />
-                                {item.platform} / {item.account_name}
-                              </span>
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
         {/* ── 内容素材 ─────────────────────────────────────────── */}
         <motion.div
-          custom={1}
+          custom={0}
           variants={cardVariants}
           initial="hidden"
           animate="visible"
@@ -626,9 +503,26 @@ export const VideoForm = memo(
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>标题</Label>
-                    <span className="text-[11px] text-muted-foreground tabular-nums">
-                      {title.length}/100
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <Tip text="AI 优化标题">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 rounded-md p-0"
+                          onClick={() => enhanceField('title')}
+                          disabled={enhancingField !== null || !title.trim()}
+                        >
+                          {enhancingField === 'title' ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Wand2 className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </Tip>
+                      <span className="text-[11px] text-muted-foreground tabular-nums">
+                        {title.length}/100
+                      </span>
+                    </div>
                   </div>
                   <Input
                     placeholder="请输入视频标题（建议 6-20 字）"
@@ -640,7 +534,24 @@ export const VideoForm = memo(
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="video-desc">视频简介</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="video-desc">视频简介</Label>
+                      <Tip text="AI 优化简介">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 rounded-md p-0"
+                          onClick={() => enhanceField('desc')}
+                          disabled={enhancingField !== null || !desc.trim()}
+                        >
+                          {enhancingField === 'desc' ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Wand2 className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </Tip>
+                    </div>
                     <Textarea
                       id="video-desc"
                       className="min-h-[90px]"
@@ -654,14 +565,14 @@ export const VideoForm = memo(
                     <div className="flex items-center justify-between">
                       <Label>标签</Label>
                       <span className="text-[11px] text-muted-foreground">
-                        {platformTagLabel(platforms)}
+                        {platformTagLabel([...activePlatforms])}
                       </span>
                     </div>
                     <TagInput
                       placeholder="按 Enter 添加标签（# 可省略）"
                       value={tags}
                       onChange={(val) => setTags(val)}
-                      maxTags={effectiveMaxTags(platforms)}
+                      maxTags={effectiveMaxTags([...activePlatforms])}
                     />
                   </div>
                 </div>
@@ -672,7 +583,7 @@ export const VideoForm = memo(
 
         {/* ── 高级选项 (collapsed by default) ───────────────────── */}
         <motion.div
-          custom={2}
+          custom={1}
           variants={cardVariants}
           initial="hidden"
           animate="visible"

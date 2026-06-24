@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { AccountsProvider } from '@/features/accounts/AccountsProvider'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import FloatingLogs from './components/FloatingLogs'
@@ -10,7 +11,6 @@ import { ToastProvider } from '@/components/ui/toast'
 import { CommandPalette } from './components/CommandPalette'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { NotFound } from './components/NotFound'
-import { OnboardingTour, resetOnboardingTour } from './components/OnboardingTour'
 import { cn } from '@/lib/utils'
 import {
   BarChart3,
@@ -25,10 +25,29 @@ import {
   Zap,
 } from 'lucide-react'
 
-import AccountsPage from '@/features/accounts/AccountsPage'
-import PublishPage from './Pages/PublishPage'
-import LogsPage from './Pages/LogsPage'
-import TasksPage from './Pages/TasksPage'
+const AccountsPage = lazy(() => import('@/features/accounts/AccountsPage'))
+const PublishPage = lazy(() => import('./Pages/PublishPage'))
+const LogsPage = lazy(() => import('./Pages/LogsPage'))
+const TasksPage = lazy(() => import('./Pages/TasksPage'))
+
+const LazyOnboardingTour = lazy(() =>
+  import('./components/OnboardingTour').then((m) => ({ default: m.OnboardingTour }))
+)
+
+function resetOnboardingTour() {
+  import('./components/OnboardingTour').then((m) => m.resetOnboardingTour())
+}
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
+        <span className="text-sm text-muted-foreground">加载中...</span>
+      </div>
+    </div>
+  )
+}
 
 const MOBILE_BREAKPOINT = 768
 const COLLAPSE_BREAKPOINT = 1024
@@ -159,16 +178,16 @@ function AppShell() {
         </header>
 
         <main className="flex-1 p-4 pb-20">
-          <Routes location={location}>
-            <Route path="/" element={<AccountsPage />} />
-            <Route path="/publish" element={<PublishPage />} />
-            <Route path="/logs" element={<LogsPage />} />
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <Suspense fallback={<PageLoader />}>
+            <Routes location={location}>
+              <Route path="/" element={<AccountsPage />} />
+              <Route path="/publish" element={<PublishPage />} />
+              <Route path="/logs" element={<LogsPage />} />
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </main>
-
-        <FloatingLogs />
 
         <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
 
@@ -390,32 +409,41 @@ function AppShell() {
         </header>
 
         <main className="flex-1 overflow-auto">
-          <Routes location={location}>
-            <Route path="/" element={<AccountsPage />} />
-            <Route path="/publish" element={<PublishPage />} />
-            <Route path="/logs" element={<LogsPage />} />
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <Suspense fallback={<PageLoader />}>
+            <Routes location={location}>
+              <Route path="/" element={<AccountsPage />} />
+              <Route path="/publish" element={<PublishPage />} />
+              <Route path="/logs" element={<LogsPage />} />
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
-      <FloatingLogs />
     </div>
   )
 }
 
 function App() {
+  /* AccountsProvider is hoisted ABOVE LazyOnboardingTour so the tour can
+   * read `useAccountGroups()` and adapt step 3 (build-first or add-auth)
+   * to whether the user already has groups. Without this hoisting the
+   * AutoStartTour child of TourProvider would render outside the
+   * accounts context and the selector fallback could not react. */
   return (
     <BrowserRouter>
       <ThemeProvider defaultTheme="system" storageKey="sau-ui-theme">
         <TooltipProvider>
           <ToastProvider>
-            <OnboardingTour>
-              <ErrorBoundary>
-                <AppShell />
-              </ErrorBoundary>
-            </OnboardingTour>
+            <AccountsProvider>
+              <LazyOnboardingTour>
+                <ErrorBoundary>
+                  <AppShell />
+                  <FloatingLogs />
+                </ErrorBoundary>
+              </LazyOnboardingTour>
+            </AccountsProvider>
           </ToastProvider>
         </TooltipProvider>
       </ThemeProvider>

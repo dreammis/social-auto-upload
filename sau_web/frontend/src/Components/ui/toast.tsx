@@ -1,6 +1,7 @@
 import * as React from "react"
-import { X } from "lucide-react"
+import { X, CheckCircle, XCircle, AlertTriangle, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toneBorderClass, toneChipClasses } from "@/lib/tone"
 
 type ToastType = "default" | "success" | "error" | "warning" | "info"
 
@@ -18,25 +19,52 @@ interface ToastContextType {
 
 const ToastContext = React.createContext<ToastContextType | undefined>(undefined)
 
+const EXIT_DURATION = 300 // ms, matches the CSS animation duration
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = React.useState<Toast[]>([])
+  const [exitingIds, setExitingIds] = React.useState<Set<string>>(new Set())
+  const timersRef = React.useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
+
+  const removeToast = React.useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+    setExitingIds((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }, [])
+
+  const dismissToast = React.useCallback((id: string) => {
+    setExitingIds((prev) => new Set(prev).add(id))
+    const timer = setTimeout(() => {
+      timersRef.current.delete(timer)
+      removeToast(id)
+    }, EXIT_DURATION)
+    timersRef.current.add(timer)
+  }, [removeToast])
 
   const addToast = React.useCallback((message: string, type: ToastType = "default") => {
     const id = Math.random().toString(36).substring(2, 9)
     setToasts((prev) => [...prev, { id, message, type }])
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id))
+    const timer = setTimeout(() => {
+      timersRef.current.delete(timer)
+      dismissToast(id)
     }, 3000)
-  }, [])
+    timersRef.current.add(timer)
+  }, [dismissToast])
 
-  const removeToast = React.useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
+  React.useEffect(() => {
+    return () => {
+      timersRef.current.forEach((t) => clearTimeout(t))
+      timersRef.current.clear()
+    }
   }, [])
 
   return (
     <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
       {children}
-      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ToastContainer toasts={toasts} exitingIds={exitingIds} dismissToast={dismissToast} />
     </ToastContext.Provider>
   )
 }
@@ -49,56 +77,84 @@ export function useToast() {
   return context
 }
 
-function ToastContainer({ toasts, removeToast }: { toasts: Toast[]; removeToast: (id: string) => void }) {
+function ToastContainer({
+  toasts,
+  exitingIds,
+  dismissToast,
+}: {
+  toasts: Toast[]
+  exitingIds: Set<string>
+  dismissToast: (id: string) => void
+}) {
   return (
-    <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2">
+    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2">
       {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onClose={() => removeToast(toast.id)} />
+        <ToastItem
+          key={toast.id}
+          toast={toast}
+          exiting={exitingIds.has(toast.id)}
+          onClose={() => dismissToast(toast.id)}
+        />
       ))}
     </div>
   )
 }
 
-function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
+function ToastIcon({ type }: { type: ToastType }) {
+  const iconClass = "h-5 w-5 shrink-0"
+  switch (type) {
+    case "success":
+      return <CheckCircle className={iconClass} />
+    case "error":
+      return <XCircle className={iconClass} />
+    case "warning":
+      return <AlertTriangle className={iconClass} />
+    case "info":
+      return <Info className={iconClass} />
+    default:
+      return null
+  }
+}
+
+function ToastItem({
+  toast,
+  exiting,
+  onClose,
+}: {
+  toast: Toast
+  exiting: boolean
+  onClose: () => void
+}) {
+  // DESIGN.md status tokens composed via `@/lib/tone`. Shared with
+  // <Badge variant="..."> and <Alert variant="...">: a single tonal
+  // vocabulary across the toast / badge / alert primitive surface.
   const typeStyles: Record<ToastType, string> = {
     default: "bg-background border",
-    success: "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-200",
-    error: "bg-red-50 border-red-200 text-red-800 dark:bg-red-950 dark:border-red-800 dark:text-red-200",
-    warning: "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200",
-    info: "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-200",
+    success: cn(toneChipClasses("success"), toneBorderClass("success")),
+    error: cn(toneChipClasses("error"), toneBorderClass("error")),
+    warning: cn(toneChipClasses("warning"), toneBorderClass("warning")),
+    info: cn(toneChipClasses("info"), toneBorderClass("info")),
   }
 
   return (
     <div
       className={cn(
-        "flex items-center gap-2 rounded-lg border p-4 shadow-lg animate-in slide-in-from-right-full fade-in duration-300",
+        "flex items-center gap-2 rounded-lg border p-4 shadow-lg duration-300",
+        exiting
+          ? "animate-out fade-out slide-out-to-right-full"
+          : "animate-in slide-in-from-right-full fade-in",
         typeStyles[toast.type]
       )}
     >
-      <span className="text-sm">{toast.message}</span>
-      <button onClick={onClose} className="ml-auto opacity-70 hover:opacity-100">
+      <ToastIcon type={toast.type} />
+      <span className="text-sm flex-1">{toast.message}</span>
+      <button
+        onClick={onClose}
+        className="opacity-70 hover:opacity-100 transition-opacity shrink-0"
+        aria-label="关闭通知"
+      >
         <X className="h-4 w-4" />
       </button>
     </div>
   )
-}
-
-// Legacy API compatibility
-export const message = {
-  success: (msg: string) => {
-    const event = new CustomEvent('toast', { detail: { message: msg, type: 'success' } })
-    window.dispatchEvent(event)
-  },
-  error: (msg: string) => {
-    const event = new CustomEvent('toast', { detail: { message: msg, type: 'error' } })
-    window.dispatchEvent(event)
-  },
-  warning: (msg: string) => {
-    const event = new CustomEvent('toast', { detail: { message: msg, type: 'warning' } })
-    window.dispatchEvent(event)
-  },
-  info: (msg: string) => {
-    const event = new CustomEvent('toast', { detail: { message: msg, type: 'info' } })
-    window.dispatchEvent(event)
-  },
 }

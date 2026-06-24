@@ -1,32 +1,59 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { TourProvider, useTour, type StepType } from '@reactour/tour'
 import { useToast } from '@/components/ui/toast'
+import { useAccountGroups } from '@/hooks/useAccountGroups'
 
 const STORAGE_KEY = 'sau-onboarding-done'
 
-// ── Steps (emojis embedded in content strings) ────────────────────────
-const steps: StepType[] = [
-  {
-    selector: 'body',
-    content: '1️⃣ 欢迎使用 SAU Shell 🎉\n\n支持抖音、快手、小红书、B 站、视频号等多平台自动发布。\n\n接下来 5 步完成首次配置。',
-  },
-  {
-    selector: '[data-tour="new-group"]',
-    content: '2️⃣ 创建第一个分组\n\n点击「新建分组」，输入名称即可。\n\n建议按用途命名，如「个人号」「工作室号」。',
-  },
-  {
-    selector: '[data-tour="add-auth"]',
-    content: '3️⃣ 添加平台授权 🔑\n\n分组卡片内点击 "+"，选择平台后扫码登录。\n\n登录后自动保存 Cookie，后续无需重复登录。',
-  },
-  {
-    selector: '[data-tour="check-all"]',
-    content: '4️⃣ 检测账号状态 ✅\n\n使用「一键检测」查看 Cookie 是否有效。\n\n绿色 = 正常，红色 = 已失效需重新登录。',
-  },
-  {
-    selector: '[data-tour="nav-publish"]',
-    content: '5️⃣ 开始发布 🚀\n\n点击左侧「发布中心」，选择平台和账号，上传视频或图文即可发布。\n\n支持定时发布和 AI 内容生成。',
-  },
-]
+/* ── Step 3 fallback ───────────────────────────────────────────────────
+ *  Step 3 ("添加平台授权") targets `[data-tour="add-auth"]` which lives
+ *  on the + icon inside a `SortableGroup`. When the user has zero groups
+ *  there is no `SortableGroup` and the selector resolves to nothing — the
+ *  popover anchors on stale geometry. We branch step 3 to instead high-
+ *  light the always-present `[data-tour="new-group"]` button in the page
+ *  header and explain "建好分组再回来".
+ *  Approach B (per @reactour/tour docs): preserve the 5-step array length
+ *  and use `setSteps()` at runtime so `currentStep` does not reset.
+ * ────────────────────────────────────────────────────────────────────── */
+function buildTourSteps(hasGroups: boolean): StepType[] {
+  const step3Selector = hasGroups ? '[data-tour="add-auth"]' : '[data-tour="new-group"]'
+  const step3Content = hasGroups
+    ? '3️⃣ 添加平台授权 🔑\n\n分组卡片内点击 "+"，选择平台后扫码登录。\n\n登录后自动保存 Cookie，后续无需重复登录。'
+    : '3️⃣ 先创建分组 📦\n\n还没看到分组卡片？点击右上的「新建分组」先创建一个。\n\n建好分组后再回到这里，下一步会带你给分组添加平台授权。'
+
+  return [
+    {
+      selector: 'body',
+      content:
+        '1️⃣ 欢迎使用 SAU Shell 🎉\n\n支持抖音、快手、小红书、B 站、视频号等多平台自动发布。\n\n接下来 5 步完成首次配置。',
+    },
+    {
+      selector: '[data-tour="new-group"]',
+      content:
+        '2️⃣ 创建第一个分组\n\n点击「新建分组」，输入名称即可。\n\n建议按用途命名，如「个人号」「工作室号」。',
+    },
+    { selector: step3Selector, content: step3Content },
+    {
+      // TODO(step4): when groups.length === 0 the check-all button is
+      // disabled and the popover still anchors on it. Mirror the step-3
+      // branch and target `[data-tour="new-group"]` (or duplicate the
+      // modal CTA) when no groups exist.
+      selector: '[data-tour="check-all"]',
+      content:
+        '4️⃣ 检测账号状态 ✅\n\n使用「一键检测」查看 Cookie 是否有效。\n\n绿色 = 正常，红色 = 已失效需重新登录。',
+    },
+    {
+      selector: '[data-tour="nav-publish"]',
+      content:
+        '5️⃣ 开始发布 🚀\n\n点击左侧「发布中心」，选择平台和账号，上传视频或图文即可发布。\n\n支持定时发布和 AI 内容生成。',
+    },
+  ]
+}
+
+/* Initial steps for TourProvider mount — fall back to the no-groups
+ * selector so the first reactivity cycle always resolves. AutoStartTour
+ * effect then swaps in the real selector once accounts query resolves. */
+const INITIAL_STEPS: StepType[] = buildTourSteps(false)
 
 // ── Dark-mode aware styles ─────────────────────────────────────────────
 const tourStyles = {
@@ -101,12 +128,30 @@ export function resetOnboardingTour() {
 }
 
 // ── Inner hook component ────────────────────────────────────────────────
+// `@reactour/tour` ^1 type defs don't expose `setSteps` even though the
+// runtime exports a callable. We narrow the hook return to include the
+// runtime method so downstream usage stays free of `any` / `unknown`.
+type TourApi = ReturnType<typeof useTour> & {
+  setSteps: (steps: StepType[]) => void
+}
+
 function AutoStartTour() {
-  const { setIsOpen, setCurrentStep } = useTour()
+  const tourApi = useTour() as TourApi
+  const { setIsOpen, setCurrentStep, setSteps } = tourApi
   const { addToast } = useToast()
+  const { data: groups = [] } = useAccountGroups()
   const startedRef = useRef(false)
   const toastRef = useRef(addToast)
   toastRef.current = addToast
+
+  /* Build steps derived from current group count, then propagate to the
+   * tour runtime. The 5-step length is preserved, so `currentStep` is
+   * unaffected by the swap. Stable deps (groups.length only) avoid
+   * cycling setSteps on every parent re-render. */
+  const steps = useMemo(() => buildTourSteps(groups.length > 0), [groups.length])
+  useEffect(() => {
+    setSteps(steps)
+  }, [steps, setSteps])
 
   // Auto-start on mount (once)
   useEffect(() => {
@@ -142,7 +187,7 @@ function AutoStartTour() {
 export function OnboardingTour({ children }: { children: ReactNode }) {
   return (
     <TourProvider
-      steps={steps}
+      steps={INITIAL_STEPS}
       beforeClose={beforeClose}
       styles={tourStyles}
       showNavigation

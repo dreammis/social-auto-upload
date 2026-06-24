@@ -1,11 +1,12 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-body);
   --font-mono: var(--font-jetbrains-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -45,10 +46,12 @@
 :root {
   /* ============================================================
    * DESIGN.md (Linear) — fonts
-   * Inter: display + body (substitute for Linear Display / Linear Text)
+   * Outfit: display / headings (geometric, distinctive)
+   * DM Sans: body text (refined, readable)
    * JetBrains Mono: code, log IDs, timeline titles (substitute for Linear Mono)
    * ============================================================ */
-  --font-inter: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'DM Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-jetbrains-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /* Linear radii: button-md is 8px, card lg is 12px */
@@ -195,7 +198,8 @@
   --status-info-bg: oklch(0.22 0.05 264);          /* lavender-tinted surface */
   --status-info-fg: oklch(0.78 0.12 264);
   --status-error-bg: oklch(0.22 0.08 25);
-  --status-error-fg: oklch(0.72 0.18 25);  --status-success-border: color-mix(in oklab, var(--status-success-fg) 40%, transparent);
+  --status-error-fg: oklch(0.72 0.18 25);
+  --status-success-border: color-mix(in oklab, var(--status-success-fg) 40%, transparent);
   --status-warning-border: color-mix(in oklab, var(--status-warning-fg) 40%, transparent);
   --status-info-border: color-mix(in oklab, var(--status-info-fg) 40%, transparent);
   --status-error-border: color-mix(in oklab, var(--status-error-fg) 40%, transparent);
@@ -217,8 +221,12 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: var(--font-inter);
+    font-family: var(--font-sans);
     font-feature-settings: 'cv11', 'ss03';
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    letter-spacing: -0.02em;
   }
 
   /* Linear: mono only in code contexts */
@@ -249,6 +257,16 @@
   to { height: 0; opacity: 0; }
 }
 
+
+/* ===== Reduced Motion (WCAG / Apple HIG / Material Design) ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 @layer utilities {
   .animate-accordion-down {
     animation: accordion-down 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -263,27 +281,27 @@
   }
 }
 
-/* ===== Card (Linear: 1px hairline border, hover = lift + glow) ===== */
+/* ===== Card (Linear: 1px hairline border, hover = surface lift only) =====
+ * Per DESIGN.md: Linear avoids drop shadows and translate-Y on dark; the
+ * depth ladder is carried by surface elevation + 1px hairline borders.
+ * Hover here lifts the card from `--card` (surface-1) to `--secondary`
+ * (surface-3) and bumps the border to `hairline-strong`. No shadow. ===== */
 .card-refined {
   color: var(--card-foreground);
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 0.75rem;                           /* rounded.lg 12px */
-  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .card-refined:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in oklab, var(--primary) 20%, transparent);
-  box-shadow:
-    0 8px 25px oklch(0 0 0 / 0.08),
-    0 0 0 1px color-mix(in oklab, var(--primary) 6%, transparent);
+  background: var(--secondary);
+  border-color: color-mix(in oklab, var(--primary) 20%, var(--border));
 }
 
 .dark .card-refined:hover {
-  border-color: color-mix(in oklab, var(--primary) 25%, transparent);
-  box-shadow:
-    0 8px 25px oklch(0 0 0 / 0.30),
-    0 0 0 1px color-mix(in oklab, var(--primary) 10%, transparent),
-    0 0 40px color-mix(in oklab, var(--primary) 4%, transparent);
+  background: var(--secondary);
+  border-color: color-mix(in oklab, var(--primary) 30%, var(--border));
 }
 
 /* ===== Button (Linear: 8px radius, primary lavender, surface-1 secondary) ===== */
@@ -348,7 +366,7 @@
   color: var(--foreground);
   padding: 0 0.75rem;
   font-size: 0.875rem;
-  font-family: var(--font-inter);
+  font-family: var(--font-sans);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -432,47 +450,21 @@
   padding: 2px 8px;
 }
 
-/* ===== Status badges (Linear semantic palette adapted for shadcn parity) ===== */
-.badge-success {
-  background: oklch(0.95 0.04 145);
-  color: oklch(0.45 0.14 145);
-  font-weight: 500;
-}
-
-.dark .badge-success {
-  background: oklch(0.20 0.06 145);               /* surface w/ success low-alpha */
-  color: oklch(0.75 0.16 145);                    /* mint-green darkmode */
-}
-
-.badge-warning {
-  background: oklch(0.96 0.04 75);
-  color: oklch(0.50 0.14 75);
-}
-
-.dark .badge-warning {
-  background: oklch(0.20 0.06 75);
-  color: oklch(0.78 0.12 75);
-}
-
-.badge-error {
-  background: oklch(0.96 0.03 25);
-  color: oklch(0.52 0.18 25);
-}
-
-.dark .badge-error {
-  background: oklch(0.22 0.08 25);
-  color: oklch(0.72 0.18 25);
-}
-
-.badge-info {
-  background: oklch(0.96 0.02 264);
-  color: oklch(0.45 0.10 264);
-}
-
-.dark .badge-info {
-  background: oklch(0.22 0.05 264);               /* surface w/ lavender low-alpha */
-  color: oklch(0.75 0.12 264);
-}
+/* ===== Status badges =====
+ * The four `.badge-{success,warning,error,info}` block rules that used to
+ * live here have been deleted (drift vs `--status-*-{bg,fg}` tokens; no
+ * active consumers after the lib/tone.ts migration).
+ *
+ * Single source of truth: `@/lib/tone` (`toneChipClasses(tone)` for paired
+ * bg+fg on chip surfaces; `toneStyleClasses[tone]` as the documented
+ * escape-hatch map). The four `--status-*-{bg,fg}` CSS variables defined
+ * above remain canonical and are emitted into Tailwind v4 utility classes
+ * by the helpers in `lib/tone.ts`.
+ *
+ * If a future site needs a different chip shape (e.g. dot-only, ring-only,
+ * outline-on-fg) add the helper to `lib/tone.ts` — do NOT add a parallel
+ * stylesheet rule here, since two sources of truth will drift again.
+ */
 
 /* ===== Tooltip (Linear: ink-canvas with on-ink text) ===== */
 .tooltip-refined {
@@ -580,19 +572,31 @@
 }
 
 /* ===== Status dot ===== */
+/* The `.status-dot-{valid,invalid}` block rules that used to live here have
+ * been deleted — light-mode hardcoded `oklch(0.65 0.16 145)` /
+ * `oklch(0.72 0.18 25)` did not react to dark theme switching (drift vs
+ * canonical `--status-{success,error}-fg` tokens). Their second occurrence
+ * in the "Light-mode overrides" section below was deleted too: it pulled
+ * half from canonical tokens and half from hardcoded oklch, doubling the
+ * SSOT surface and locking a separate halo alpha.
+ *
+ * Single source of truth: `@/lib/tone.ts` `toneDotStyle(tone)` returns the
+ * inline-style object `{ background, boxShadow }` driven by the canonical
+ * `--status-{tone}-fg` token. Apply via:
+ *   `<span className="status-dot" style={toneDotStyle(tone)} />`
+ *
+ * The `.status-dot` base rule below (size / shape only) is KEPT — carries
+ * geometric properties (6×6 px, rounded-50%, flex-shrink) with no color
+ * tokens and zero drift risk.
+ *
+ * If a future site needs a different dot shape (outline, ring, no-halo)
+ * add the helper to `lib/tone.ts` — do NOT add a parallel stylesheet rule
+ * here, since two sources of truth will drift again. */
 .status-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
-}
-.status-dot-valid {
-  background: oklch(0.65 0.16 145);
-  box-shadow: 0 0 6px oklch(0.65 0.16 145 / 0.40);
-}
-.status-dot-invalid {
-  background: oklch(0.72 0.18 25);
-  box-shadow: 0 0 6px oklch(0.72 0.18 25 / 0.40);
 }
 
 /* ===== Light-mode overrides for new components ===== */
@@ -637,15 +641,6 @@
   border-color: color-mix(in oklab, var(--primary) 50%, transparent);
   background: color-mix(in oklab, var(--primary) 6%, transparent);
   color: color-mix(in oklab, var(--primary) 78%, white);
-}
-
-.status-dot-valid {
-  background: var(--status-success-fg);
-  box-shadow: 0 0 6px oklch(0.65 0.16 145 / 0.30);
-}
-.status-dot-invalid {
-  background: var(--status-error-fg);
-  box-shadow: 0 0 6px oklch(0.62 0.20 25 / 0.30);
 }
 
 /* ===== Print ===== */

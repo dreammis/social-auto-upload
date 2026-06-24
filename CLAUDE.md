@@ -26,19 +26,23 @@ The project also provides a command-line interface (CLI) for users who prefer to
 
 ### Backend
 
-1.  **Install dependencies:**
+> 当前主线使用 `uv` + `pyproject.toml` 管理依赖，使用 `patchright` 驱动浏览器，数据库初始化已在 `web_runner/db.py` 中集成（首次启动 `web_runner.py` 时自动建表）。**`requirements.txt` 和 `db/createTable.py` 仅作历史兼容用途，新用户请直接按下方命令走。**
+
+1.  **Install dependencies (推荐 `uv`，回退 `pip` 时使用 `-e` 安装 `pyproject.toml`):**
     ```bash
-    pip install -r requirements.txt
+    uv pip install -e .
+    # 或： pip install -e .
     ```
 
-2.  **Install Playwright browser drivers:**
+2.  **Install Playwright-compatible browser drivers (`patchright`，国内镜像):**
     ```bash
-    playwright install chromium
+    patchright install chromium
+    # Windows PowerShell 用 npmmirror: $env:PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright"; patchright install chromium
     ```
 
-3.  **Initialize the database:**
+3.  **Initialize the database (首次启动 `web_runner.py` 时自动完成，无需手动执行):**
     ```bash
-    python db/createTable.py
+    python web_runner.py   # 自动调用 web_runner/db.py::init_db()
     ```
 
 4.  **Run the Web Shell (React + Flask UI):**
@@ -71,7 +75,11 @@ The project also provides a command-line interface (CLI) for users who prefer to
 
 ### Command-line Interface
 
-To use the CLI, you can run the `cli_main.py` script with the appropriate arguments.
+`uv pip install -e .` 安装后，会在虚拟环境里注册 `sau` 入口（当前主入口为 `sau_cli.py` / `cli/` 包）。本地开发时也可直接：
+
+```bash
+python sau_cli.py douyin login --account <account_name>
+```
 
 **Login:**
 
@@ -88,7 +96,7 @@ sau douyin check --account <account_name>
 **Upload:**
 
 ```bash
-sau douyin upload --account <account_name> --file <video_file> --title <title> [--tags tag1,tag2] [--schedule YYYY-MM-DD HH:MM]
+sau douyin upload-video --account <account_name> --file <video_file> --title <title> [--tags tag1,tag2] [--schedule YYYY-MM-DD HH:MM]
 ```
 
 **Install bundled skill:**
@@ -99,7 +107,7 @@ sau skill install
 
 ## Development Conventions
 
-*   Current mainline code is in `sau_cli.py`, `uploader/`, `skills/`, and `docs/CLI.md`.
+*   Current mainline code is in `sau_cli.py` / `cli/`, `uploader/`, `skills/`, and `docs/CLI.md`.
 *   The optional React frontend is located in `sau_web/frontend`.
 *   The historical Vue frontend `sau_frontend/` has been removed.
 *   The project uses a SQLite database for data storage. The database file is located at `db/database.db`.

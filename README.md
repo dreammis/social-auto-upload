@@ -220,11 +220,39 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 
 如果您需要立即发布或其他定制化的发布策略，欢迎研究源码或在社区提问。
 
-## 📃详细文档
+## 📃 详细文档
 
-已落后，目前在快速重构该项目，当下，你需要做的是把这个仓库，发给你的AI agent：qwen code，codex cc，openclaw等等，让他们帮你安装和使用
+项目主线的安装、CLI、Web Shell、AI Agent 提示词等文档已统一收敛到 `docs/`，请按需查阅：
+
+| 文档 | 路径 | 用途 |
+| --- | --- | --- |
+| 安装说明 | [`docs/install.md`](docs/install.md) | 开发者/创作者依赖安装、首次使用、环境准备 |
+| 更新说明 | [`docs/update.md`](docs/update.md) | `git pull` 后重新同步依赖与浏览器驱动 |
+| CLI 命令速查 | [`docs/CLI.md`](docs/CLI.md) | `sau <platform> <action>` 子命令、参数、示例 |
+| Web Shell | [`docs/web-shell.md`](docs/web-shell.md) | 可选 React + Flask 可视化界面、CORS、页面与路由 |
+| Agent Bootstrap | [`docs/agent-bootstrap.md`](docs/agent-bootstrap.md) | OpenClaw / Codex / Claude Code 启动提示词 |
+| 历史 Web 说明 | [`docs/legacy-web.md`](docs/legacy-web.md) | `sau_backend.py` + Vue 旧 Web 迁移说明 |
+
+> 早期策略/重构/价值评估文档（`skill-distribution.md`、`FRONTEND-UI-UPGRADE.md`、`VALUE-UPGRADE.md`）已归档到 [`docs/dev/`](docs/dev/) 下，供后续重构查阅。
 
 更详细的文档和说明，请查看：[social-auto-upload 官方文档](https://sap-doc.nasdaddy.com/)
+
+## ⚙️ 环境变量
+
+项目支持通过环境变量配置行为。完整列表见 [`.env.example`](.env.example)。
+
+| 变量 | 说明 | 默认值 |
+| --- | --- | --- |
+| `SAU_CORS_ALLOWED_ORIGINS` | CORS 允许的来源（逗号分隔），Web Shell 跨域必需 | 空（CORS 关闭） |
+| `OPENROUTER_API_KEY` | OpenRouter API Key，用于 AI 内容生成 | 空 |
+| `VITE_API_BASE_URL` | 前端后端地址，开发模式自动走代理无需设置 | 空 |
+
+启动 Web Shell 时，`sau_web/start.sh` 会自动设置 `SAU_CORS_ALLOWED_ORIGINS`。如手动启动后端，需自行配置：
+
+```bash
+export SAU_CORS_ALLOWED_ORIGINS="http://localhost:5174"
+python run.py
+```
 
 ## 🐾交流与支持
 

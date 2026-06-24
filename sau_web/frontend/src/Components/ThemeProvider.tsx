@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { ToastProvider } from './ui/toast'
 
 export type Theme = 'light' | 'dark' | 'system'
 
@@ -66,9 +65,7 @@ export function ThemeProvider({
 
   return (
     <ThemeProviderContext.Provider {...props} value={{ theme, resolved, setTheme }}>
-      <ToastProvider>
-        {children}
-      </ToastProvider>
+      {children}
     </ThemeProviderContext.Provider>
   )
 }

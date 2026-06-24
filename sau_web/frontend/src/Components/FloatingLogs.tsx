@@ -15,13 +15,61 @@ import {
 type Position = { x: number; y: number }
 type Size = { width: number; height: number }
 
+/** Maximum number of log entries to keep in memory */
+const MAX_LOGS = 2000
+
 function getInitialPosition(): Position {
   if (typeof window === 'undefined') return { x: 24, y: 24 }
-  return { x: window.innerWidth - 520, y: window.innerHeight - 420 }
+  // Default to the bottom-LEFT corner so the panel never sits on top of the
+  // primary CTA (which lives bottom-right). The user can drag the panel
+  // anywhere on screen.
+  return { x: 24, y: Math.max(80, window.innerHeight - 420) }
 }
 
 function getInitialSize(): Size {
   return { width: 520, height: 380 }
+}
+
+// ── Persistence: user's preferred position / size sticks across reloads. ─
+const POS_STORAGE_KEY = 'sau-floating-logs-pos'
+const SIZE_STORAGE_KEY = 'sau-floating-logs-size'
+
+function clampToViewport(pos: Position, size: Size): Position {
+  if (typeof window === 'undefined') return pos
+  const margin = 8
+  const maxX = Math.max(margin, window.innerWidth - size.width - margin)
+  const maxY = Math.max(margin, window.innerHeight - size.height - margin)
+  return {
+    x: Math.min(Math.max(pos.x, margin), maxX),
+    y: Math.min(Math.max(pos.y, margin), maxY),
+  }
+}
+
+function loadInitialGeometry(): { position: Position; size: Size } {
+  const size = getInitialSize()
+  const position = getInitialPosition()
+  if (typeof window === 'undefined') return { position, size }
+  try {
+    const rawSize = window.localStorage.getItem(SIZE_STORAGE_KEY)
+    if (rawSize) {
+      const parsed = JSON.parse(rawSize) as Partial<Size>
+      if (typeof parsed.width === 'number' && typeof parsed.height === 'number') {
+        size.width = Math.max(320, Math.min(parsed.width, window.innerWidth - 16))
+        size.height = Math.max(180, Math.min(parsed.height, window.innerHeight - 16))
+      }
+    }
+    const rawPos = window.localStorage.getItem(POS_STORAGE_KEY)
+    if (rawPos) {
+      const parsed = JSON.parse(rawPos) as Partial<Position>
+      if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+        position.x = parsed.x
+        position.y = parsed.y
+      }
+    }
+  } catch {
+    // corrupted JSON / quota error / private browser → fall back to defaults
+  }
+  return { position: clampToViewport(position, size), size }
 }
 
 function getLogColor(message: string) {
@@ -53,31 +101,106 @@ function FloatingLogs() {
     shadow: isDark ? '0 12px 32px rgba(0,0,0,0.4)' : '0 12px 32px rgba(0,0,0,0.1)',
   }), [isDark])
 
-  const [visible, setVisible] = useState(true)
-  const [minimized, setMinimized] = useState(false)
+  // Persist visible/minimized state across reloads
+  const [visible, setVisible] = useState(() => {
+    if (typeof window === 'undefined') return true
+    try {
+      const stored = window.localStorage.getItem('sau-floating-logs-visible')
+      return stored !== null ? stored === 'true' : true
+    } catch {
+      return true
+    }
+  })
+
+  const [minimized, setMinimized] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      const stored = window.localStorage.getItem('sau-floating-logs-minimized')
+      return stored !== null ? stored === 'true' : false
+    } catch {
+      return false
+    }
+  })
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  // Detect open Radix dialogs/drawers — only react when the value changes.
-  // Bare DOM-events are skipped: only the actual data-state transition matters.
+  // Detect open Radix dialogs/drawers using targeted MutationObserver.
+  //
+  // We observe only the document.body for attribute changes on elements
+  // with data-state attribute, which is much more efficient than polling
+  // or observing the entire DOM tree.
   useEffect(() => {
-    const check = () => {
-      const hasOpen = document.querySelector('[data-state="open"]') !== null
-      setDrawerOpen((prev) => (prev === hasOpen ? prev : hasOpen))
-    }
-    const observer = new MutationObserver(check)
+    const sync = (next: boolean) => setDrawerOpen((cur) => (cur === next ? cur : next))
+
+    // Initial check
+    sync(document.querySelector('[data-state="open"]') !== null)
+
+    // Create observer for data-state attribute changes
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'data-state') {
+          const target = mutation.target as HTMLElement
+          if (target.matches('[data-state]')) {
+            sync(document.querySelector('[data-state="open"]') !== null)
+            break
+          }
+        }
+      }
+    })
+
+    // Observe only attribute changes on elements with data-state
     observer.observe(document.body, {
-      childList: true,
-      subtree: true,
       attributes: true,
       attributeFilter: ['data-state'],
+      subtree: true,
     })
+
     return () => observer.disconnect()
   }, [])
 
+  // Persist visible/minimized state to localStorage
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('sau-floating-logs-visible', String(visible))
+    } catch {
+      /* private mode / quota exceeded — silently ignore */
+    }
+  }, [visible])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('sau-floating-logs-minimized', String(minimized))
+    } catch {
+      /* private mode / quota exceeded — silently ignore */
+    }
+  }, [minimized])
+
   const [filter, setFilter] = useState('')
   const [logs, setLogs] = useState<LogEntry[]>([])
-  const [size, setSize] = useState<Size>(getInitialSize)
-  const [position, setPosition] = useState<Position>(getInitialPosition)
+  const initialGeometry = useMemo(loadInitialGeometry, [])
+  const [size, setSize] = useState<Size>(initialGeometry.size)
+  const [position, setPosition] = useState<Position>(initialGeometry.position)
+
+  // Button position for the collapsed state
+  const [buttonPosition, setButtonPosition] = useState<Position>(() => {
+    if (typeof window === 'undefined') return { x: 24, y: 24 }
+    try {
+      const stored = window.localStorage.getItem('sau-floating-logs-btn-pos')
+      if (stored) {
+        const parsed = JSON.parse(stored) as { x?: number; y?: number }
+        if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+          return clampToViewport({ x: parsed.x, y: parsed.y }, { width: 44, height: 44 })
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return { x: 24, y: Math.max(80, window.innerHeight - 80) }
+  })
+
+  const buttonDraggingRef = useRef(false)
+  const buttonDragOffset = useRef<Position>({ x: 0, y: 0 })
+  const buttonPendingPos = useRef<Position>({ x: 0, y: 0 })
+  const buttonRef = useRef<HTMLButtonElement>(null)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
@@ -92,30 +215,112 @@ function FloatingLogs() {
   const pendingSize = useRef<Size>({ width: 0, height: 0 })
 
   const loadLogs = useCallback(async () => {
-    try {
-      const res = await api.getLogs(latestTsRef.current || undefined)
+    const maxRetries = 3
+    let retryCount = 0
+
+    const fetchLogs = async (): Promise<void> => {
+      try {
+        const res = await api.getLogs(latestTsRef.current || undefined)
       setLogs((prev) => {
+        // Merge new logs with existing ones
         const map = new Map(prev.map((item) => [item.ts, item]))
         for (const item of res.data) {
           map.set(item.ts, item)
         }
+
+        // Always sort once, then slice if needed
         const sorted = Array.from(map.values()).sort((a, b) => a.ts.localeCompare(b.ts))
-        return sorted.length > 2000 ? sorted.slice(-2000) : sorted
+        return sorted.length > MAX_LOGS ? sorted.slice(-MAX_LOGS) : sorted
       })
-      const payload = res.data
-      if (payload.length) {
-        latestTsRef.current = payload[payload.length - 1].ts
+        const payload = res.data
+        if (payload.length) {
+          latestTsRef.current = payload[payload.length - 1].ts
+        }
+      } catch (error) {
+        retryCount++
+        if (retryCount < maxRetries) {
+          // Exponential backoff: 1s, 2s, 4s
+          const delay = Math.pow(2, retryCount - 1) * 1000
+          await new Promise((resolve) => setTimeout(resolve, delay))
+          return fetchLogs()
+        }
+        // Silently fail after max retries to avoid disrupting the UI
       }
-    } catch {
-      // ignore
     }
+
+    await fetchLogs()
   }, [])
 
   useEffect(() => {
     loadLogs()
-    const timer = setInterval(loadLogs, 2000)
-    return () => clearInterval(timer)
+
+    let timer: ReturnType<typeof setInterval> | null = null
+
+    const startPolling = () => {
+      if (timer) clearInterval(timer)
+      timer = setInterval(loadLogs, 2000)
+    }
+
+    const stopPolling = () => {
+      if (timer) {
+        clearInterval(timer)
+        timer = null
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling()
+      } else {
+        loadLogs() // Immediate fetch when page becomes visible
+        startPolling()
+      }
+    }
+
+    // Start polling if page is visible
+    if (!document.hidden) {
+      startPolling()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      stopPolling()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [loadLogs])
+
+  // Persist drag-drop position + resize across reloads. ``try/catch`` keeps
+  // private-mode browsers and quota errors from breaking the panel.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(POS_STORAGE_KEY, JSON.stringify(position))
+    } catch {
+      /* private mode / quota exceeded — silently ignore */
+    }
+  }, [position])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIZE_STORAGE_KEY, JSON.stringify(size))
+    } catch {
+      /* private mode / quota exceeded — silently ignore */
+    }
+  }, [size])
+
+  // Re-clamp position when the viewport shrinks/grows so a dock change or
+  // rotation doesn't strand the panel off-screen. Functional setState bails
+  // out when the clamped coords are identical, keeping resize ticks cheap.
+  useEffect(() => {
+    const handleResize = () => {
+      setPosition((cur) => {
+        const next = clampToViewport(cur, size)
+        return next.x === cur.x && next.y === cur.y ? cur : next
+      })
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [size])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -193,6 +398,68 @@ function FloatingLogs() {
     sizeStart.current = { ...size }
   }
 
+  // Button drag handlers
+  const handleButtonDragStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    buttonDraggingRef.current = true
+    buttonPendingPos.current = buttonPosition
+    buttonDragOffset.current = {
+      x: e.clientX - buttonPosition.x,
+      y: e.clientY - buttonPosition.y,
+    }
+  }
+
+  // Persist button position to localStorage
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('sau-floating-logs-btn-pos', JSON.stringify(buttonPosition))
+    } catch {
+      /* private mode / quota exceeded — silently ignore */
+    }
+  }, [buttonPosition])
+
+  // Re-clamp button position when viewport changes
+  useEffect(() => {
+    const handleResize = () => {
+      setButtonPosition((cur) => {
+        const next = clampToViewport(cur, { width: 44, height: 44 })
+        return next.x === cur.x && next.y === cur.y ? cur : next
+      })
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // Button drag mouse events
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!buttonDraggingRef.current) return
+
+      buttonPendingPos.current = {
+        x: e.clientX - buttonDragOffset.current.x,
+        y: e.clientY - buttonDragOffset.current.y,
+      }
+
+      if (buttonRef.current) {
+        buttonRef.current.style.transform = `translate(${buttonPendingPos.current.x}px, ${buttonPendingPos.current.y}px)`
+      }
+    }
+
+    const handleMouseUp = () => {
+      if (buttonDraggingRef.current) {
+        buttonDraggingRef.current = false
+        setButtonPosition(clampToViewport(buttonPendingPos.current, { width: 44, height: 44 }))
+      }
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [])
+
   const filteredLogs = filter
     ? logs.filter((item) => item.message.toLowerCase().includes(filter.toLowerCase()))
     : logs
@@ -200,9 +467,20 @@ function FloatingLogs() {
   if (!visible || drawerOpen) {
     return (
       <Button
-        className="fixed right-6 bottom-6 h-11 w-11 rounded-full shadow-md z-[9999] btn-elegant"
+        ref={buttonRef}
+        className="fixed left-0 top-0 h-11 w-11 rounded-full shadow-md z-[9999] btn-elegant cursor-move"
         size="icon"
-        onClick={() => setVisible(true)}
+        style={{
+          transform: `translate(${buttonPosition.x}px, ${buttonPosition.y}px)`,
+          willChange: 'transform',
+        }}
+        onMouseDown={handleButtonDragStart}
+        onClick={() => {
+          // Only open if not dragging
+          if (!buttonDraggingRef.current) {
+            setVisible(true)
+          }
+        }}
         aria-label="Show logs"
       >
         <FileText className="h-4 w-4" />

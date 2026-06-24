@@ -171,7 +171,7 @@ class BrowserCliParserTests(unittest.TestCase):
 class BrowserCliDispatchTests(unittest.TestCase):
     def test_dispatch_xiaohongshu_check_prints_valid(self):
         args = Namespace(platform="xiaohongshu", action="check", account="creator")
-        with patch("sau_cli.check_xiaohongshu_account", new=AsyncMock(return_value=True)):
+        with patch("cli.platforms.xiaohongshu.check", new=AsyncMock(return_value=True)):
             code = asyncio.run(sau_cli.dispatch(args))
         self.assertEqual(code, 0)
 
@@ -188,7 +188,7 @@ class BrowserCliDispatchTests(unittest.TestCase):
             debug=False,
             headless=True,
         )
-        with patch("sau_cli.upload_note", new=AsyncMock()) as mock_upload:
+        with patch("cli.platforms.douyin.upload_note", new=AsyncMock()) as mock_upload:
             asyncio.run(sau_cli.dispatch(args))
 
         request = mock_upload.await_args.args[0]
@@ -213,7 +213,7 @@ class BrowserCliDispatchTests(unittest.TestCase):
             debug=False,
             headless=True,
         )
-        with patch("sau_cli.upload_video", new=AsyncMock()) as mock_upload:
+        with patch("cli.platforms.douyin.upload_video", new=AsyncMock()) as mock_upload:
             asyncio.run(sau_cli.dispatch(args))
 
         request = mock_upload.await_args.args[0]
@@ -239,7 +239,7 @@ class BrowserCliDispatchTests(unittest.TestCase):
             debug=False,
             headless=True,
         )
-        with patch("sau_cli.upload_tencent_video", new=AsyncMock()) as mock_upload:
+        with patch("cli.platforms.tencent.upload_video", new=AsyncMock()) as mock_upload:
             asyncio.run(sau_cli.dispatch(args))
 
         request = mock_upload.await_args.args[0]
@@ -260,7 +260,7 @@ class BrowserCliDispatchTests(unittest.TestCase):
             debug=False,
             headless=False,
         )
-        with patch("sau_cli.upload_xiaohongshu_video", new=AsyncMock()) as mock_upload:
+        with patch("cli.platforms.xiaohongshu.upload_video", new=AsyncMock()) as mock_upload:
             asyncio.run(sau_cli.dispatch(args))
 
         request = mock_upload.await_args.args[0]
@@ -281,7 +281,7 @@ class BrowserCliDispatchTests(unittest.TestCase):
             debug=False,
             headless=True,
         )
-        with patch("sau_cli.upload_xiaohongshu_note", new=AsyncMock()) as mock_upload:
+        with patch("cli.platforms.xiaohongshu.upload_note", new=AsyncMock()) as mock_upload:
             asyncio.run(sau_cli.dispatch(args))
 
         request = mock_upload.await_args.args[0]

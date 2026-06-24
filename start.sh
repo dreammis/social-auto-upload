@@ -26,7 +26,7 @@ uv pip install -e ".[web]"
 echo "🌐 Installing patchright Chromium browser..."
 PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright" patchright install chromium
 
-echo "🚀 Starting server at http://localhost:5409 ..."
+echo "🚀 Starting server at http://localhost:6001 ..."
 echo "   Open this URL in your browser to use the app."
 echo "   Press Ctrl+C to stop."
 echo ""
