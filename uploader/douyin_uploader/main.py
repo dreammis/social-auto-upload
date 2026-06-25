@@ -50,7 +50,11 @@ def _build_login_result(success: bool, status: str, message: str, account_file: 
 
 async def cookie_auth(account_file):
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True, channel="chromium")
+        # 抖音无头会撞反爬墙→content/upload 跳登录→误判 cookie 失效（间歇性）。校验必须有头。
+        # 允许 linux server 用户通过 env var 强制无头: DOUYIN_COOKIE_AUTH_HEADLESS=true
+        use_headless = os.environ.get("DOUYIN_COOKIE_AUTH_HEADLESS", "").lower() in ("1", "true", "yes")
+        launch_kwargs = {"headless": use_headless, "channel": "chrome", "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
+        browser = await playwright.chromium.launch(**launch_kwargs)
         try:
             context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
@@ -118,7 +122,12 @@ async def _extract_douyin_qrcode_src(page: Page) -> str:
 
 
 async def _save_douyin_qrcode(page: Page, account_file: str, previous_qrcode_path: Path | None = None, qrcode_callback=None) -> dict:
-    qrcode_src = await _extract_douyin_qrcode_src(page)
+    # 提取二维码 src 仅为了保存/终端显示；定位不到时不致命——有头浏览器里二维码可见，直接扫码即可
+    try:
+        qrcode_src = await _extract_douyin_qrcode_src(page)
+    except Exception as exc:
+        douyin_logger.warning(_msg("😵", f"没定位到二维码元素（{str(exc)[:50]}）——请直接在弹出的浏览器里扫码，小人继续等登录跳转"))
+        return {"image_path": "", "image_data_url": ""}
     qrcode_path = save_data_url_image(qrcode_src, build_login_qrcode_path(account_file))
     if previous_qrcode_path and previous_qrcode_path != qrcode_path:
         if remove_qrcode_file(previous_qrcode_path):
@@ -138,24 +147,32 @@ async def _save_douyin_qrcode(page: Page, account_file: str, previous_qrcode_pat
 
 
 async def _is_douyin_login_completed(page: Page) -> bool:
-    try:
-        cookies = await page.context.cookies()
-        for cookie in cookies:
-            if cookie.get("name") == "sessionid" and cookie.get("value"):
-                return True
-    except Exception:
-        pass
-    return False
+    # 登录后会跳到 creator-micro 下任意页（home/content 等）；登录页是 creator.douyin.com/ 根路径
+    if "creator.douyin.com/creator-micro" not in page.url:
+        return False
+
+    login_markers = [
+        page.get_by_text("扫码登录", exact=True).first,
+        page.get_by_text("手机号登录", exact=True).first,
+        page.get_by_text("二维码失效", exact=True).first,
+        page.get_by_role("img", name="二维码").first,
+    ]
+
+    for marker in login_markers:
+        if not await marker.count():
+            continue
+        try:
+            if await marker.is_visible():
+                return False
+        except Exception:
+            continue
+
+    return True
 
 
-async def _wait_for_douyin_login(page: Page, account_file: str, qrcode_info: dict, qrcode_callback=None, poll_interval: int = 2, max_checks: int = 100) -> dict:
-    # 抖音扫码后流程：扫码 → APP 点确认 → URL 立即变（即使二验页）/ sessionid 较晚才生成
-    # 旧实现只等 sessionid，二验时会超时。改为 URL 变化 + sessionid 双判定。
-    original_url = page.url
-    qrcode_path = Path(qrcode_info["image_path"])
-    saw_2fa = False
-
-    for i in range(max_checks):
+async def _wait_for_douyin_login(page: Page, account_file: str, qrcode_info: dict, qrcode_callback=None, poll_interval: int = 3, max_checks: int = 100) -> dict:
+    qrcode_path = Path(qrcode_info["image_path"]) if qrcode_info.get("image_path") else None
+    for _ in range(max_checks):
         if await _is_douyin_login_completed(page):
             douyin_logger.info(_msg("🥳", f"扫码成功，已经跳转到登录后页面: {page.url}"))
             return _build_login_result(True, "success", "抖音扫码登录成功", account_file, qrcode_info, page.url)
@@ -176,7 +193,7 @@ async def _wait_for_douyin_login(page: Page, account_file: str, qrcode_info: dic
             await expired_box.click()
             await asyncio.sleep(1)
             qrcode_info = await _save_douyin_qrcode(page, account_file, qrcode_path, qrcode_callback=qrcode_callback)
-            qrcode_path = Path(qrcode_info["image_path"])
+            qrcode_path = Path(qrcode_info["image_path"]) if qrcode_info.get("image_path") else None
 
         await asyncio.sleep(poll_interval)
 
@@ -207,7 +224,7 @@ async def douyin_cookie_gen(
             page = await context.new_page()
             await page.goto("https://creator.douyin.com/")
             qrcode_info = await _save_douyin_qrcode(page, account_file, qrcode_callback=qrcode_callback)
-            qrcode_path = Path(qrcode_info["image_path"])
+            qrcode_path = Path(qrcode_info["image_path"]) if qrcode_info.get("image_path") else None
             douyin_logger.info(_msg("🧍", "请扫码，小人正在耐心等待登录完成"))
             result = await _wait_for_douyin_login(
                 page,
@@ -286,26 +303,22 @@ class DouYinBaseUploader(BaseVideoUploader):
         await asyncio.sleep(1)
 
     async def fill_title_and_description(self, page: Page, title: str, description: str, tags: list[str] | None = None):
-        description_section = (
-            page.get_by_text("作品描述", exact=True)
-            .locator("xpath=ancestor::div[2]")
-            .locator("xpath=following-sibling::div[1]")
-        )
-
-        title_input = description_section.locator('input[type="text"]').first
-        await title_input.wait_for(state="visible", timeout=10000)
+        # 2026-06 抖音发布页 DOM：标题=input[placeholder*=填写作品标题]，描述=div.zone-container[contenteditable]
+        # version_2(post/video) 发布页要等视频上传完才渲染表单（实测约 40s），故等待超时给到 120s
+        title_input = page.locator('input[placeholder*="填写作品标题"]').first
+        await title_input.wait_for(state="visible", timeout=120000)
         await title_input.fill(title[:30])
 
-        description_editor = description_section.locator('.zone-container[contenteditable="true"]').first
-        await description_editor.wait_for(state="visible", timeout=10000)
+        description_editor = page.locator('div.zone-container[contenteditable="true"]').first
+        await description_editor.wait_for(state="visible", timeout=120000)
         await description_editor.click()
         await page.keyboard.press("Control+KeyA")
         await page.keyboard.press("Delete")
-        await page.keyboard.type(description)
 
         for tag in tags or []:
             await page.keyboard.type(" #" + tag)
             await page.keyboard.press("Space")
+        await page.keyboard.press("Escape")  # 收起话题下拉，避免浮层拦截后续点击
 
     async def set_location(self, page: Page, location: str = ""):
         if not location:
@@ -419,6 +432,72 @@ class DouYinBaseUploader(BaseVideoUploader):
         except Exception as exc:
             douyin_logger.warning(_msg("🧾", f"自主声明设置失败，跳过该步骤继续发布：{exc}"))
 
+    async def select_bgm(self, page: Page, bgm_name: str) -> bool:
+        """为图文发布选择 BGM：可选增强功能，搜索无结果或异常均跳过不中断发布。"""
+        try:
+            # 点击「选择音乐」按钮
+            music_entry = page.locator('text="选择音乐"').nth(1)
+            if not await music_entry.count():
+                music_entry = page.locator('text="选择音乐"').first
+            await music_entry.wait_for(state="visible", timeout=10000)
+            await music_entry.click()
+
+            # 等待侧边栏出现并搜索
+            sidesheet = page.locator(".semi-sidesheet-content").first
+            await sidesheet.wait_for(state="visible", timeout=8000)
+            search_input = sidesheet.locator('input.semi-input[placeholder="搜索音乐"]').first
+            await search_input.wait_for(state="visible", timeout=5000)
+            await search_input.fill(bgm_name)
+            await search_input.press("Enter")
+
+            # 等待搜索结果
+            await asyncio.sleep(2)
+            first_card = sidesheet.locator(".card-container-tmocjc").first
+            try:
+                await first_card.wait_for(state="visible", timeout=8000)
+            except Exception:
+                douyin_logger.warning(_msg("🎵", f"音乐「{bgm_name}」搜索结果为空，小人跳过"))
+                await self._close_music_sidesheet(page)
+                return False
+
+            # 打印找到的音乐名称
+            try:
+                song_name_el = first_card.locator(".song-name-oRge4d").first
+                if await song_name_el.count():
+                    song_name = await song_name_el.inner_text()
+                    douyin_logger.info(_msg("🎵", f"小人找到了: {song_name}"))
+            except Exception:
+                pass
+
+            # JS 点击「使用」（按钮 visibility:hidden，普通 click 无效）
+            apply_btn = first_card.locator(".apply-btn-LUPP0D").first
+            await apply_btn.evaluate("el => el.click()")
+            douyin_logger.info(_msg("🥳", f"BGM「{bgm_name}」已应用"))
+
+            # 等待侧边栏关闭，超时则手动关闭
+            try:
+                await sidesheet.wait_for(state="hidden", timeout=5000)
+            except Exception:
+                await self._close_music_sidesheet(page)
+
+            return True
+        except Exception as exc:
+            douyin_logger.warning(_msg("🎵", f"添加 BGM 时出错，跳过该步骤继续发布：{exc}"))
+            try:
+                await self._close_music_sidesheet(page)
+            except Exception:
+                pass
+            return False
+
+    async def _close_music_sidesheet(self, page: Page) -> None:
+        try:
+            close_btn = page.locator(".semi-sidesheet-close").first
+            if await close_btn.count() and await close_btn.is_visible():
+                await close_btn.click()
+                await asyncio.sleep(1)
+        except Exception:
+            pass
+
 
 class DouYinVideo(DouYinBaseUploader):
     def __init__(
@@ -494,29 +573,46 @@ class DouYinVideo(DouYinBaseUploader):
             return
 
         douyin_logger.info(_msg("🏃", "小人正在设置视频封面"))
-        await page.click('text="选择封面"')
-        cover_locator_str = 'div[id*="creator-content-modal"]'
-        cover_locator = page.locator(cover_locator_str)
-        await page.wait_for_selector(cover_locator_str)
+        # 先清掉 shepherd 新手引导浮层，否则它会拦截“选择封面”点击导致弹窗打不开
+        await page.evaluate(
+            "() => document.querySelectorAll('.shepherd-element,.shepherd-modal-overlay-container').forEach(e=>e.remove())"
+        )
+        await page.get_by_text("选择封面", exact=True).first.click(force=True)
+        cover_locator_str = 'div.dy-creator-content-modal'
+        cover_locator = page.locator(cover_locator_str).first
+        await page.wait_for_selector(cover_locator_str, timeout=20000)
 
-        upload_input = cover_locator.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input")
-
-        if self.thumbnail_landscape_path:
-            await page.wait_for_timeout(1000)
-            await upload_input.set_input_files(self.thumbnail_landscape_path)
-            await page.wait_for_timeout(2000)
-            douyin_logger.info(_msg("🖼️", "横版封面上传完成"))
+        await page.wait_for_timeout(1500)
+        # version_2 封面弹窗有 4 个隐藏 file input：
+        #   [0]/[1] 左侧“AI生成参考图”上传/替换，[2]/[3] 才是“上传封面”/替换。
+        # 旧代码用 .first 传到了 AI 参考图（不会成为封面）→ 这就是“传了却没封面”的根因。
+        # 取 input.semi-upload-hidden-input 的第 2 个（nth(1)），即真正的封面上传输入。
+        cover_upload = cover_locator.locator("input.semi-upload-hidden-input").nth(1)
 
         if self.thumbnail_portrait_path:
-            await cover_locator.locator("div[class*='steps'] div").nth(1).click()
-            await page.wait_for_timeout(1000)
-            await upload_input.set_input_files(self.thumbnail_portrait_path)
-            await page.wait_for_timeout(2000)
-            douyin_logger.info(_msg("🖼️", "竖版封面上传完成"))
+            # 弹窗默认就在“设置竖封面”页；防御性点一下 tab（已激活则忽略）
+            try:
+                await cover_locator.get_by_text("设置竖封面", exact=True).first.click(timeout=3000)
+                await page.wait_for_timeout(800)
+            except Exception:
+                pass
+            await cover_upload.set_input_files(self.thumbnail_portrait_path)
+            await page.wait_for_timeout(3000)
+            douyin_logger.info(_msg("🖼️", "竖版封面已上传到预览"))
+        elif self.thumbnail_landscape_path:
+            try:
+                await cover_locator.get_by_text("设置横封面", exact=True).first.click(timeout=3000)
+                await page.wait_for_timeout(800)
+            except Exception:
+                pass
+            await cover_upload.set_input_files(self.thumbnail_landscape_path)
+            await page.wait_for_timeout(3000)
+            douyin_logger.info(_msg("🖼️", "横版封面已上传到预览"))
 
-        await cover_locator.locator('button:visible:has-text("完成")').click()
+        # 点红色主按钮“完成”应用封面（exact 避免误中“完成编辑”）
+        await cover_locator.get_by_role("button", name="完成", exact=True).first.click()
         douyin_logger.info(_msg("🥳", "视频封面设置完成"))
-        await page.wait_for_selector("div.extractFooter", state="detached")
+        await cover_locator.wait_for(state="detached", timeout=20000)
 
     async def upload(self, playwright: Playwright) -> None:
         douyin_logger.info(_msg("🧍", "小人先检查 cookie、视频文件、封面和发布时间"))
@@ -531,10 +627,12 @@ class DouYinVideo(DouYinBaseUploader):
         context = await set_init_script(context)
 
         page = await context.new_page()
-        await page.goto("https://creator.douyin.com/creator-micro/content/upload")
+        await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
         douyin_logger.info(_msg("🏃", f"小人开始搬运视频: {self.title}.mp4"))
         douyin_logger.info(_msg("🧭", "小人正在赶往上传主页"))
-        await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
+        await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=90000)
+        # wait_for_url 完成时上传页可能尚未渲染出文件 input（实测偶发），先等它挂载再 set_input_files
+        await page.wait_for_selector("div[class^='container'] input", state="attached", timeout=60000)
         await page.locator("div[class^='container'] input").set_input_files(self.file_path)
 
         while True:
@@ -596,9 +694,13 @@ class DouYinVideo(DouYinBaseUploader):
 
         while True:
             try:
+                # 移除会拦截发布按钮点击的新手引导/话题下拉浮层
+                await page.evaluate(
+                    "() => { document.querySelectorAll('.shepherd-element, .shepherd-modal-overlay-container, [class*=\"mention-wrapper\"]').forEach(e => e.remove()); }"
+                )
                 publish_button = page.get_by_role("button", name="发布", exact=True)
                 if await publish_button.count():
-                    await publish_button.click()
+                    await publish_button.click(force=True)
                 await page.wait_for_url(
                     "https://creator.douyin.com/creator-micro/content/manage**",
                     timeout=3000,
@@ -638,6 +740,7 @@ class DouYinNote(DouYinBaseUploader):
         publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
+        bgm: str = "",
     ):
         super().__init__(
             publish_date=publish_date,
@@ -650,11 +753,16 @@ class DouYinNote(DouYinBaseUploader):
         self.note = note or ""
         self.title = title or (self.note[:30] if self.note else "")
         self.tags = tags or []
+        self.bgm = bgm or ""
 
     async def validate_upload_args(self):
         await self.validate_base_args()
         if not self.title or not str(self.title).strip():
             raise ValueError("图文模式下，title 是必须的")
+
+        if len(self.title) > 20:
+            raise ValueError(f"标题不能超过20字符，当前: {len(self.title)}字符")
+
         if not self.image_paths:
             raise ValueError("图文模式下，图片是必须的")
 
@@ -663,6 +771,10 @@ class DouYinNote(DouYinBaseUploader):
 
         if len(self.image_paths) > 35:
             raise ValueError("图文模式下最多只支持上传 35 张图片")
+
+        note_len = len(self.note) if self.note else 0
+        if note_len > 1000:
+            raise ValueError(f"正文不能超过1000字符，当前: {note_len}字符")
 
         normalized_image_paths = []
         for image_path in self.image_paths:
@@ -693,7 +805,14 @@ class DouYinNote(DouYinBaseUploader):
         await asyncio.sleep(1)
         douyin_logger.info(_msg("✍️", "小人开始填标题、描述和话题"))
         await self.fill_title_and_description(page, self.title, self.note, self.tags)
+        title_len = len(self.title) if self.title else 0
+        tags_text = " ".join(f"#{t}" for t in self.tags) if self.tags else ""
+        desc_and_tags_len = len(self.note or "") + (len(tags_text) + 2 if self.tags else 0)
+        douyin_logger.info(_msg("📝", f"标题总字数: {title_len}，描述+话题总字数: {desc_and_tags_len}"))
         douyin_logger.info(_msg("🏷️", f"小人一共贴了 {len(self.tags)} 个话题"))
+
+        if self.bgm:
+            await self.select_bgm(page, self.bgm)
 
         if self.publish_strategy == DOUYIN_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_douyin(page, self.publish_date)
@@ -728,9 +847,9 @@ class DouYinNote(DouYinBaseUploader):
         upload_success = False
         try:
             page = await context.new_page()
-            await page.goto("https://creator.douyin.com/creator-micro/content/upload")
+            await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
             douyin_logger.info(_msg("🧭", "小人正在赶往图文发布页"))
-            await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
+            await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=90000)
 
             await self.upload_note_content(page)
             upload_success = True
