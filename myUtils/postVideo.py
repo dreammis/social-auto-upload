@@ -481,6 +481,7 @@ def post_video_bilibili(title, files, tags, account_file, category=None, enableT
                 copyright_type=copyright_type,
                 no_reprint=1 if copyright_type == 1 else 0,
                 ai_declaration=ai_declaration,
+                season_name=collection,  # 合集名称
                 publish_strategy=publish_strategy,
             )
 

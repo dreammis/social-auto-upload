@@ -304,6 +304,7 @@ class BilibiliBaseUploader(BaseVideoUploader):
         copyright_type: int = 1,  # 1=自制，2=转载
         no_reprint: int = 0,
         ai_declaration: bool = False,
+        season_name: str | None = None,  # 合集名称
         publish_strategy: str = BILIBILI_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool | None = None,
@@ -320,6 +321,7 @@ class BilibiliBaseUploader(BaseVideoUploader):
         self.copyright_type = copyright_type
         self.no_reprint = no_reprint
         self.ai_declaration = ai_declaration
+        self.season_name = season_name
         self.publish_strategy = publish_strategy
         self.debug = debug
         self.local_executable_path = LOCAL_CHROME_PATH
@@ -442,15 +444,19 @@ class BilibiliVideo(BilibiliBaseUploader):
         # 4. 选择分区
         await self._select_category(page, self.tid)
         
-        # 5. 上传封面
+        # 5. 选择合集（可选）
+        if self.season_name:
+            await self._select_season(page, self.season_name)
+        
+        # 6. 上传封面
         if self.cover_path:
             await self._upload_cover(page)
         
-        # 6. 设置原创声明（禁止转载）
+        # 7. 设置原创声明（禁止转载）
         if self.no_reprint == 1:
             await self._set_original_declaration(page)
         
-        # 7. 设置AI创作声明
+        # 8. 设置AI创作声明
         if self.ai_declaration:
             await self._set_ai_declaration(page)
         
@@ -533,6 +539,40 @@ class BilibiliVideo(BilibiliBaseUploader):
         try:
             await tags_input.wait_for(state="visible", timeout=10000)
             bilibili_logger.info(_msg("📝", f"开始填写标签 [tag-container]: {','.join(self.tags)}"))
+            
+            # 先删除已存在的标签（根据实际HTML结构）
+            # 查找 .tag-pre-wrp 内的 .label-item-v2-container
+            existing_tags = page.locator('.tag-pre-wrp .label-item-v2-container')
+            existing_count = await existing_tags.count()
+            bilibili_logger.info(_msg("🔍", f"检查旧标签，找到 {existing_count} 个"))
+            
+            if existing_count > 0:
+                bilibili_logger.info(_msg("🗑️", f"发现{existing_count}个旧标签，正在删除..."))
+                for i in range(existing_count):
+                    try:
+                        # 获取当前第一个标签（删除后索引会变化，所以总是删第一个）
+                        current_tag = page.locator('.tag-pre-wrp .label-item-v2-container').first
+                        tag_text_elem = current_tag.locator('.label-item-v2-content')
+                        tag_text = await tag_text_elem.text_content() if await tag_text_elem.count() else "未知"
+                        bilibili_logger.info(_msg("🗑️", f"删除旧标签: {tag_text}"))
+                        
+                        # 点击关闭按钮（svg.close 元素）
+                        close_btn = current_tag.locator('.close')
+                        if await close_btn.count():
+                            await close_btn.click()
+                            await page.wait_for_timeout(500)
+                            bilibili_logger.info(_msg("✅", f"旧标签已删除: {tag_text}"))
+                        else:
+                            bilibili_logger.warning(_msg("⚠️", f"未找到关闭按钮，跳过: {tag_text}"))
+                    except Exception as e:
+                        bilibili_logger.warning(_msg("⚠️", f"删除标签失败: {e}"))
+                        continue
+                
+                # 再次检查是否还有旧标签
+                final_count = await existing_tags.count()
+                bilibili_logger.info(_msg("🔍", f"删除完成，剩余 {final_count} 个旧标签"))
+            else:
+                bilibili_logger.info(_msg("ℹ️", "没有旧标签需要删除"))
 
             # 清空输入框（如果有残留）
             current_value = await tags_input.input_value() or ""
@@ -548,42 +588,35 @@ class BilibiliVideo(BilibiliBaseUploader):
                 await tags_input.click()
                 await page.wait_for_timeout(500)
                 
-                # 输入标签文本（使用type模拟真实键盘输入）
-                await tags_input.type(tag, delay=80)  # 每个字符间隔80ms，更稳定
+                # 输入标签文本
+                await tags_input.type(tag, delay=80)
                 await page.wait_for_timeout(300)
                 
                 # 按回车键创建标签
                 await page.keyboard.press("Enter")
-                bilibili_logger.info(_msg("✅", f"标签已添加 [回车确认]: {tag}"))
+                bilibili_logger.info(_msg("✅", f"标签已添加: {tag}"))
                 
-                # 等待标签创建完成（检查是否成功）
+                # 等待标签创建完成
                 await page.wait_for_timeout(1000)
             
-            bilibili_logger.info(_msg("🎉", f"所有标签已填写完成: {','.join(self.tags)}"))
+            # 最终验证：检查所有标签是否都已创建
+            created_tags = page.locator('.tag-pre-wrp .label-item-v2-container')
+            created_count = await created_tags.count()
+            if created_count == len(self.tags):
+                try:
+                    all_tag_texts = await created_tags.locator('.label-item-v2-content').all_text_contents()
+                    tag_texts_str = ', '.join([t.strip() for t in all_tag_texts])
+                    bilibili_logger.info(_msg("🎉", f"所有标签已填写完成: {tag_texts_str}"))
+                except:
+                    bilibili_logger.info(_msg("🎉", f"所有标签已填写完成: {','.join(self.tags)}"))
+            else:
+                bilibili_logger.warning(_msg("⚠️", f"标签数量不符，预期 {len(self.tags)} 个，实际 {created_count} 个"))
         except Exception as e:
-            bilibili_logger.warning(_msg("⚠️", f"方式1(input.val)失败: {e}，尝试方式2"))
-            
-            # 方式2: 使用placeholder精确定位标签输入框
-            try:
-                tags_input_alt = page.locator('input[placeholder="按回车键Enter创建标签"]').first
-                if await tags_input_alt.count():
-                    bilibili_logger.info(_msg("📝", f"开始填写标签 [placeholder定位]"))
-                    
-                    for tag in self.tags:
-                        await tags_input_alt.click()
-                        await tags_input_alt.type(tag, delay=50)
-                        await page.keyboard.press("Enter")
-                        await page.wait_for_timeout(800)
-                        bilibili_logger.info(_msg("✅", f"标签已添加 [方式2]: {tag}"))
-                    
-                    bilibili_logger.info(_msg("🎉", f"所有标签已填写完成 [方式2]"))
-                else:
-                    bilibili_logger.error(_msg("❌", "所有标签填写方式均失败"))
-            except Exception as e2:
-                bilibili_logger.error(_msg("❌", f"方式2也失败: {e2}"))
+            bilibili_logger.error(_msg("❌", f"标签填写失败: {e}"))
+            raise RuntimeError(f"标签填写失败: {e}")
 
     async def _select_category(self, page: Page, tid: int):
-        """选择分区（下拉列表：点击展开 → 选择选项）"""
+        """选择分区（直接定位分区下拉框）"""
         # tid到名称映射
         tid_names = {
             21: "动画", 22: "音乐", 47: "游戏", 75: "知识",
@@ -598,44 +631,128 @@ class BilibiliVideo(BilibiliBaseUploader):
         bilibili_logger.info(_msg("📁", f"开始选择分区: {target_name}(tid={tid})"))
         
         try:
-            # 查找所有可见的下拉框组件
-            all_selects = page.locator('div[class*="select"], div.bcc-select, [role="listbox"]')
-            select_count = await all_selects.count()
+            # 直接定位分区下拉框（根据HTML结构）
+            # 方式1: 通过"分区"标题定位
+            category_select = page.locator('div.video-human-type:has(h3:has-text("分区")) .select-container').first
             
-            target_found = False
+            if not await category_select.count():
+                # 方式2: 直接找select-container
+                category_select = page.locator('div.select-container').first
+                bilibili_logger.info(_msg("🔍", "使用方式2定位分区下拉框"))
+            else:
+                bilibili_logger.info(_msg("🔍", "通过分区标题定位到下拉框"))
             
-            # 遍历每个下拉框查找目标选项
-            for i in range(select_count):
-                select_elem = all_selects.nth(i)
-                if not await select_elem.is_visible():
-                    continue
-                
-                try:
-                    # 点击展开下拉框
-                    await select_elem.click()
-                    await page.wait_for_timeout(800)
-                    
-                    # 查找目标选项（文本匹配）
-                    option = page.get_by_text(target_name).first
-                    if await option.count() and await option.is_visible():
-                        await option.click()
-                        bilibili_logger.info(_msg("✅", f"分区已选择: {target_name}"))
-                        target_found = True
-                        break
-                    
-                    # 关闭继续下一个
-                    await page.keyboard.press("Escape")
-                    await page.wait_for_timeout(300)
-                    
-                except Exception as e:
-                    bilibili_logger.debug(_msg("📝", f"第{i+1}个失败: {e}"))
-                    continue
+            if not await category_select.count():
+                bilibili_logger.error(_msg("❌", "未找到分区下拉框"))
+                raise RuntimeError("未找到分区下拉框")
             
-            if not target_found:
+            # 点击展开分区下拉框
+            await category_select.click()
+            await page.wait_for_timeout(1000)
+            
+            # 查找目标选项（文本匹配）
+            option = page.get_by_text(target_name).first
+            if await option.count() and await option.is_visible():
+                await option.click()
+                bilibili_logger.info(_msg("✅", f"分区已选择: {target_name}"))
+            else:
                 bilibili_logger.warning(_msg("⚠️", f"未找到分区选项: {target_name}(tid={tid})"))
+                # 关闭下拉框
+                await page.keyboard.press("Escape")
         
         except Exception as e:
-            bilibili_logger.warning(_msg("⚠️", f"分区选择失败: {e}"))
+            bilibili_logger.error(_msg("❌", f"分区选择失败: {e}"))
+            raise RuntimeError(f"分区选择失败: {e}")
+
+    async def _select_season(self, page: Page, season_name: str):
+        """选择合集（模糊搜索）"""
+        bilibili_logger.info(_msg("📚", f"开始选择合集: {season_name}"))
+        
+        try:
+            # 查找合集下拉框
+            season_select = page.locator('.season-select .season-enter').first
+            
+            if not await season_select.count():
+                bilibili_logger.warning(_msg("ℹ️", "未找到合集下拉框，可能不需要选择合集"))
+                return
+            
+            # 点击展开合集下拉框
+            await season_select.click()
+            bilibili_logger.info(_msg("👆", "已点击合集下拉框"))
+            await page.wait_for_timeout(1000)
+            
+            # 查找下拉列表中包含目标文本的选项（模糊搜索）
+            # 根据B站的下拉列表结构，选项应该在展开后的列表中
+            # 尝试多种选择器查找选项
+            option_selectors = [
+                '.season-item',  # 可能的选项容器
+                '.season-list-item',
+                '.dropdown-item',
+                '[role="option"]',
+                '.select-item',
+                '.option-item',
+            ]
+            
+            found_option = None
+            for selector in option_selectors:
+                options = page.locator(selector)
+                option_count = await options.count()
+                
+                if option_count > 0:
+                    bilibili_logger.info(_msg("🔍", f"找到 {option_count} 个合集选项 [{selector}]"))
+                    
+                    # 查找包含目标文本的选项
+                    for i in range(option_count):
+                        option = options.nth(i)
+                        option_text = await option.text_content() or ""
+                        option_text = option_text.strip()
+                        
+                        # 检查是否包含目标文本（模糊匹配）
+                        if season_name in option_text or option_text in season_name:
+                            found_option = option
+                            bilibili_logger.info(_msg("✅", f"找到匹配的合集选项: {option_text} (搜索: {season_name})"))
+                            break
+                
+                if found_option:
+                    break
+            
+            # 如果通过选择器找不到，尝试使用文本查找
+            if not found_option:
+                bilibili_logger.info(_msg("🔍", "尝试通过文本查找合集选项"))
+                option_texts = page.locator(f':text-is("{season_name}"), :text-contains("{season_name}")')
+                option_count = await option_texts.count()
+                
+                if option_count > 0:
+                    # 找到包含目标文本的元素，点击它
+                    for i in range(option_count):
+                        option = option_texts.nth(i)
+                        if await option.is_visible():
+                            option_text = await option.text_content() or ""
+                            found_option = option
+                            bilibili_logger.info(_msg("✅", f"通过文本找到合集选项: {option_text.strip()}"))
+                            break
+            
+            if found_option:
+                # 点击选择的合集
+                await found_option.click()
+                await page.wait_for_timeout(500)
+                
+                # 验证是否选中成功（检查显示的合集名称）
+                selected_text_elem = page.locator('.season-select .season-enter-text span')
+                if await selected_text_elem.count():
+                    selected_text = await selected_text_elem.text_content() or ""
+                    bilibili_logger.info(_msg("✅", f"合集已选择: {selected_text.strip()}"))
+                else:
+                    bilibili_logger.info(_msg("✅", f"合集已选择"))
+            else:
+                bilibili_logger.warning(_msg("⚠️", f"未找到匹配的合集选项: {season_name}"))
+                # 关闭下拉框
+                await page.keyboard.press("Escape")
+        
+        except Exception as e:
+            bilibili_logger.error(_msg("❌", f"合集选择失败: {e}"))
+            # 不抛出异常，合集选择失败不影响上传
+            bilibili_logger.warning(_msg("⚠️", "合集选择失败，继续上传"))
 
     async def _upload_cover(self, page: Page):
         """上传封面（封面设置 → 勾选双比例同步 → 上传图片 → 完成）"""
@@ -868,46 +985,56 @@ class BilibiliVideo(BilibiliBaseUploader):
             raise RuntimeError("未找到'立即投稿/提交'按钮")
         
         await submit_button.wait_for(state="visible", timeout=10000)
-        await submit_button.click()
-        bilibili_logger.info(_msg("🚀", "已点击'立即投稿'按钮"))
+        
+        # 先等待一下，确保按钮完全可点击
+        await page.wait_for_timeout(1000)
+        
+        # await submit_button.click()
+        # bilibili_logger.info(_msg("🚀", "已点击'立即投稿'按钮"))
+        
+        # 等待页面响应（给页面足够的时间处理点击）
+        # await page.wait_for_timeout(3000)
 
         # 等待提交成功（检查多种成功标志）
         max_wait_time = 15  # 最大等待15秒
         start_time = asyncio.get_event_loop().time()
         
-        while asyncio.get_event_loop().time() - start_time < max_wait_time:
-            try:
-                # 检查URL是否跳转到稿件管理页面
-                current_url = page.url
-                if "member.bilibili.com/platform/home" in current_url or \
-                   "member.bilibili.com/platform/upload/video/frame" in current_url and "submit" not in current_url:
-                    bilibili_logger.success(_msg("🎉", "视频提交成功（页面已跳转）"))
-                    return
+        # while asyncio.get_event_loop().time() - start_time < max_wait_time:
+        #     try:
+        #         # 检查URL是否跳转到稿件管理页面
+        #         current_url = page.url
+        #         bilibili_logger.info(_msg("🔍", f"当前URL: {current_url}"))
                 
-                # 检查成功提示文本
-                success_texts = ["提交成功", "发布成功", "稿件发布成功", "投稿成功"]
-                for text in success_texts:
-                    if await page.get_by_text(text).count():
-                        bilibili_logger.success(_msg("🎉", f"视频{text}"))
-                        await page.wait_for_timeout(5000)
-                        return
+        #         if "member.bilibili.com/platform/home" in current_url or \
+        #            ("member.bilibili.com/platform/upload/video/frame" in current_url and "submit" not in current_url):
+        #             bilibili_logger.success(_msg("🎉", "视频提交成功（页面已跳转）"))
+        #             return
                 
-                # 检查按钮是否消失（说明已经提交）
-                if not await submit_button.count():
-                    # 等待一下再检查成功标志
-                    await page.wait_for_timeout(2000)
-                    current_url = page.url
-                    if "member.bilibili.com/platform/home" in current_url or \
-                       "upload/video/frame" in current_url and "submit" not in current_url:
-                        bilibili_logger.success(_msg("�", "视频提交成功（按钮已消失）"))
-                        await page.wait_for_timeout(5000)
-                        return
+        #         # 检查成功提示文本
+        #         success_texts = ["提交成功", "发布成功", "稿件发布成功", "投稿成功"]
+        #         for text in success_texts:
+        #             if await page.get_by_text(text).count():
+        #                 bilibili_logger.success(_msg("🎉", f"视频{text}"))
+        #                 await page.wait_for_timeout(5000)
+        #                 return
                 
-                await asyncio.sleep(1)
+        #         # 检查按钮是否消失（说明已经提交）
+        #         if not await submit_button.count():
+        #             bilibili_logger.info(_msg("✅", "提交按钮已消失"))
+        #             # 等待一下再检查成功标志
+        #             await page.wait_for_timeout(2000)
+        #             current_url = page.url
+        #             if "member.bilibili.com/platform/home" in current_url or \
+        #                ("upload/video/frame" in current_url and "submit" not in current_url):
+        #                 bilibili_logger.success(_msg("🎉", "视频提交成功（按钮已消失）"))
+        #                 await page.wait_for_timeout(5000)
+        #                 return
                 
-            except Exception as e:
-                bilibili_logger.info(_msg("🏃", f"检查发布状态时出现异常: {e}"))
-                await asyncio.sleep(1)
+        #         await asyncio.sleep(1)
+                
+        #     except Exception as e:
+        #         bilibili_logger.info(_msg("🏃", f"检查发布状态时出现异常: {e}"))
+        #         await asyncio.sleep(1)
         
         # 如果等待超时，截图并抛出异常
         if self.debug and self.screenshot_manager:

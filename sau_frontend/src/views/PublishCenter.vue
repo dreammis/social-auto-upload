@@ -290,20 +290,28 @@
                 <h4 class="platform-title" style="color: #00A1D6;">B站</h4>
                 
                 <!-- 标签/话题 -->
-                <div class="form-item">
-                  <label>标签 / 话题</label>
-                  <div class="tags-input">
-                    <el-tag v-for="(tag, idx) in tab.platformConfig.bilibili.tags" :key="idx" closable @close="tab.platformConfig.bilibili.tags.splice(idx, 1)" style="margin-right: 5px;">
-                      {{ tag }}
-                    </el-tag>
-                    <el-input
-                      v-model="newTagInputs.bilibili"
-                      placeholder="输入标签后按回车添加"
-                      size="small"
-                      style="width: 200px;"
-                      @keyup.enter="addTagToPlatform(tab, 'bilibili')"
-                      clearable
-                    />
+                <div class="topic-section">
+                  <h3>标签 / 话题</h3>
+                  <div class="topic-display">
+                    <div class="selected-topics">
+                      <el-tag
+                        v-for="(tag, index) in tab.platformConfig.bilibili.tags"
+                        :key="index"
+                        closable
+                        @close="removeUnifiedTag(tab, 'bilibili', index)"
+                        class="topic-tag"
+                      >
+                        #{{ tag }}
+                      </el-tag>
+                    </div>
+                    <el-button 
+                      type="primary" 
+                      plain 
+                      @click="openUnifiedTopicDialog(tab, 'bilibili')"
+                      class="select-topic-btn"
+                    >
+                      添加话题
+                    </el-button>
                   </div>
                 </div>
 
@@ -328,20 +336,28 @@
                 <h4 class="platform-title" style="color: #07C160;">视频号</h4>
                 
                 <!-- 标签/话题 -->
-                <div class="form-item">
-                  <label>标签 / 话题</label>
-                  <div class="tags-input">
-                    <el-tag v-for="(tag, idx) in tab.platformConfig.channels.tags" :key="idx" closable @close="tab.platformConfig.channels.tags.splice(idx, 1)" style="margin-right: 5px;">
-                      {{ tag }}
-                    </el-tag>
-                    <el-input
-                      v-model="newTagInputs.channels"
-                      placeholder="输入标签后按回车添加"
-                      size="small"
-                      style="width: 200px;"
-                      @keyup.enter="addTagToPlatform(tab, 'channels')"
-                      clearable
-                    />
+                <div class="topic-section">
+                  <h3>标签 / 话题</h3>
+                  <div class="topic-display">
+                    <div class="selected-topics">
+                      <el-tag
+                        v-for="(tag, index) in tab.platformConfig.channels.tags"
+                        :key="index"
+                        closable
+                        @close="removeUnifiedTag(tab, 'channels', index)"
+                        class="topic-tag"
+                      >
+                        #{{ tag }}
+                      </el-tag>
+                    </div>
+                    <el-button 
+                      type="primary" 
+                      plain 
+                      @click="openUnifiedTopicDialog(tab, 'channels')"
+                      class="select-topic-btn"
+                    >
+                      添加话题
+                    </el-button>
                   </div>
                 </div>
 
@@ -359,20 +375,28 @@
                 <h4 class="platform-title" style="color: #FE2C55;">小红书</h4>
                 
                 <!-- 标签/话题 -->
-                <div class="form-item">
-                  <label>标签 / 话题</label>
-                  <div class="tags-input">
-                    <el-tag v-for="(tag, idx) in tab.platformConfig.xiaohongshu.tags" :key="idx" closable @close="tab.platformConfig.xiaohongshu.tags.splice(idx, 1)" style="margin-right: 5px;">
-                      {{ tag }}
-                    </el-tag>
-                    <el-input
-                      v-model="newTagInputs.xiaohongshu"
-                      placeholder="输入标签后按回车添加"
-                      size="small"
-                      style="width: 200px;"
-                      @keyup.enter="addTagToPlatform(tab, 'xiaohongshu')"
-                      clearable
-                    />
+                <div class="topic-section">
+                  <h3>标签 / 话题</h3>
+                  <div class="topic-display">
+                    <div class="selected-topics">
+                      <el-tag
+                        v-for="(tag, index) in tab.platformConfig.xiaohongshu.tags"
+                        :key="index"
+                        closable
+                        @close="removeUnifiedTag(tab, 'xiaohongshu', index)"
+                        class="topic-tag"
+                      >
+                        #{{ tag }}
+                      </el-tag>
+                    </div>
+                    <el-button 
+                      type="primary" 
+                      plain 
+                      @click="openUnifiedTopicDialog(tab, 'xiaohongshu')"
+                      class="select-topic-btn"
+                    >
+                      添加话题
+                    </el-button>
                   </div>
                 </div>
 
@@ -396,20 +420,28 @@
                 <h4 class="platform-title" style="color: #FF4906;">快手</h4>
                 
                 <!-- 标签/话题 -->
-                <div class="form-item">
-                  <label>标签 / 话题</label>
-                  <div class="tags-input">
-                    <el-tag v-for="(tag, idx) in tab.platformConfig.kuaishou.tags" :key="idx" closable @close="tab.platformConfig.kuaishou.tags.splice(idx, 1)" style="margin-right: 5px;">
-                      {{ tag }}
-                    </el-tag>
-                    <el-input
-                      v-model="newTagInputs.kuaishou"
-                      placeholder="输入标签后按回车添加"
-                      size="small"
-                      style="width: 200px;"
-                      @keyup.enter="addTagToPlatform(tab, 'kuaishou')"
-                      clearable
-                    />
+                <div class="topic-section">
+                  <h3>标签 / 话题</h3>
+                  <div class="topic-display">
+                    <div class="selected-topics">
+                      <el-tag
+                        v-for="(tag, index) in tab.platformConfig.kuaishou.tags"
+                        :key="index"
+                        closable
+                        @close="removeUnifiedTag(tab, 'kuaishou', index)"
+                        class="topic-tag"
+                      >
+                        #{{ tag }}
+                      </el-tag>
+                    </div>
+                    <el-button 
+                      type="primary" 
+                      plain 
+                      @click="openUnifiedTopicDialog(tab, 'kuaishou')"
+                      class="select-topic-btn"
+                    >
+                      添加话题
+                    </el-button>
                   </div>
                 </div>
 
@@ -429,20 +461,28 @@
                 <h4 class="platform-title" style="color: #000;">抖音</h4>
                 
                 <!-- 标签/话题 -->
-                <div class="form-item">
-                  <label>标签 / 话题</label>
-                  <div class="tags-input">
-                    <el-tag v-for="(tag, idx) in tab.platformConfig.douyin.tags" :key="idx" closable @close="tab.platformConfig.douyin.tags.splice(idx, 1)" style="margin-right: 5px;">
-                      {{ tag }}
-                    </el-tag>
-                    <el-input
-                      v-model="newTagInputs.douyin"
-                      placeholder="输入标签后按回车添加"
-                      size="small"
-                      style="width: 200px;"
-                      @keyup.enter="addTagToPlatform(tab, 'douyin')"
-                      clearable
-                    />
+                <div class="topic-section">
+                  <h3>标签 / 话题</h3>
+                  <div class="topic-display">
+                    <div class="selected-topics">
+                      <el-tag
+                        v-for="(tag, index) in tab.platformConfig.douyin.tags"
+                        :key="index"
+                        closable
+                        @close="removeUnifiedTag(tab, 'douyin', index)"
+                        class="topic-tag"
+                      >
+                        #{{ tag }}
+                      </el-tag>
+                    </div>
+                    <el-button 
+                      type="primary" 
+                      plain 
+                      @click="openUnifiedTopicDialog(tab, 'douyin')"
+                      class="select-topic-btn"
+                    >
+                      添加话题
+                    </el-button>
                   </div>
                 </div>
 
@@ -473,20 +513,28 @@
                 <h4 class="platform-title" style="color: #000;">TikTok</h4>
                 
                 <!-- 标签/话题 -->
-                <div class="form-item">
-                  <label>标签 / 话题</label>
-                  <div class="tags-input">
-                    <el-tag v-for="(tag, idx) in tab.platformConfig.tiktok.tags" :key="idx" closable @close="tab.platformConfig.tiktok.tags.splice(idx, 1)" style="margin-right: 5px;">
-                      {{ tag }}
-                    </el-tag>
-                    <el-input
-                      v-model="newTagInputs.tiktok"
-                      placeholder="输入标签后按回车添加"
-                      size="small"
-                      style="width: 200px;"
-                      @keyup.enter="addTagToPlatform(tab, 'tiktok')"
-                      clearable
-                    />
+                <div class="topic-section">
+                  <h3>标签 / 话题</h3>
+                  <div class="topic-display">
+                    <div class="selected-topics">
+                      <el-tag
+                        v-for="(tag, index) in tab.platformConfig.tiktok.tags"
+                        :key="index"
+                        closable
+                        @close="removeUnifiedTag(tab, 'tiktok', index)"
+                        class="topic-tag"
+                      >
+                        #{{ tag }}
+                      </el-tag>
+                    </div>
+                    <el-button 
+                      type="primary" 
+                      plain 
+                      @click="openUnifiedTopicDialog(tab, 'tiktok')"
+                      class="select-topic-btn"
+                    >
+                      添加话题
+                    </el-button>
                   </div>
                 </div>
               </div>
@@ -496,20 +544,28 @@
                 <h4 class="platform-title" style="color: #E74C3C;">百家号</h4>
                 
                 <!-- 标签/话题 -->
-                <div class="form-item">
-                  <label>标签 / 话题</label>
-                  <div class="tags-input">
-                    <el-tag v-for="(tag, idx) in tab.platformConfig.baijiahao.tags" :key="idx" closable @close="tab.platformConfig.baijiahao.tags.splice(idx, 1)" style="margin-right: 5px;">
-                      {{ tag }}
-                    </el-tag>
-                    <el-input
-                      v-model="newTagInputs.baijiahao"
-                      placeholder="输入标签后按回车添加"
-                      size="small"
-                      style="width: 200px;"
-                      @keyup.enter="addTagToPlatform(tab, 'baijiahao')"
-                      clearable
-                    />
+                <div class="topic-section">
+                  <h3>标签 / 话题</h3>
+                  <div class="topic-display">
+                    <div class="selected-topics">
+                      <el-tag
+                        v-for="(tag, index) in tab.platformConfig.baijiahao.tags"
+                        :key="index"
+                        closable
+                        @close="removeUnifiedTag(tab, 'baijiahao', index)"
+                        class="topic-tag"
+                      >
+                        #{{ tag }}
+                      </el-tag>
+                    </div>
+                    <el-button 
+                      type="primary" 
+                      plain 
+                      @click="openUnifiedTopicDialog(tab, 'baijiahao')"
+                      class="select-topic-btn"
+                    >
+                      添加话题
+                    </el-button>
                   </div>
                 </div>
               </div>
@@ -1225,6 +1281,51 @@
           <el-button type="primary" @click="window.open(currentScreenshotUrl)">在新窗口打开</el-button>
         </template>
       </el-dialog>
+      
+      <!-- 统一发布Tab的添加话题弹窗 -->
+      <el-dialog
+        v-model="unifiedTopicDialogVisible"
+        title="添加话题"
+        width="600px"
+        class="topic-dialog"
+      >
+        <div class="topic-dialog-content">
+          <!-- 自定义话题输入 -->
+          <div class="custom-topic-input">
+            <el-input
+              v-model="unifiedCustomTopic"
+              placeholder="输入自定义话题"
+              class="custom-input"
+            >
+              <template #prepend>#</template>
+            </el-input>
+            <el-button type="primary" @click="addUnifiedCustomTopic">添加</el-button>
+          </div>
+
+          <!-- 推荐话题 -->
+          <div class="recommended-topics">
+            <h4>推荐话题</h4>
+            <div class="topic-grid">
+              <el-button
+                v-for="topic in recommendedTopics"
+                :key="topic"
+                :type="unifiedCurrentTab?.platformConfig?.[unifiedCurrentPlatform]?.tags?.includes(topic) ? 'primary' : 'default'"
+                @click="toggleUnifiedRecommendedTopic(topic)"
+                class="topic-btn"
+              >
+                {{ topic }}
+              </el-button>
+            </div>
+          </div>
+        </div>
+
+        <template #footer>
+          <div class="dialog-footer">
+            <el-button @click="unifiedTopicDialogVisible = false">取消</el-button>
+            <el-button type="primary" @click="confirmUnifiedTopicSelection">确定</el-button>
+          </div>
+        </template>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -1770,7 +1871,7 @@ const handleUploadError = (error) => {
 }
 
 // ==================== 统一发布（一键发布）相关函数 ====================
-// 各平台标签输入状态
+// 各平台标签输入状态（已弃用，改用弹窗方式）
 const newTagInputs = reactive({
   xiaohongshu: '',
   channels: '',
@@ -1781,13 +1882,72 @@ const newTagInputs = reactive({
   baijiahao: ''
 })
 
-// 添加标签到指定平台
+// 统一发布Tab的话题弹窗状态
+const unifiedTopicDialogVisible = ref(false)
+const unifiedCustomTopic = ref('')
+const unifiedCurrentPlatform = ref('')
+const unifiedCurrentTab = ref(null)
+
+// 添加标签到指定平台（已弃用，改用弹窗方式）
 const addTagToPlatform = (tab, platformKey) => {
   const inputValue = newTagInputs[platformKey].trim()
   if (inputValue && !tab.platformConfig[platformKey].tags.includes(inputValue)) {
     tab.platformConfig[platformKey].tags.push(inputValue)
     newTagInputs[platformKey] = ''
   }
+}
+
+// 打开统一发布的话题弹窗
+const openUnifiedTopicDialog = (tab, platformKey) => {
+  unifiedCurrentTab.value = tab
+  unifiedCurrentPlatform.value = platformKey
+  unifiedCustomTopic.value = ''
+  unifiedTopicDialogVisible.value = true
+}
+
+// 添加自定义话题到统一发布平台
+const addUnifiedCustomTopic = () => {
+  if (!unifiedCustomTopic.value.trim()) {
+    ElMessage.warning('请输入话题内容')
+    return
+  }
+  if (unifiedCurrentTab.value && unifiedCurrentPlatform.value) {
+    const tags = unifiedCurrentTab.value.platformConfig[unifiedCurrentPlatform.value].tags
+    if (!tags.includes(unifiedCustomTopic.value.trim())) {
+      tags.push(unifiedCustomTopic.value.trim())
+      unifiedCustomTopic.value = ''
+      ElMessage.success('话题添加成功')
+    } else {
+      ElMessage.warning('话题已存在')
+    }
+  }
+}
+
+// 切换推荐话题（统一发布）
+const toggleUnifiedRecommendedTopic = (topic) => {
+  if (!unifiedCurrentTab.value || !unifiedCurrentPlatform.value) return
+  
+  const tags = unifiedCurrentTab.value.platformConfig[unifiedCurrentPlatform.value].tags
+  const index = tags.indexOf(topic)
+  if (index > -1) {
+    tags.splice(index, 1)
+  } else {
+    tags.push(topic)
+  }
+}
+
+// 删除统一发布的标签
+const removeUnifiedTag = (tab, platformKey, index) => {
+  tab.platformConfig[platformKey].tags.splice(index, 1)
+}
+
+// 确认统一发布的话题选择
+const confirmUnifiedTopicSelection = () => {
+  unifiedTopicDialogVisible.value = false
+  unifiedCustomTopic.value = ''
+  unifiedCurrentPlatform.value = ''
+  unifiedCurrentTab.value = null
+  ElMessage.success('添加话题完成')
 }
 
 // ==================== 账号搜索与选择（统一发布） ====================
@@ -2821,8 +2981,8 @@ const closeScreenshotPreview = () => {
         .account-section,
         .platform-section,
         .title-section,
-        .douyinProduct-section,
         .topic-section,
+        .douyinProduct-section,
         .schedule-section {
           margin-bottom: 30px;
         }
@@ -2940,7 +3100,7 @@ const closeScreenshotPreview = () => {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            min-height: 32px;
+            min-height: 0;
             
             .topic-tag {
               font-size: 14px;
