@@ -989,52 +989,51 @@ class BilibiliVideo(BilibiliBaseUploader):
         # 先等待一下，确保按钮完全可点击
         await page.wait_for_timeout(1000)
         
-        # await submit_button.click()
-        # bilibili_logger.info(_msg("🚀", "已点击'立即投稿'按钮"))
+        await submit_button.click()
+        bilibili_logger.info(_msg("🚀", "已点击'立即投稿'按钮"))
         
         # 等待页面响应（给页面足够的时间处理点击）
-        # await page.wait_for_timeout(3000)
+        await page.wait_for_timeout(3000)
 
         # 等待提交成功（检查多种成功标志）
         max_wait_time = 15  # 最大等待15秒
         start_time = asyncio.get_event_loop().time()
-        
-        # while asyncio.get_event_loop().time() - start_time < max_wait_time:
-        #     try:
-        #         # 检查URL是否跳转到稿件管理页面
-        #         current_url = page.url
-        #         bilibili_logger.info(_msg("🔍", f"当前URL: {current_url}"))
+        while asyncio.get_event_loop().time() - start_time < max_wait_time:
+            try:
+                # 检查URL是否跳转到稿件管理页面
+                current_url = page.url
+                bilibili_logger.info(_msg("🔍", f"当前URL: {current_url}"))
                 
-        #         if "member.bilibili.com/platform/home" in current_url or \
-        #            ("member.bilibili.com/platform/upload/video/frame" in current_url and "submit" not in current_url):
-        #             bilibili_logger.success(_msg("🎉", "视频提交成功（页面已跳转）"))
-        #             return
+                if "member.bilibili.com/platform/home" in current_url or \
+                   ("member.bilibili.com/platform/upload/video/frame" in current_url and "submit" not in current_url):
+                    bilibili_logger.success(_msg("🎉", "视频提交成功（页面已跳转）"))
+                    return
                 
-        #         # 检查成功提示文本
-        #         success_texts = ["提交成功", "发布成功", "稿件发布成功", "投稿成功"]
-        #         for text in success_texts:
-        #             if await page.get_by_text(text).count():
-        #                 bilibili_logger.success(_msg("🎉", f"视频{text}"))
-        #                 await page.wait_for_timeout(5000)
-        #                 return
+                # 检查成功提示文本
+                success_texts = ["提交成功", "发布成功", "稿件发布成功", "投稿成功"]
+                for text in success_texts:
+                    if await page.get_by_text(text).count():
+                        bilibili_logger.success(_msg("🎉", f"视频{text}"))
+                        await page.wait_for_timeout(5000)
+                        return
                 
-        #         # 检查按钮是否消失（说明已经提交）
-        #         if not await submit_button.count():
-        #             bilibili_logger.info(_msg("✅", "提交按钮已消失"))
-        #             # 等待一下再检查成功标志
-        #             await page.wait_for_timeout(2000)
-        #             current_url = page.url
-        #             if "member.bilibili.com/platform/home" in current_url or \
-        #                ("upload/video/frame" in current_url and "submit" not in current_url):
-        #                 bilibili_logger.success(_msg("🎉", "视频提交成功（按钮已消失）"))
-        #                 await page.wait_for_timeout(5000)
-        #                 return
+                # 检查按钮是否消失（说明已经提交）
+                if not await submit_button.count():
+                    bilibili_logger.info(_msg("✅", "提交按钮已消失"))
+                    # 等待一下再检查成功标志
+                    await page.wait_for_timeout(2000)
+                    current_url = page.url
+                    if "member.bilibili.com/platform/home" in current_url or \
+                       ("upload/video/frame" in current_url and "submit" not in current_url):
+                        bilibili_logger.success(_msg("🎉", "视频提交成功（按钮已消失）"))
+                        await page.wait_for_timeout(5000)
+                        return
                 
-        #         await asyncio.sleep(1)
+                await asyncio.sleep(1)
                 
-        #     except Exception as e:
-        #         bilibili_logger.info(_msg("🏃", f"检查发布状态时出现异常: {e}"))
-        #         await asyncio.sleep(1)
+            except Exception as e:
+                bilibili_logger.info(_msg("🏃", f"检查发布状态时出现异常: {e}"))
+                await asyncio.sleep(1)
         
         # 如果等待超时，截图并抛出异常
         if self.debug and self.screenshot_manager:
