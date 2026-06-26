@@ -155,7 +155,7 @@ async def cookie_auth(account_file):
         if LOCAL_CHROME_PATH:
             browser = await playwright.chromium.launch(headless=True, executable_path=LOCAL_CHROME_PATH)
         else:
-            browser = await playwright.chromium.launch(headless=True, channel="chrome")
+            browser = await playwright.chromium.launch(headless=True, channel="chromium")
         try:
             context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
@@ -174,14 +174,14 @@ async def cookie_auth(account_file):
             await browser.close()
 
 
-async def ks_setup(account_file, handle=False, return_detail=False, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS):
+async def ks_setup(account_file, handle=False, return_detail=False, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS, cdp_url: str | None = None):
     account_file = get_absolute_path(account_file, "ks_uploader")
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
             result = _build_login_result(False, "cookie_invalid", "cookie文件不存在或已失效", account_file)
             return result if return_detail else False
         kuaishou_logger.info(_msg("🥹", "cookie 失效了，准备重新登录快手创作者平台"))
-        result = await get_ks_cookie(account_file, qrcode_callback=qrcode_callback, headless=headless)
+        result = await get_ks_cookie(account_file, qrcode_callback=qrcode_callback, headless=headless, cdp_url=cdp_url)
         return result if return_detail else result["success"]
 
     result = _build_login_result(True, "cookie_valid", "cookie有效", account_file)
@@ -194,16 +194,23 @@ async def get_ks_cookie(
     headless: bool = LOCAL_CHROME_HEADLESS,
     poll_interval: int = 3,
     max_checks: int = 100,
+    cdp_url: str | None = None,
 ):
     if headless:
         kuaishou_logger.info(_msg("🖼️", "快手登录将以无头模式运行，小人会输出终端二维码并保存本地二维码图片"))
 
     async with async_playwright() as playwright:
-        if LOCAL_CHROME_PATH:
-            browser = await playwright.chromium.launch(headless=headless, executable_path=LOCAL_CHROME_PATH)
+        if cdp_url:
+            browser = await playwright.chromium.connect_over_cdp(cdp_url)
+            context = browser.contexts[0] if browser.contexts else await browser.new_context()
+            should_close_context = False
         else:
-            browser = await playwright.chromium.launch(headless=headless, channel="chrome")
-        context = await browser.new_context()
+            if LOCAL_CHROME_PATH:
+                browser = await playwright.chromium.launch(headless=headless, executable_path=LOCAL_CHROME_PATH)
+            else:
+                browser = await playwright.chromium.launch(headless=headless, channel="chromium")
+            context = await browser.new_context()
+            should_close_context = True
         context = await set_init_script(context)
         qrcode_path = None
         qrcode_info = None
@@ -265,7 +272,8 @@ async def get_ks_cookie(
                 kuaishou_logger.info(_msg("🧹", f"临时二维码文件已清理: {qrcode_path}"))
             if not result["success"]:
                 kuaishou_logger.error(_msg("😢", f"登录失败: {result['message']}"))
-            await context.close()
+            if should_close_context:
+                await context.close()
             await browser.close()
 
     return result
@@ -453,7 +461,7 @@ class KSVideo(KSBaseUploader):
         else:
             browser = await playwright.chromium.launch(
                 headless=self.headless,
-                channel="chrome",
+                channel="chromium",
             )
         context = await browser.new_context(storage_state=self.account_file)
         context = await set_init_script(context)
@@ -699,7 +707,7 @@ class KSNote(KSBaseUploader):
         else:
             browser = await playwright.chromium.launch(
                 headless=self.headless,
-                channel="chrome",
+                channel="chromium",
             )
         context = await browser.new_context(storage_state=self.account_file)
         context = await set_init_script(context)

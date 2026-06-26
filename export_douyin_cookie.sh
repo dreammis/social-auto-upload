@@ -52,6 +52,9 @@ import os
 import uuid
 import sys
 
+# Shell 把 USERNAME 作为环境变量传过来, Python 需要显式取
+USERNAME = os.environ.get('USERNAME', '')
+
 DEBUG_PORT = 9222
 if USERNAME:
     COOKIE_FILE = f"cookies/douyin_{USERNAME}.json"

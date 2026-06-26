@@ -51,12 +51,12 @@ def _build_login_result(success: bool, status: str, message: str, account_file: 
 async def cookie_auth(account_file):
     # 抖音无头会撞反爬墙→content/upload 跳登录→误判 cookie 失效（间歇性）。校验必须有头。
     # 即便有头，页面慢/瞬时跳转仍会让 wait_for_url(精确URL,5s) 误判→重试3次+宽松判定(URL含 content/upload 且无登录文案)。
+    # 允许 linux server 用户通过 env var 强制无头: DOUYIN_COOKIE_AUTH_HEADLESS=true
+    use_headless = os.environ.get("DOUYIN_COOKIE_AUTH_HEADLESS", "").lower() in ("1", "true", "yes")
+    launch_kwargs = {"headless": use_headless, "channel": "chrome", "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
     for _attempt in range(3):
         async with async_playwright() as playwright:
-            browser = await playwright.chromium.launch(
-                headless=False, channel="chrome",
-                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
-            )
+            browser = await playwright.chromium.launch(**launch_kwargs)
             try:
                 context = await browser.new_context(storage_state=account_file)
                 context = await set_init_script(context)
@@ -73,13 +73,13 @@ async def cookie_auth(account_file):
     return False
 
 
-async def douyin_setup(account_file, handle=False, return_detail=False, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS):
+async def douyin_setup(account_file, handle=False, return_detail=False, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS, cdp_url: str | None = None):
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
             result = _build_login_result(False, "cookie_invalid", "cookie文件不存在或已失效", account_file)
             return result if return_detail else False
         douyin_logger.info(_msg("🥹", "cookie 失效了，准备打开浏览器重新登录"))
-        result = await douyin_cookie_gen(account_file, qrcode_callback=qrcode_callback, headless=headless)
+        result = await douyin_cookie_gen(account_file, qrcode_callback=qrcode_callback, headless=headless, cdp_url=cdp_url)
         return result if return_detail else result["success"]
 
     result = _build_login_result(True, "cookie_valid", "cookie有效", account_file)
@@ -87,26 +87,38 @@ async def douyin_setup(account_file, handle=False, return_detail=False, qrcode_c
 
 
 async def _extract_douyin_qrcode_src(page: Page) -> str:
+    # 等 SPA 加载完成（不只等"扫码登录"文字，否则抖音慢加载时 30s 就超时）。
+    # 给 domcontentloaded 后足够时间让客户端 JS 注入登录卡。
+    try:
+        await page.wait_for_load_state("networkidle", timeout=15000)
+    except Exception:
+        pass
     scan_login_tab = page.get_by_text("扫码登录", exact=True).first
-    await scan_login_tab.wait_for(timeout=30000)
+    # attached 状态：DOM 里出现即可，不要求 visible/渲染完整，避免 race
+    await scan_login_tab.wait_for(state="attached", timeout=60000)
 
-    qrcode_img = (
-        scan_login_tab
-        .locator("..")
-        .locator("xpath=following-sibling::div[1]")
-        .locator('img[aria-label="二维码"]')
-        .first
-    )
+    # 新版抖音创作者中心 (single_tab + animate_qrcode_container) 不再用 aria-label="二维码"。
+    # 按优先级兜底多个 selector，至少一个能命中即可。
+    qrcode_selectors = [
+        'div#animate_qrcode_container img[src^="data:image"]',
+        'div[class*="animate_qrcode_container"] img[src^="data:image"]',
+        'div[class*="scan_qrcode_login_content"] img[src^="data:image"]',
+        'img[aria-label="二维码"]',
+    ]
+    last_err: Exception | None = None
+    for sel in qrcode_selectors:
+        qrcode_img = page.locator(sel).first
+        try:
+            await qrcode_img.wait_for(state="attached", timeout=10000)
+        except Exception as e:
+            last_err = e
+            continue
+        src = await qrcode_img.get_attribute("src")
+        if src:
+            return src
+        last_err = RuntimeError(f"selector {sel} 命中但 src 为空")
 
-    if not await qrcode_img.count():
-        qrcode_img = page.get_by_role("img", name="二维码").first
-
-    await qrcode_img.wait_for(state="visible", timeout=30000)
-    src = await qrcode_img.get_attribute("src")
-    if not src:
-        raise RuntimeError("未获取到抖音登录二维码地址")
-
-    return src
+    raise RuntimeError(f"未获取到抖音登录二维码地址 (last_err={last_err})")
 
 
 async def _save_douyin_qrcode(page: Page, account_file: str, previous_qrcode_path: Path | None = None, qrcode_callback=None) -> dict:
@@ -165,6 +177,16 @@ async def _wait_for_douyin_login(page: Page, account_file: str, qrcode_info: dic
             douyin_logger.info(_msg("🥳", f"扫码成功，已经跳转到登录后页面: {page.url}"))
             return _build_login_result(True, "success", "抖音扫码登录成功", account_file, qrcode_info, page.url)
 
+        # URL 变化 + sessionid 未到位 → 二验流程，继续等
+        if page.url != original_url and not await _is_douyin_login_completed(page):
+            sms_input = page.locator('input[placeholder*="验证码"], input[type="tel"], input[placeholder*="短信"], input[placeholder*="手机号"]')
+            if await sms_input.count() > 0:
+                if not saw_2fa:
+                    douyin_logger.warning(_msg("⚠️", f"检测到抖音短信/安全二次验证，请在弹出的浏览器中手动输入。等待 sessionid ({i}/{max_checks})"))
+                    saw_2fa = True
+            await asyncio.sleep(poll_interval)
+            continue
+
         expired_box = page.get_by_text("二维码失效", exact=True).locator("..").first
         if await expired_box.count() and await expired_box.is_visible():
             douyin_logger.warning(_msg("😵", "二维码失效了，小人马上去刷新"))
@@ -181,13 +203,20 @@ async def _wait_for_douyin_login(page: Page, account_file: str, qrcode_info: dic
 async def douyin_cookie_gen(
     account_file,
     qrcode_callback=None,
-    poll_interval: int = 3,
-    max_checks: int = 100,
+    poll_interval: int = 2,
+    max_checks: int = 60,
     headless: bool = LOCAL_CHROME_HEADLESS,
+    cdp_url: str | None = None,
 ):
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=headless, channel="chrome")
-        context = await browser.new_context()
+        if cdp_url:
+            browser = await playwright.chromium.connect_over_cdp(cdp_url)
+            context = browser.contexts[0] if browser.contexts else await browser.new_context()
+            should_close_context = False
+        else:
+            browser = await playwright.chromium.launch(headless=headless, channel="chromium")
+            context = await browser.new_context()
+            should_close_context = True
         context = await set_init_script(context)
         qrcode_path = None
         result = _build_login_result(False, "failed", "抖音登录失败", account_file)
@@ -224,7 +253,8 @@ async def douyin_cookie_gen(
                 douyin_logger.info(_msg("🧹", f"临时二维码文件已清理: {qrcode_path}"))
             if not result["success"]:
                 douyin_logger.error(_msg("😢", f"登录失败: {result['message']}"))
-            await context.close()
+            if should_close_context:
+                await context.close()
             await browser.close()
         return result
 
@@ -589,7 +619,7 @@ class DouYinVideo(DouYinBaseUploader):
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chrome")
+        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium")
         context = await browser.new_context(
             storage_state=f"{self.account_file}",
             permissions=["geolocation"],
@@ -807,7 +837,7 @@ class DouYinNote(DouYinBaseUploader):
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "图文上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chrome")
+        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium")
         context = await browser.new_context(
             storage_state=f"{self.account_file}",
             permissions=["geolocation"],
