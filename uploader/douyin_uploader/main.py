@@ -383,12 +383,14 @@ class DouYinBaseUploader(BaseVideoUploader):
             douyin_logger.error(_msg("😢", f"设置商品链接时出错: {str(e)}"))
             return False
 
-    async def set_self_declaration(self, page: Page, declaration: str = "内容为个人观点或见解") -> None:
+    async def set_self_declaration(self, page: Page, declaration: str | None = None) -> None:
         """抖音「自主声明」为发布必选项：打开声明弹窗 → 选指定类型 → 确定。
 
         入口和弹窗都是异步渲染，等不到就记 warning 跳过、继续发布，绝不因此中断
         （与小红书话题、视频号声明原创的容错策略保持一致）。
         """
+        if not declaration:
+            return
         try:
             # 发布页底部「自主声明」行，未选时显示占位文案「请选择自主声明」
             # 或者已选时显示「添加声明」按钮
@@ -1090,10 +1092,9 @@ class DouYinVideo(DouYinBaseUploader):
             await self.set_thumbnail(page)
 
             # 设置自主声明（必选项）
-            declaration_type = "内容为个人观点或见解"  # 默认值
             if self.declaration_info and self.declaration_info.get("declaration_type"):
                 declaration_type = self.declaration_info.get("declaration_type")
-            await self.set_self_declaration(page, declaration_type)
+                await self.set_self_declaration(page, declaration_type)
 
             # 设置合集
             if self.collection:
