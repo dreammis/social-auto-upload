@@ -175,11 +175,15 @@ def ensure_biliup_binary(force_check: bool = True) -> Path:
     return binary_path
 
 
-def run_biliup_command(arguments: list[str], interactive: bool = False) -> subprocess.CompletedProcess[str]:
+def run_biliup_command(
+    arguments: list[str],
+    interactive: bool = False,
+    cwd: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
     binary_path = ensure_biliup_binary(force_check=False)
     command = [str(binary_path), *arguments]
     if interactive:
-        return subprocess.run(command, check=False)
+        return subprocess.run(command, check=False, cwd=cwd)
     return subprocess.run(
         command,
         check=False,
@@ -187,4 +191,5 @@ def run_biliup_command(arguments: list[str], interactive: bool = False) -> subpr
         text=True,
         encoding="utf-8",
         errors="replace",
+        cwd=cwd,
     )

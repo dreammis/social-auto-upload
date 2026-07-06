@@ -37,9 +37,12 @@ class BilibiliCliTests(unittest.TestCase):
             code = asyncio.run(sau_cli.dispatch(args))
         self.assertEqual(code, 0)
 
-    def test_login_bilibili_account_returns_friendly_message_without_terminal(self):
-        with patch("sau_cli.has_interactive_terminal", return_value=False):
+    def test_login_bilibili_account_runs_biliup_without_terminal(self):
+        with patch("sau_cli.run_biliup_command") as run_command:
+            run_command.return_value.returncode = 0
+            run_command.return_value.stdout = ""
+            run_command.return_value.stderr = ""
             result = asyncio.run(sau_cli.login_bilibili_account("creator"))
-        self.assertFalse(result["success"])
-        self.assertIn("local interactive terminal", result["message"].lower())
-        self.assertIn("qrcode.png", result["message"].lower())
+        self.assertTrue(result["success"])
+        run_command.assert_called_once()
+        self.assertIn("Bilibili login completed", result["message"])

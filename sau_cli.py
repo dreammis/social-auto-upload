@@ -254,18 +254,10 @@ async def check_xiaohongshu_account(account_name: str) -> bool:
 
 async def login_bilibili_account(account_name: str) -> dict:
     account_file = resolve_account_file("bilibili", account_name)
-    if not has_interactive_terminal():
-        return {
-            "success": False,
-            "message": (
-                "Bilibili login requires a local interactive terminal. "
-                f"Please run `sau bilibili login --account {account_name}` yourself in a local terminal. "
-                "If the terminal QR code does not render completely, open `./qrcode.png` and scan that image."
-            ),
-            "account_file": str(account_file),
-        }
-
-    result = run_biliup_command(["-u", str(account_file), "login"], interactive=True)
+    account_file.parent.mkdir(parents=True, exist_ok=True)
+    qrcode_path = account_file.parent / "qrcode.png"
+    print(f"Bilibili login QR code will be saved to: {qrcode_path}", flush=True)
+    result = run_biliup_command(["-u", str(account_file), "login"], interactive=True, cwd=account_file.parent)
     success = result.returncode == 0
     return {
         "success": success,
