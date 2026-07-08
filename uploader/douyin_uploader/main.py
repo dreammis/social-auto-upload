@@ -4,6 +4,7 @@ from datetime import datetime
 import asyncio
 import inspect
 import os
+import random
 from pathlib import Path
 
 from patchright.async_api import Page
@@ -12,7 +13,7 @@ from patchright.async_api import async_playwright
 
 from conf import DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
-from utils.base_social_media import set_init_script
+from utils.base_social_media import set_init_script, create_stealth_context, human_type, human_delay
 from utils.login_qrcode import build_login_qrcode_path
 from utils.login_qrcode import decode_qrcode_from_path
 from utils.login_qrcode import print_terminal_qrcode
@@ -53,13 +54,15 @@ async def cookie_auth(account_file):
     # 即便有头，页面慢/瞬时跳转仍会让 wait_for_url(精确URL,5s) 误判→重试3次+宽松判定(URL含 content/upload 且无登录文案)。
     # 允许 linux server 用户通过 env var 强制无头: DOUYIN_COOKIE_AUTH_HEADLESS=true
     use_headless = os.environ.get("DOUYIN_COOKIE_AUTH_HEADLESS", "").lower() in ("1", "true", "yes")
-    launch_kwargs = {"headless": use_headless, "channel": "chrome", "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
+    launch_kwargs = {"headless": use_headless, "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
+    # WSL2 无桌面时强制无头
+    if not use_headless and not os.environ.get("DISPLAY"):
+        launch_kwargs["headless"] = True
     for _attempt in range(3):
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(**launch_kwargs)
             try:
-                context = await browser.new_context(storage_state=account_file)
-                context = await set_init_script(context)
+                context = await create_stealth_context(browser, storage_state=account_file)
                 page = await context.new_page()
                 await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
                 await page.wait_for_timeout(2500)  # 等页面稳定，避免瞬时跳转误判
@@ -172,6 +175,8 @@ async def _is_douyin_login_completed(page: Page) -> bool:
 
 async def _wait_for_douyin_login(page: Page, account_file: str, qrcode_info: dict, qrcode_callback=None, poll_interval: int = 3, max_checks: int = 100) -> dict:
     qrcode_path = Path(qrcode_info["image_path"]) if qrcode_info.get("image_path") else None
+    original_url = page.url
+    saw_2fa = False
     for _ in range(max_checks):
         if await _is_douyin_login_completed(page):
             douyin_logger.info(_msg("🥳", f"扫码成功，已经跳转到登录后页面: {page.url}"))
@@ -211,13 +216,15 @@ async def douyin_cookie_gen(
     async with async_playwright() as playwright:
         if cdp_url:
             browser = await playwright.chromium.connect_over_cdp(cdp_url)
-            context = browser.contexts[0] if browser.contexts else await browser.new_context()
+            if browser.contexts:
+                context = await set_init_script(browser.contexts[0])
+            else:
+                context = await create_stealth_context(browser)
             should_close_context = False
         else:
-            browser = await playwright.chromium.launch(headless=headless, channel="chromium")
-            context = await browser.new_context()
+            browser = await playwright.chromium.launch(headless=headless)
+            context = await create_stealth_context(browser)
             should_close_context = True
-        context = await set_init_script(context)
         qrcode_path = None
         result = _build_login_result(False, "failed", "抖音登录失败", account_file)
         try:
@@ -298,7 +305,7 @@ class DouYinBaseUploader(BaseVideoUploader):
         await asyncio.sleep(1)
         await page.locator('.semi-input[placeholder="日期和时间"]').click()
         await page.keyboard.press("Control+KeyA")
-        await page.keyboard.type(str(publish_date_hour))
+        await human_type(page, str(publish_date_hour))
         await page.keyboard.press("Enter")
         await asyncio.sleep(1)
 
@@ -307,7 +314,8 @@ class DouYinBaseUploader(BaseVideoUploader):
         # version_2(post/video) 发布页要等视频上传完才渲染表单（实测约 40s），故等待超时给到 120s
         title_input = page.locator('input[placeholder*="填写作品标题"]').first
         await title_input.wait_for(state="visible", timeout=120000)
-        await title_input.fill(title[:30])
+        await title_input.click()
+        await human_type(page, title[:30])
 
         description_editor = page.locator('div.zone-container[contenteditable="true"]').first
         await description_editor.wait_for(state="visible", timeout=120000)
@@ -316,7 +324,8 @@ class DouYinBaseUploader(BaseVideoUploader):
         await page.keyboard.press("Delete")
 
         for tag in tags or []:
-            await page.keyboard.type(" #" + tag)
+            await page.keyboard.type(" #", delay=random.randint(50, 120))
+            await human_type(page, tag)
             await page.keyboard.press("Space")
         await page.keyboard.press("Escape")  # 收起话题下拉，避免浮层拦截后续点击
 
@@ -619,12 +628,12 @@ class DouYinVideo(DouYinBaseUploader):
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium")
-        context = await browser.new_context(
-            storage_state=f"{self.account_file}",
+        browser = await playwright.chromium.launch(headless=self.headless)
+        context = await create_stealth_context(
+            browser,
             permissions=["geolocation"],
+            storage_state=f"{self.account_file}",
         )
-        context = await set_init_script(context)
 
         page = await context.new_page()
         await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
@@ -837,12 +846,12 @@ class DouYinNote(DouYinBaseUploader):
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "图文上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium")
-        context = await browser.new_context(
-            storage_state=f"{self.account_file}",
+        browser = await playwright.chromium.launch(headless=self.headless)
+        context = await create_stealth_context(
+            browser,
             permissions=["geolocation"],
+            storage_state=f"{self.account_file}",
         )
-        context = await set_init_script(context)
 
         upload_success = False
         try:

@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import os
+import random
 from datetime import datetime
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from patchright.async_api import async_playwright
 
 from conf import DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
-from utils.base_social_media import set_init_script
+from utils.base_social_media import set_init_script, create_stealth_context, human_type, human_delay
 from utils.login_qrcode import build_login_qrcode_path
 from utils.login_qrcode import decode_qrcode_from_path
 from utils.login_qrcode import print_terminal_qrcode
@@ -164,8 +165,7 @@ async def cookie_auth(account_file):
         else:
             browser = await playwright.chromium.launch(headless=True, channel="chromium")
         try:
-            context = await browser.new_context(storage_state=account_file)
-            context = await set_init_script(context)
+            context = await create_stealth_context(browser, storage_state=account_file)
             page = await context.new_page()
             await page.goto(
                 _build_xhs_creator_url(
@@ -234,8 +234,7 @@ async def xiaohongshu_cookie_gen(
 
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=headless, channel="chromium")
-        context = await browser.new_context()
-        context = await set_init_script(context)
+        context = await create_stealth_context(browser)
         qrcode_path = None
         qrcode_info = None
         result = _build_login_result(False, "failed", "小红书登录失败", account_file)
@@ -390,7 +389,9 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
 
     async def fill_title(self, page: Page) -> None:
         title_container = page.locator('input[placeholder*="填写标题"]')
-        await title_container.fill(self.title[:20])
+        await title_container.click()
+        await title_container.fill("")
+        await human_type(page, self.title[:20])
 
     async def fill_desc(self, page: Page) -> None:
         if not getattr(self, "desc", ""):
@@ -401,7 +402,7 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
         await page.keyboard.press("Backspace")
         await page.keyboard.press("Control+KeyA")
         await page.keyboard.press("Delete")
-        await page.keyboard.type(self.desc)
+        await human_type(page, self.desc)
         await page.keyboard.press("Enter")
 
     async def fill_tags(self, page: Page) -> None:
@@ -424,7 +425,7 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
             # 话题候选下拉框依赖小红书联想接口实时返回，网络抖动/无匹配时会等不到。
             # 标签是可选增强项：等不到候选框就跳过该标签继续，不让整条发布因此失败。
             try:
-                await page.keyboard.type("#" + tag, delay=30)
+                await page.keyboard.type("#" + tag, delay=random.randint(50, 150))
                 await page.locator('#creator-editor-topic-container').wait_for(
                     state="visible",
                     timeout=6000
@@ -620,11 +621,11 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         await self.validate_upload_args()
         xiaohongshu_logger.info(_msg("🥳", "上传前检查通过"))
         browser = await playwright.chromium.launch(headless=self.headless, channel="chromium")
-        context = await browser.new_context(
+        context = await create_stealth_context(
+            browser,
             permissions=["geolocation"],
             storage_state=self.account_file,
         )
-        context = await set_init_script(context)
 
         try:
             page = await context.new_page()
@@ -743,11 +744,11 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
         await self.validate_upload_args()
         xiaohongshu_logger.info(_msg("🥳", "图文上传前检查通过"))
         browser = await playwright.chromium.launch(headless=self.headless, channel="chromium")
-        context = await browser.new_context(
+        context = await create_stealth_context(
+            browser,
             permissions=["geolocation"],
             storage_state=self.account_file,
         )
-        context = await set_init_script(context)
 
         try:
             page = await context.new_page()

@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import os
+import random
 from datetime import datetime
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from patchright.async_api import async_playwright
 
 from conf import BASE_DIR, DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
-from utils.base_social_media import set_init_script
+from utils.base_social_media import set_init_script, create_stealth_context, human_type, human_delay
 from utils.log import tencent_logger
 
 TENCENT_LOGIN_URL = "https://channels.weixin.qq.com"
@@ -108,8 +109,7 @@ async def cookie_auth(account_file):
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=True))
         try:
-            context = await browser.new_context(storage_state=account_file)
-            context = await set_init_script(context)
+            context = await create_stealth_context(browser, storage_state=account_file)
             page = await context.new_page()
             await page.goto(TENCENT_UPLOAD_URL)
             await page.wait_for_url(TENCENT_UPLOAD_URL, timeout=5000)
@@ -351,7 +351,7 @@ async def tencent_cookie_gen(
 
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=headless))
-        context = await browser.new_context()
+        context = await create_stealth_context(browser)
         qrcode_path = None
         result = _build_login_result(False, "failed", "视频号登录失败", account_file)
         try:
@@ -491,7 +491,7 @@ class TencentBaseUploader(BaseVideoUploader):
 
         await page.click('input[placeholder="请选择时间"]')
         await page.keyboard.press("Control+KeyA")
-        await page.keyboard.type(publish_date.strftime("%H"))
+        await human_type(page, publish_date.strftime("%H"))
         await page.keyboard.press("Enter")  # 确认小时并关闭时间下拉
         await page.wait_for_timeout(500)
         # 收起时间选择浮层：直接点描述区可能被 weui-desktop-dialog 遮挡，做容错
@@ -539,20 +539,23 @@ class TencentBaseUploader(BaseVideoUploader):
             .locator('span input[type="text"]')
         )
         if await short_title_element.count():
-            await short_title_element.fill(short_title or format_str_for_short_title(title))
+            await short_title_element.click()
+            await short_title_element.fill("")
+            await human_type(page, short_title or format_str_for_short_title(title))
 
     async def fill_title_and_tags(self, page: Page) -> None:
         await page.locator("div.input-editor").click()
-        await page.keyboard.type(self.title)
+        await human_type(page, self.title)
         await page.keyboard.press("Enter")
         for tag in self.tags:
-            await page.keyboard.type("#" + tag)
+            await page.keyboard.type("#", delay=random.randint(50, 120))
+            await human_type(page, tag)
             await page.keyboard.press("Space")
         tencent_logger.info(_msg("🏷️", f"成功添加 hashtag: {len(self.tags)}"))
 
     async def fill_description(self, page: Page) -> None:
         await page.keyboard.press("Enter")
-        await page.keyboard.type(self.desc)
+        await human_type(page, self.desc)
         tencent_logger.info(_msg("🏷️", f"成功添加 desc: {len(self.desc)}"))
 
     async def apply_collection(self, page: Page) -> None:
@@ -884,7 +887,7 @@ class TencentVideo(TencentBaseUploader):
         tencent_logger.info(_msg("🥳", "上传前检查通过"))
 
         browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=self.headless))
-        context = await browser.new_context(storage_state=self.account_file)
+        context = await create_stealth_context(browser, storage_state=self.account_file)
 
         try:
             page = await context.new_page()
@@ -988,8 +991,7 @@ class TencentNote(TencentBaseUploader):
         tencent_logger.info(_msg("🥳", "图文上传前检查通过"))
 
         browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=self.headless))
-        context = await browser.new_context(storage_state=self.account_file)
-        context = await set_init_script(context)
+        context = await create_stealth_context(browser, storage_state=self.account_file)
 
         try:
             page = await context.new_page()
