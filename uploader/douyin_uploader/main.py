@@ -53,7 +53,10 @@ async def cookie_auth(account_file):
     # 即便有头，页面慢/瞬时跳转仍会让 wait_for_url(精确URL,5s) 误判→重试3次+宽松判定(URL含 content/upload 且无登录文案)。
     # 允许 linux server 用户通过 env var 强制无头: DOUYIN_COOKIE_AUTH_HEADLESS=true
     use_headless = os.environ.get("DOUYIN_COOKIE_AUTH_HEADLESS", "").lower() in ("1", "true", "yes")
-    launch_kwargs = {"headless": use_headless, "channel": "chrome", "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
+    # WSL2 无桌面降级：有 DISPLAY 但实为 IP（WSLg 假显示器），清空即无头
+    if not use_headless and not os.environ.get("DISPLAY"):
+        use_headless = True
+    launch_kwargs = {"headless": use_headless, "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
     for _attempt in range(3):
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(**launch_kwargs)
@@ -214,7 +217,7 @@ async def douyin_cookie_gen(
             context = browser.contexts[0] if browser.contexts else await browser.new_context()
             should_close_context = False
         else:
-            browser = await playwright.chromium.launch(headless=headless, channel="chromium")
+            browser = await playwright.chromium.launch(headless=headless)
             context = await browser.new_context()
             should_close_context = True
         context = await set_init_script(context)
@@ -581,45 +584,43 @@ class DouYinVideo(DouYinBaseUploader):
         cover_locator_str = 'div.dy-creator-content-modal'
         cover_locator = page.locator(cover_locator_str).first
         await page.wait_for_selector(cover_locator_str, timeout=20000)
-
         await page.wait_for_timeout(1500)
-        # version_2 封面弹窗有 4 个隐藏 file input：
-        #   [0]/[1] 左侧“AI生成参考图”上传/替换，[2]/[3] 才是“上传封面”/替换。
-        # 旧代码用 .first 传到了 AI 参考图（不会成为封面）→ 这就是“传了却没封面”的根因。
-        # 取 input.semi-upload-hidden-input 的第 2 个（nth(1)），即真正的封面上传输入。
-        cover_upload = cover_locator.locator("input.semi-upload-hidden-input").nth(1)
 
-        if self.thumbnail_portrait_path:
-            # 弹窗默认就在“设置竖封面”页；防御性点一下 tab（已激活则忽略）
-            try:
-                await cover_locator.get_by_text("设置竖封面", exact=True).first.click(timeout=3000)
-                await page.wait_for_timeout(800)
-            except Exception:
-                pass
-            await cover_upload.set_input_files(self.thumbnail_portrait_path)
-            await page.wait_for_timeout(3000)
-            douyin_logger.info(_msg("🖼️", "竖版封面已上传到预览"))
-        elif self.thumbnail_landscape_path:
-            try:
-                await cover_locator.get_by_text("设置横封面", exact=True).first.click(timeout=3000)
-                await page.wait_for_timeout(800)
-            except Exception:
-                pass
-            await cover_upload.set_input_files(self.thumbnail_landscape_path)
-            await page.wait_for_timeout(3000)
-            douyin_logger.info(_msg("🖼️", "横版封面已上传到预览"))
+        # 新UI：弹窗内是"上传封面"按钮 + "AI生成参考图"按钮
+        # 需要先点击"上传封面"按钮触发系统文件选择器
+        upload_path = self.thumbnail_portrait_path or self.thumbnail_landscape_path
+        if not upload_path:
+            return
+
+        # 先在"设置竖封面"tab（默认已选中，防御性点一下）
+        try:
+            await cover_locator.get_by_text("设置竖封面", exact=True).first.click(timeout=3000)
+            await page.wait_for_timeout(500)
+        except Exception:
+            pass
+
+        # 通过 filechooser 事件监听上传封面
+        async with page.expect_file_chooser() as fc_info:
+            await cover_locator.get_by_text("上传封面", exact=True).first.click(force=True)
+        file_chooser = await fc_info.value
+        await file_chooser.set_files(upload_path)
+        await page.wait_for_timeout(3000)
+        douyin_logger.info(_msg("🖼️", "竖版封面已上传到预览"))
 
         # 点红色主按钮“完成”应用封面（exact 避免误中“完成编辑”）
         await cover_locator.get_by_role("button", name="完成", exact=True).first.click()
         douyin_logger.info(_msg("🥳", "视频封面设置完成"))
-        await cover_locator.wait_for(state="detached", timeout=20000)
+        try:
+            await cover_locator.wait_for(state="detached", timeout=20000)
+        except Exception:
+            pass  # 弹窗可能残留DOM但不影响发布
 
     async def upload(self, playwright: Playwright) -> None:
         douyin_logger.info(_msg("🧍", "小人先检查 cookie、视频文件、封面和发布时间"))
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium")
+        browser = await playwright.chromium.launch(headless=self.headless)
         context = await browser.new_context(
             storage_state=f"{self.account_file}",
             permissions=["geolocation"],
@@ -696,7 +697,7 @@ class DouYinVideo(DouYinBaseUploader):
             try:
                 # 移除会拦截发布按钮点击的新手引导/话题下拉浮层
                 await page.evaluate(
-                    "() => { document.querySelectorAll('.shepherd-element, .shepherd-modal-overlay-container, [class*=\"mention-wrapper\"]').forEach(e => e.remove()); }"
+                    "() => { document.querySelectorAll('.shepherd-element, .shepherd-modal-overlay-container, .dy-creator-content-modal-wrap, .dy-creator-content-portal, [class*=\"mention-wrapper\"]').forEach(e => e.remove()); }"
                 )
                 publish_button = page.get_by_role("button", name="发布", exact=True)
                 if await publish_button.count():
@@ -837,7 +838,7 @@ class DouYinNote(DouYinBaseUploader):
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "图文上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium")
+        browser = await playwright.chromium.launch(headless=self.headless)
         context = await browser.new_context(
             storage_state=f"{self.account_file}",
             permissions=["geolocation"],
