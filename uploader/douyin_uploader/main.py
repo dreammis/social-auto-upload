@@ -411,6 +411,7 @@ class DouYinVideo(DouYinBaseUploader):
         publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
+        proxy: str = "",
     ):
         super().__init__(
             publish_date=publish_date,
@@ -427,6 +428,7 @@ class DouYinVideo(DouYinBaseUploader):
         self.productLink = productLink
         self.productTitle = productTitle
         self.desc = desc or ""
+        self.proxy = proxy
 
     async def validate_upload_args(self):
         await self.validate_base_args()
@@ -521,7 +523,10 @@ class DouYinVideo(DouYinBaseUploader):
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chrome")
+        browser = await playwright.chromium.launch(
+            headless=self.headless, channel="chrome",
+            proxy={"server": self.proxy} if self.proxy else None,
+        )
         context = await browser.new_context(
             storage_state=f"{self.account_file}",
             permissions=["geolocation"],
@@ -753,7 +758,10 @@ class DouYinNote(DouYinBaseUploader):
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "图文上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chrome")
+        browser = await playwright.chromium.launch(
+            headless=self.headless, channel="chrome",
+            proxy={"server": self.proxy} if self.proxy else None,
+        )
         context = await browser.new_context(
             storage_state=f"{self.account_file}",
             permissions=["geolocation"],

@@ -234,7 +234,7 @@ async def check_bilibili_account(account_name: str) -> bool:
     return result.returncode == 0
 
 
-async def upload_video(request: DouyinVideoUploadRequest) -> Path:
+async def upload_video(request: DouyinVideoUploadRequest, proxy: str = "") -> Path:
     account_file = resolve_account_file("douyin", request.account_name)
     is_ready = await douyin_setup(str(account_file), handle=False)
     if not is_ready:
@@ -256,6 +256,7 @@ async def upload_video(request: DouyinVideoUploadRequest) -> Path:
         publish_strategy=request.publish_strategy,
         debug=request.debug,
         headless=request.headless,
+        proxy=proxy,
     )
     await app.douyin_upload_video()
     return account_file
@@ -431,6 +432,7 @@ def add_runtime_flags(parser: argparse.ArgumentParser) -> None:
     headless_group.add_argument("--headed", dest="headless", action="store_false", help="Run with browser UI")
     headless_group.add_argument("--headless", dest="headless", action="store_true", help="Run in headless mode")
     parser.set_defaults(headless=True)
+    parser.add_argument("--proxy", default="", help="SOCKS5 proxy URL (e.g. socks5://10.0.0.1:1080)")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -577,7 +579,7 @@ async def dispatch(args: argparse.Namespace) -> int:
                 debug=args.debug,
                 headless=args.headless,
             )
-            await upload_video(request)
+            await upload_video(request, proxy=getattr(args, 'proxy', ''))
             print(f"Douyin video upload submitted: {request.video_file}")
             return 0
 
