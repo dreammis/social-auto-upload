@@ -368,6 +368,19 @@
                 <div class="form-item">
                   <el-checkbox v-model="tab.platformConfig.channels.isOriginal">声明原创</el-checkbox>
                 </div>
+
+                <div class="form-item">
+                  <label>视频标注</label>
+                  <el-select v-model="tab.platformConfig.channels.declaration" placeholder="请选择标注" clearable style="width: 100%;">
+                    <el-option label="无需标注" value="" />
+                    <el-option label="含AI生成内容" value="含AI生成内容" />
+                    <el-option label="内容为虚构剧情，仅供娱乐" value="内容为虚构剧情，仅供娱乐" />
+                    <el-option label="个人观点，仅供参考" value="个人观点，仅供参考" />
+                    <el-option label="内容包含营销广告" value="内容包含营销广告" />
+                    <el-option label="内容为自行拍摄" value="内容为自行拍摄" />
+                    <el-option label="内容为转载" value="内容为转载" />
+                  </el-select>
+                </div>
               </div>
 
               <!-- 小红书独有设置 -->
@@ -1593,6 +1606,7 @@ const unifiedPublishInit = {
       tags: [], // 标签/话题（独立）
       isDraft: false, // 草稿模式
       isOriginal: true, // 原创声明
+      declaration: '含AI生成内容', // 视频标注
     },
     // 抖音独有
     douyin: {
@@ -2366,12 +2380,13 @@ const getPlatformSpecificConfig = (tab, platformId) => {
         isOriginal: config.bilibili.isOriginal ? 1 : 0,
         collection: common.collection  // 使用公共合集
       }
-    case 2: // 视频号（无AI声明）
+    case 2: // 视频号
       return {
         isDraft: config.channels.isDraft,
         isOriginal: config.channels.isOriginal,
         declareOriginal: config.channels.isOriginal,
         tencentDeclareOriginal: config.channels.isOriginal,
+        tencentDeclaration: config.channels.declaration || '',
         collection: common.collection  // 使用公共合集
       }
     case 1: // 小红书

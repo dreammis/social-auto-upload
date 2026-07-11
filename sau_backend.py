@@ -133,39 +133,40 @@ def upload_file():
             "msg": "No selected file"
         }), 400
     try:
-        # 保存文件到指定位置
         uuid_v1 = uuid.uuid1()
-        print(f"UUID v1: {uuid_v1}")
-        safe_name = secure_filename(file.filename)
-        if not safe_name:
-            return jsonify({"code": 400, "data": None, "msg": "Invalid filename"}), 400
-        filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{safe_name}")
+        original_filename = file.filename
+        file_ext = ''
+        if '.' in original_filename:
+            file_ext = '.' + original_filename.rsplit('.', 1)[-1]
+        safe_name = secure_filename(original_filename)
+        if safe_name and '.' in safe_name:
+            # secure_filename 保留了文件名和扩展名（如 'test.mp4'）
+            final_name = f"{uuid_v1}_{safe_name}"
+        else:
+            # 用 UUID 替代中文部分，手动拼接扩展名
+            final_name = f"{uuid_v1}{file_ext}"
+        filepath = Path(BASE_DIR / "videoFile" / final_name)
         file.save(filepath)
-        return jsonify({"code":200,"msg": "File uploaded successfully", "data": f"{uuid_v1}_{safe_name}"}), 200
+        return jsonify({"code":200,"msg": "File uploaded successfully", "data": final_name}), 200
     except Exception as e:
         return jsonify({"code":500,"msg": str(e),"data":None}), 500
 
 @app.route('/getFile', methods=['GET'])
 def get_file():
     filename = request.args.get('filename')
-
     if not filename:
         return jsonify({"code": 400, "msg": "filename is required", "data": None}), 400
-
     # 防止路径穿越攻击
     if '..' in filename or filename.startswith('/'):
         return jsonify({"code": 400, "msg": "Invalid filename", "data": None}), 400
-
     # 拼接完整路径
     file_path = str(Path(BASE_DIR / "videoFile"))
-
     # 返回文件
     return send_from_directory(file_path,filename)
 
 
 def sync_video_file_records(conn):
     """同步 videoFile 目录与数据库记录
-    
     1. 将目录中存在但数据库中不存在的文件添加到数据库
     2. 删除数据库中存在但目录中不存在的记录
     """
@@ -686,6 +687,7 @@ def postVideo():
     thumbnail_portrait = data.get('thumbnailPortrait', '')
     is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
     tencent_declare_original = data.get('tencentDeclareOriginal', data.get('declareOriginal', False))
+    tencent_declaration = data.get('tencentDeclaration')
 
     declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
 
@@ -743,7 +745,7 @@ def postVideo():
             case 2:
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                                    start_days, is_draft, thumbnail_path, desc, collection=collection,
-                                   declare_original=tencent_declare_original)
+                                   declare_original=tencent_declare_original, declaration=tencent_declaration)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days, thumbnail_path, thumbnail_portrait, productLink, productTitle, declaration_info, desc,
@@ -842,6 +844,7 @@ def postVideoBatch():
         desc = data.get('desc', '')
         is_draft = data.get('isDraft', False)
         tencent_declare_original = data.get('tencentDeclareOriginal', data.get('declareOriginal', False))
+        tencent_declaration = data.get('tencentDeclaration')
         declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
 
         videos_per_day = data.get('videosPerDay')
@@ -880,7 +883,7 @@ def postVideoBatch():
             case 2:
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                                    start_days, is_draft, thumbnail_path, desc, collection=collection,
-                                   declare_original=tencent_declare_original)
+                                   declare_original=tencent_declare_original, declaration=tencent_declaration)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days, thumbnail_path, thumbnail_portrait, productLink, productTitle, declaration_info, desc,
@@ -1216,6 +1219,7 @@ def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, de
             channels_tags = channels_config.get('tags', [])  # 视频号独立标签
             is_draft = channels_config.get('isDraft', False)
             is_original = channels_config.get('isOriginal', False)
+            declaration = channels_config.get('declaration')
 
             post_video_tencent(
                 title=title,
@@ -1231,7 +1235,8 @@ def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, de
                 thumbnail_path=coverPath,
                 desc=desc,
                 collection=collection,
-                declare_original=is_original
+                declare_original=is_original,
+                declaration=declaration
             )
 
         case 3:  # 抖音

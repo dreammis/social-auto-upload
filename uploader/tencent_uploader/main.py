@@ -696,6 +696,39 @@ class TencentBaseUploader(BaseVideoUploader):
                 tencent_logger.warning(_msg("😵", f"生成原创声明诊断信息失败: {exc}"))
             tencent_logger.warning(_msg("📭", "本视频未声明原创（页面无入口或为可选项），跳过并继续发布"))
 
+    async def set_declaration(self, page: Page, declaration: str | None = None) -> None:
+        """视频号「视频标注」功能：选择声明类型（如"含AI生成内容"等）。
+        declaration 为 None 时跳过，不设置任何声明。
+        """
+        if not declaration:
+            return
+        try:
+            mark_tag_select = page.locator("div.mark-tag-select").first
+            if not await mark_tag_select.count():
+                tencent_logger.info(_msg("🧍", "未找到视频标注区域，跳过"))
+                return
+
+            await mark_tag_select.scroll_into_view_if_needed()
+            # 点击展开选项列表
+            await mark_tag_select.click()
+            await page.wait_for_timeout(500)
+
+            options = mark_tag_select.locator("div.mark-tag-option")
+            option_count = await options.count()
+            for i in range(option_count):
+                option = options.nth(i)
+                option_main = option.locator("div.option-main").first
+                if await option_main.count():
+                    text = (await option_main.inner_text()).strip()
+                    if text == declaration:
+                        await option.click()
+                        await page.wait_for_timeout(500)
+                        tencent_logger.info(_msg("🥳", f"视频标注已选择「{declaration}」"))
+                        return
+            tencent_logger.warning(_msg("😵", f"未找到视频标注选项「{declaration}」，跳过"))
+        except Exception as exc:
+            tencent_logger.warning(_msg("😵", f"设置视频标注失败，继续发布: {exc}"))
+
     async def set_location(self, page: Page, location_name: str = "不显示位置") -> None:
         try:
             location_form = page.locator("div.form-item").filter(has_text="位置").first
@@ -802,6 +835,7 @@ class TencentVideo(TencentBaseUploader):
         debug: bool = DEBUG_MODE,
         headless: bool | None = None,
         collection: str | None = None,  # 合集名称
+        declaration: str | None = None,  # 视频标注（如"含AI生成内容"）
         screenshot_manager: ScreenshotManager | None = None,  # 截图管理器（异常诊断）
     ):
         super().__init__(
@@ -824,6 +858,7 @@ class TencentVideo(TencentBaseUploader):
         self.thumbnail_portrait_path = thumbnail_portrait_path or thumbnail_path
         self.short_title = short_title
         self.collection = collection  # 合集名称
+        self.declaration = declaration  # 视频标注
         self.screenshot_manager = screenshot_manager  # 截图管理器
 
     async def _take_error_screenshot(self, page: Page, error_msg: str = None) -> None:
@@ -974,6 +1009,7 @@ class TencentVideo(TencentBaseUploader):
             await self.wait_for_upload_complete(page)
             await self.set_location(page)
             await self.set_original_declaration(page)
+            await self.set_declaration(page, self.declaration)
 
             # 设置合集
             if self.collection:
