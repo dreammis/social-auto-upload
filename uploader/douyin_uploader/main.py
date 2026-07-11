@@ -4,6 +4,7 @@ from datetime import datetime
 import asyncio
 import inspect
 import os
+import sys
 from pathlib import Path
 
 from patchright.async_api import Page
@@ -46,6 +47,20 @@ def _build_login_result(success: bool, status: str, message: str, account_file: 
         "qrcode": qrcode,
         "current_url": current_url,
     }
+
+
+async def _read_verify_code(code_file: str) -> str:
+    if os.path.exists(code_file):
+        with open(code_file, encoding="utf-8") as file_obj:
+            return file_obj.read().strip()
+
+    if not sys.stdin or not sys.stdin.isatty():
+        return ""
+
+    try:
+        return (await asyncio.to_thread(input, "请输入抖音短信验证码（直接回车可稍后重试）: ")).strip()
+    except (EOFError, OSError):
+        return ""
 
 
 async def cookie_auth(account_file):
@@ -534,6 +549,38 @@ class DouYinVideo(DouYinBaseUploader):
         self.productTitle = productTitle
         self.desc = desc or ""
 
+    async def _submit_sms_verify_code(self, page: Page, sms_input, code: str, code_file: str) -> bool:
+        douyin_logger.info(_msg("✍️", f"已获取验证码，准备填入: {code}"))
+        await sms_input.click()
+        await sms_input.fill(code)
+        douyin_logger.info(_msg("✅", "验证码已填入输入框"))
+        await page.wait_for_timeout(500)
+
+        verify_btn = page.locator('div.uc-ui-verify_sms-verify_button:has-text("验证")').first
+        if await verify_btn.count() and await verify_btn.is_visible():
+            try:
+                await verify_btn.click(force=True)
+                douyin_logger.success(_msg("✅", "已点击「验证」按钮 (force)"))
+            except Exception:
+                await page.eval_on_selector('div.uc-ui-verify_sms-verify_button', 'el => el.click()')
+                douyin_logger.success(_msg("✅", "已点击「验证」按钮 (JS)"))
+        else:
+            verify_by_text = page.get_by_text("验证", exact=True).first
+            if await verify_by_text.count():
+                await verify_by_text.click(force=True)
+                douyin_logger.success(_msg("✅", "已点击「验证」按钮 (text)"))
+            else:
+                douyin_logger.warning(_msg("⚠️", "未找到验证按钮，尝试按Enter"))
+                await page.keyboard.press("Enter")
+
+        if os.path.exists(code_file):
+            os.remove(code_file)
+            douyin_logger.info(_msg("🧹", "验证码文件已清理"))
+
+        await page.wait_for_timeout(3000)
+        douyin_logger.info(_msg("🔄", "验证码处理完成，继续发布流程"))
+        return True
+
     async def validate_upload_args(self):
         await self.validate_base_args()
         if not self.title or not str(self.title).strip():
@@ -694,6 +741,7 @@ class DouYinVideo(DouYinBaseUploader):
         if self.publish_strategy == DOUYIN_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_douyin(page, self.publish_date)
 
+        sms_prompt_logged = False
         while True:
             try:
                 # 移除会拦截发布按钮点击的新手引导/话题下拉浮层
@@ -709,40 +757,14 @@ class DouYinVideo(DouYinBaseUploader):
                     if await get_code_btn.count() and await get_code_btn.is_visible():
                         await get_code_btn.click()
                         douyin_logger.info(_msg("📤", "已点击「获取验证码」，请查看手机短信"))
-                    # 等待验证码文件
                     code_file = os.path.join(BASE_DIR, "verify_code.txt")
-                    if os.path.exists(code_file):
-                        code = open(code_file).read().strip()
-                        if code:
-                            douyin_logger.info(_msg("✍️", f"从文件读取到验证码: {code}"))
-                            await sms_input.click()
-                            await sms_input.fill(code)
-                            douyin_logger.info(_msg("✅", "验证码已填入输入框"))
-                            await page.wait_for_timeout(500)
-                            # 点击「验证」按钮（div 类型按钮，用 force=True + JS 兜底）
-                            verify_btn = page.locator('div.uc-ui-verify_sms-verify_button:has-text("验证")').first
-                            if await verify_btn.count() and await verify_btn.is_visible():
-                                try:
-                                    await verify_btn.click(force=True)
-                                    douyin_logger.success(_msg("✅", "已点击「验证」按钮 (force)"))
-                                except Exception:
-                                    await page.eval_on_selector('div.uc-ui-verify_sms-verify_button', 'el => el.click()')
-                                    douyin_logger.success(_msg("✅", "已点击「验证」按钮 (JS)"))
-                            else:
-                                # 兜底：按文本找
-                                verify_by_text = page.get_by_text("验证", exact=True).first
-                                if await verify_by_text.count():
-                                    await verify_by_text.click(force=True)
-                                    douyin_logger.success(_msg("✅", "已点击「验证」按钮 (text)"))
-                                else:
-                                    douyin_logger.warning(_msg("⚠️", "未找到验证按钮，尝试按Enter"))
-                                    await page.keyboard.press("Enter")
-                            os.remove(code_file)
-                            douyin_logger.info(_msg("🧹", "验证码文件已清理"))
-                            await page.wait_for_timeout(3000)
-                            douyin_logger.info(_msg("🔄", "验证码处理完成，继续发布流程"))
-                    else:
-                        douyin_logger.warning(_msg("⏳", "等待你发送验证码到微信..."))
+                    code = await _read_verify_code(code_file)
+                    if code:
+                        sms_prompt_logged = False
+                        await self._submit_sms_verify_code(page, sms_input, code, code_file)
+                    elif not sms_prompt_logged:
+                        douyin_logger.warning(_msg("⏳", f"等待验证码输入；可在交互终端直接输入，或写入文件: {code_file}"))
+                        sms_prompt_logged = True
                 publish_button = page.get_by_role("button", name="发布", exact=True)
                 if await publish_button.count():
                     await publish_button.click(force=True)

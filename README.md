@@ -204,6 +204,7 @@ sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title
 
 - `creator` 之类的名字只是示例值，真正含义是 `account_name`
 - 一个 `account_name` 对应一个账号文件，可以准备多个账号，也可以按账号名并发执行任务
+- 抖音视频发布若触发短信二次验证，程序会优先读取项目根目录下的 `verify_code.txt`；如果你是在本地交互式终端手动运行 CLI，也可以直接按终端提示输入验证码
 - 浏览器平台统一约定：
 - 视频使用 `title + desc + tags`
 - 图文使用 `title + note + tags`
