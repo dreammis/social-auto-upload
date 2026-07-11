@@ -145,6 +145,7 @@ class BilibiliVideoUploadRequest:
     tid: int
     tags: list[str]
     publish_date: datetime | int
+    thumbnail_file: Path | None = None
 
 
 @dataclass(slots=True)
@@ -501,6 +502,8 @@ async def upload_bilibili_video(request: BilibiliVideoUploadRequest) -> Path:
     ]
     if request.tags:
         arguments.extend(["--tag", ",".join(request.tags)])
+    if request.thumbnail_file:
+        arguments.extend(["--cover", str(request.thumbnail_file)])
     if isinstance(request.publish_date, datetime):
         arguments.extend(["--dtime", str(int(request.publish_date.timestamp()))])
 
@@ -680,6 +683,7 @@ def build_parser() -> argparse.ArgumentParser:
     bilibili_upload_video_parser.add_argument("--desc", required=True, help="Video description")
     bilibili_upload_video_parser.add_argument("--tid", required=True, type=int, help="Bilibili category id")
     bilibili_upload_video_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
+    bilibili_upload_video_parser.add_argument("--thumbnail", type=existing_file_path, help="Optional Bilibili cover image path")
     bilibili_upload_video_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
 
     tencent_parser = platform_parsers.add_parser("tencent", help="Tencent/WeChat Channels operations")
@@ -926,6 +930,7 @@ async def dispatch(args: argparse.Namespace) -> int:
                 tid=args.tid,
                 tags=parse_tags(args.tags),
                 publish_date=args.schedule or 0,
+                thumbnail_file=args.thumbnail,
             )
             await upload_bilibili_video(request)
             print(f"Bilibili video upload submitted: {request.video_file}")

@@ -1,6 +1,9 @@
 import asyncio
+import tempfile
 import unittest
 from argparse import Namespace
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import sau_cli
@@ -43,3 +46,13 @@ class BilibiliCliTests(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("local interactive terminal", result["message"].lower())
         self.assertIn("qrcode.png", result["message"].lower())
+
+    def test_upload_bilibili_video_passes_thumbnail_to_biliup(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            account_file = Path(temp_dir) / "account.json"
+            account_file.write_text("{}", encoding="utf-8")
+            request = sau_cli.BilibiliVideoUploadRequest("creator", Path("demo.mp4"), "hello", "hello", 249, ["test"], 0, Path("cover.png"))
+            with patch("sau_cli.resolve_account_file", return_value=account_file), patch("sau_cli.run_biliup_command", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")) as run_biliup:
+                asyncio.run(sau_cli.upload_bilibili_video(request))
+        self.assertIn("--cover", run_biliup.call_args.args[0])
+        self.assertIn("cover.png", run_biliup.call_args.args[0])

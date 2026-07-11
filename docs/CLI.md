@@ -81,7 +81,7 @@ SAU_XHS_CREATOR_BASE_URL=https://creator.rednote.com sau xiaohongshu login --acc
 ```bash
 sau bilibili login --account <account_name>
 sau bilibili check --account <account_name>
-sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tid 249 --tags 足球,测试
+sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tid 249 --tags 足球,测试 --thumbnail covers/demo.png
 ```
 
 补充说明：
