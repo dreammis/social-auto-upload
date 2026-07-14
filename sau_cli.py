@@ -31,6 +31,7 @@ from uploader.tencent_uploader.main import (
     TENCENT_PUBLISH_STRATEGY_SCHEDULED,
     TencentVideo,
     cookie_auth as tencent_cookie_auth,
+    _has_tencent_login_state,
     tencent_setup,
 )
 from uploader.xiaohongshu_uploader.main import (
@@ -289,9 +290,9 @@ async def login_tencent_account(account_name: str, headless: bool = True) -> dic
 
 async def check_tencent_account(account_name: str) -> bool:
     account_file = resolve_account_file("tencent", account_name)
-    if not account_file.exists():
+    if not _has_tencent_login_state(str(account_file)):
         return False
-    return await tencent_cookie_auth(str(account_file))
+    return await tencent_cookie_auth(str(account_file), headless=False)
 
 
 async def login_youtube_account(account_name: str, headless: bool = False) -> dict:
@@ -512,7 +513,7 @@ async def upload_bilibili_video(request: BilibiliVideoUploadRequest) -> Path:
 
 async def upload_tencent_video(request: TencentVideoUploadRequest) -> Path:
     account_file = resolve_account_file("tencent", request.account_name)
-    is_ready = await tencent_setup(str(account_file), handle=False)
+    is_ready = await tencent_setup(str(account_file), handle=False, headless=request.headless)
     if not is_ready:
         raise RuntimeError(
             f"Tencent/WeChat Channels cookie is missing or expired: {account_file}. "

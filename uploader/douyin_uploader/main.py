@@ -576,9 +576,9 @@ class DouYinVideo(DouYinBaseUploader):
             return
 
         douyin_logger.info(_msg("🏃", "小人正在设置视频封面"))
-        # 先清掉 shepherd 新手引导浮层，否则它会拦截“选择封面”点击导致弹窗打不开
+        # 先清掉 shepherd + portal 覆盖层，否则它们拦截“选择封面”点击
         await page.evaluate(
-            "() => document.querySelectorAll('.shepherd-element,.shepherd-modal-overlay-container').forEach(e=>e.remove())"
+            "() => document.querySelectorAll('.shepherd-element,.shepherd-modal-overlay-container,.dy-creator-content-modal-wrap,.dy-creator-content-portal').forEach(e=>e.remove())"
         )
         await page.get_by_text("选择封面", exact=True).first.click(force=True)
         cover_locator_str = 'div.dy-creator-content-modal'
