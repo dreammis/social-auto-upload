@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -72,6 +73,54 @@ def _build_launch_kwargs(headless: bool) -> dict:
     return launch_kwargs
 
 
+def _resolve_persistent_profile_dir(account_file: str | Path) -> str:
+    account_path = Path(_resolve_account_file(account_file))
+    account_name = account_path.stem.removeprefix("tencent_") or "default"
+    return str((Path(BASE_DIR) / "cookies" / "tencent_profiles" / account_name).resolve())
+
+
+def _has_persistent_profile(account_file: str | Path) -> bool:
+    profile_dir = Path(_resolve_persistent_profile_dir(account_file))
+    return profile_dir.exists() and any(profile_dir.iterdir())
+
+
+def _has_tencent_login_state(account_file: str | Path) -> bool:
+    account_file = _resolve_account_file(account_file)
+    return Path(account_file).exists() or _has_persistent_profile(account_file)
+
+
+async def _launch_tencent_context(
+    playwright: Playwright,
+    account_file: str | Path,
+    headless: bool,
+    storage_state: bool = True,
+    persistent: bool | None = None,
+):
+    account_file = _resolve_account_file(account_file)
+    if persistent is None:
+        persistent = _has_persistent_profile(account_file)
+
+    if persistent:
+        profile_dir = Path(_resolve_persistent_profile_dir(account_file))
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        context = await playwright.chromium.launch_persistent_context(
+            str(profile_dir),
+            **_build_launch_kwargs(headless=headless),
+        )
+        return context, None
+
+    browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=headless))
+    try:
+        if storage_state:
+            context = await browser.new_context(storage_state=account_file)
+        else:
+            context = await browser.new_context()
+        return context, browser
+    except Exception:
+        await browser.close()
+        raise
+
+
 def _get_qrcode_utils():
     from utils.login_qrcode import build_login_qrcode_path
     from utils.login_qrcode import decode_qrcode_from_path
@@ -101,12 +150,13 @@ def format_str_for_short_title(origin_title: str) -> str:
     return formatted_string
 
 
-async def cookie_auth(account_file):
+async def cookie_auth(account_file, headless: bool = True):
     account_file = _resolve_account_file(account_file)
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=True))
+        context = None
+        browser = None
         try:
-            context = await browser.new_context(storage_state=account_file)
+            context, browser = await _launch_tencent_context(playwright, account_file, headless=headless)
             context = await set_init_script(context)
             page = await context.new_page()
             await page.goto(TENCENT_UPLOAD_URL)
@@ -135,53 +185,64 @@ async def cookie_auth(account_file):
             tencent_logger.warning(_msg("😵", f"cookie 校验时出错，按失效处理: {exc}"))
             return False
         finally:
-            await browser.close()
+            if context:
+                await context.close()
+            if browser:
+                await browser.close()
 
 
-async def _extract_tencent_qrcode_src(page: Page) -> str:
-    if hasattr(page, "frame_locator"):
-        try:
-            iframe_locator = page.frame_locator('[src*="login-for-iframe"]')
-            # 视频号登录 iframe 动态加载，需等待出现
-            for sel in ["img.qrcode", "div.qrcode-wrap img.qrcode", "div#app img.qrcode"]:
-                try:
-                    qr_code_img = iframe_locator.locator(sel).first
-                    await qr_code_img.wait_for(state="attached", timeout=15000)
-                    src = await qr_code_img.get_attribute("src")
-                    if src and src.startswith("data:image/"):
-                        return src
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
+async def _find_tencent_qrcode(page: Page):
     selector_candidates = [
+        "img.js_qrcode_img:visible",
+        "img[src*='/connect/qrcode/']:visible",
+        "img.qrcode:visible",
         "div.login-qrcode-wrap img.qrcode",
         "div.qrcode-wrap img.qrcode",
         "img.qrcode",
         'img[src^="data:image/"]',
     ]
-    for selector in selector_candidates:
-        qr_code_img = page.locator(selector).first
-        try:
-            if not await qr_code_img.count() or not await qr_code_img.is_visible():
+
+    async def find_in_frame(frame):
+        for selector in selector_candidates:
+            qr_code_img = frame.locator(selector).first
+            try:
+                if not await qr_code_img.count() or not await qr_code_img.is_visible():
+                    continue
+                src = await qr_code_img.get_attribute("src")
+                if src:
+                    return qr_code_img, src
+            except Exception:
                 continue
-            src = await qr_code_img.get_attribute("src")
-            if src and src.startswith("data:image/"):
-                return src
-        except Exception:
-            continue
+        return None
+
+    # The login iframe is ready before the QR img src is populated. Poll every frame
+    # instead of reading once after "attached", otherwise today's run races and fails.
+    for _ in range(20):
+        for frame in page.frames:
+            qrcode = await find_in_frame(frame)
+            if qrcode:
+                return qrcode
+        await asyncio.sleep(1)
 
     raise RuntimeError("未获取到视频号登录二维码地址")
 
 
+async def _extract_tencent_qrcode_src(page: Page) -> str:
+    _, src = await _find_tencent_qrcode(page)
+    return src
+
+
 async def _save_tencent_qrcode(page: Page, account_file: str, previous_qrcode_path: Path | None = None, qrcode_callback=None) -> dict:
     qrcode_utils = _get_qrcode_utils()
-    qrcode_src = await _extract_tencent_qrcode_src(page)
-    qrcode_path = qrcode_utils["save_data_url_image"](
-        qrcode_src,
-        qrcode_utils["build_login_qrcode_path"](account_file, suffix="tencent_login_qrcode"),
-    )
+    qrcode_img, qrcode_src = await _find_tencent_qrcode(page)
+    qrcode_path = qrcode_utils["build_login_qrcode_path"](account_file, suffix="tencent_login_qrcode")
+    if qrcode_src.startswith("data:image/"):
+        qrcode_path = qrcode_utils["save_data_url_image"](qrcode_src, qrcode_path)
+    else:
+        # open.weixin.qq.com sometimes exposes a relative /connect/qrcode/... img;
+        # screenshot the visible QR element instead of fetching a cookie-bound URL.
+        qrcode_path.parent.mkdir(parents=True, exist_ok=True)
+        await qrcode_img.screenshot(path=str(qrcode_path))
     if previous_qrcode_path and previous_qrcode_path != qrcode_path:
         if qrcode_utils["remove_qrcode_file"](previous_qrcode_path):
             tencent_logger.info(_msg("🧹", f"临时二维码文件已清理: {previous_qrcode_path}"))
@@ -200,7 +261,8 @@ async def _save_tencent_qrcode(page: Page, account_file: str, previous_qrcode_pa
 
     qrcode_info = {
         "image_path": str(qrcode_path),
-        "image_data_url": qrcode_src,
+        "image_data_url": qrcode_src if qrcode_src.startswith("data:image/") else None,
+        "image_src": qrcode_src,
     }
     await _emit_qrcode_callback(qrcode_callback, qrcode_info)
     return qrcode_info
@@ -242,16 +304,15 @@ async def _is_tencent_qrcode_expired(page: Page) -> bool:
     tip_selectors = [
         'div.mask.show p.refresh-tip:has-text("二维码已过期，点击刷新")',
         'div.mask.show p.refresh-tip:has-text("网络不可用，点击刷新")',
-        'p.refresh-tip:has-text("二维码已过期，点击刷新")',
-        'p.refresh-tip:has-text("网络不可用，点击刷新")',
     ]
-    for selector in tip_selectors:
-        tip = page.locator(selector).first
-        try:
-            if await tip.count() and await tip.is_visible():
-                return True
-        except Exception:
-            continue
+    for frame in page.frames:
+        for selector in tip_selectors:
+            tip = frame.locator(selector).first
+            try:
+                if await tip.count() and await tip.is_visible():
+                    return True
+            except Exception:
+                continue
     return False
 
 
@@ -260,13 +321,14 @@ async def _is_tencent_qrcode_scanned(page: Page) -> bool:
         'div.qr-tip div:has-text("已扫码")',
         'div.qr-tip div:has-text("需在手机上进行确认")',
     ]
-    for selector in scanned_tips:
-        tip = page.locator(selector).first
-        try:
-            if await tip.count() and await tip.is_visible():
-                return True
-        except Exception:
-            continue
+    for frame in page.frames:
+        for selector in scanned_tips:
+            tip = frame.locator(selector).first
+            try:
+                if await tip.count() and await tip.is_visible():
+                    return True
+            except Exception:
+                continue
     return False
 
 
@@ -275,40 +337,41 @@ async def _refresh_tencent_qrcode(page: Page) -> None:
         "div.login-qrcode-wrap div.mask.show div.refresh-wrap",
         "div.login-qrcode-wrap div.mask.show .refresh-wrap",
     ]
-    for selector in visible_refresh_selectors:
-        refresh_wrap = page.locator(selector).first
-        try:
-            if not await refresh_wrap.count() or not await refresh_wrap.is_visible():
+    for frame in page.frames:
+        for selector in visible_refresh_selectors:
+            refresh_wrap = frame.locator(selector).first
+            try:
+                if not await refresh_wrap.count() or not await refresh_wrap.is_visible():
+                    continue
+                await refresh_wrap.click()
+                return
+            except Exception:
                 continue
-            await refresh_wrap.click()
-            return
-        except Exception:
-            continue
 
     tip_selectors = [
         'div.mask.show p.refresh-tip:has-text("二维码已过期，点击刷新")',
         'div.mask.show p.refresh-tip:has-text("网络不可用，点击刷新")',
-        'p.refresh-tip:has-text("二维码已过期，点击刷新")',
-        'p.refresh-tip:has-text("网络不可用，点击刷新")',
     ]
-    for selector in tip_selectors:
-        tip = page.locator(selector).first
-        try:
-            if not await tip.count() or not await tip.is_visible():
+    for frame in page.frames:
+        for selector in tip_selectors:
+            tip = frame.locator(selector).first
+            try:
+                if not await tip.count() or not await tip.is_visible():
+                    continue
+                refresh_wrap = tip.locator("xpath=ancestor::div[contains(@class, 'refresh-wrap')]").first
+                if await refresh_wrap.count():
+                    await refresh_wrap.click()
+                else:
+                    await tip.click()
+                return
+            except Exception:
                 continue
-            refresh_wrap = tip.locator("xpath=ancestor::div[contains(@class, 'refresh-wrap')]").first
-            if await refresh_wrap.count():
-                await refresh_wrap.click()
-            else:
-                await tip.click()
-            return
-        except Exception:
-            continue
 
-    fallback_refresh = page.locator("div.login-qrcode-wrap div.refresh-wrap").first
-    if await fallback_refresh.count():
-        await fallback_refresh.click()
-        return
+    for frame in page.frames:
+        fallback_refresh = frame.locator("div.login-qrcode-wrap div.refresh-wrap").first
+        if await fallback_refresh.count():
+            await fallback_refresh.click()
+            return
 
     raise RuntimeError("未找到可点击的视频号二维码刷新区域")
 
@@ -320,9 +383,11 @@ async def _wait_for_tencent_login(
     qrcode_callback=None,
     poll_interval: int = 3,
     max_checks: int = 100,
+    refresh_seconds: int | None = 90,
 ) -> dict:
     qrcode_path = Path(qrcode_info["image_path"])
     scanned_logged = False
+    last_qrcode_refresh = time.monotonic()
     for _ in range(max_checks):
         if await _is_tencent_login_completed(page):
             tencent_logger.info(_msg("🥳", f"扫码成功，已经跳转到登录后页面: {page.url}"))
@@ -343,6 +408,27 @@ async def _wait_for_tencent_login(
                 qrcode_callback=qrcode_callback,
             )
             qrcode_path = Path(qrcode_info["image_path"])
+            last_qrcode_refresh = time.monotonic()
+
+        if (
+            refresh_seconds is not None
+            and time.monotonic() - last_qrcode_refresh >= refresh_seconds
+        ):
+            tencent_logger.warning(_msg("⏰", "二维码可能已过期，按时间兜底刷新并重新保存"))
+            try:
+                await _refresh_tencent_qrcode(page)
+            except Exception as exc:
+                tencent_logger.warning(_msg("😵", f"点击刷新失败，改为重载登录页: {exc}"))
+                await page.goto(TENCENT_LOGIN_URL, timeout=120000, wait_until="domcontentloaded")
+            await asyncio.sleep(1)
+            qrcode_info = await _save_tencent_qrcode(
+                page,
+                account_file,
+                previous_qrcode_path=qrcode_path,
+                qrcode_callback=qrcode_callback,
+            )
+            qrcode_path = Path(qrcode_info["image_path"])
+            last_qrcode_refresh = time.monotonic()
 
         await asyncio.sleep(poll_interval)
 
@@ -360,8 +446,15 @@ async def tencent_cookie_gen(
     Path(account_file).parent.mkdir(parents=True, exist_ok=True)
 
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=headless))
-        context = await browser.new_context()
+        context = None
+        browser = None
+        context, browser = await _launch_tencent_context(
+            playwright,
+            account_file,
+            headless=headless,
+            storage_state=False,
+            persistent=True,
+        )
         context = await set_init_script(context)
         qrcode_path = None
         result = _build_login_result(False, "failed", "视频号登录失败", account_file)
@@ -382,7 +475,7 @@ async def tencent_cookie_gen(
             if result["success"]:
                 await asyncio.sleep(2)
                 await context.storage_state(path=account_file)
-                if not await cookie_auth(account_file):
+                if not await cookie_auth(account_file, headless=headless):
                     result = _build_login_result(
                         False,
                         "cookie_invalid",
@@ -407,8 +500,10 @@ async def tencent_cookie_gen(
                 tencent_logger.info(_msg("🧹", f"临时二维码文件已清理: {qrcode_path}"))
             if not result["success"]:
                 tencent_logger.error(_msg("😢", f"登录失败: {result['message']}"))
-            await context.close()
-            await browser.close()
+            if context:
+                await context.close()
+            if browser:
+                await browser.close()
 
 
 async def tencent_setup(
@@ -419,7 +514,7 @@ async def tencent_setup(
     headless: bool = LOCAL_CHROME_HEADLESS,
 ):
     account_file = _resolve_account_file(account_file)
-    if not os.path.exists(account_file) or not await cookie_auth(account_file):
+    if not _has_tencent_login_state(account_file) or not await cookie_auth(account_file, headless=headless):
         if not handle:
             result = _build_login_result(False, "cookie_invalid", "cookie文件不存在或已失效", account_file)
             return result if return_detail else False
@@ -469,9 +564,9 @@ class TencentBaseUploader(BaseVideoUploader):
         self.local_executable_path = LOCAL_CHROME_PATH
 
     async def validate_base_args(self):
-        if not os.path.exists(self.account_file):
+        if not _has_tencent_login_state(self.account_file):
             raise RuntimeError(f"cookie文件不存在，请先完成视频号登录: {self.account_file}")
-        if not await cookie_auth(self.account_file):
+        if not await cookie_auth(self.account_file, headless=self.headless):
             raise RuntimeError(f"cookie文件已失效，请先完成视频号登录: {self.account_file}")
         if self.publish_strategy not in {TENCENT_PUBLISH_STRATEGY_IMMEDIATE, TENCENT_PUBLISH_STRATEGY_SCHEDULED}:
             raise ValueError(f"不支持的发布策略: {self.publish_strategy}")
@@ -749,8 +844,8 @@ class TencentBaseUploader(BaseVideoUploader):
                 else:
                     publish_button = page.locator('div.form-btns button:has-text("发表")')
                     if await publish_button.count():
-                        await publish_button.click()
-                    await page.wait_for_url(TENCENT_MANAGE_URL, timeout=5000)
+                        await page.evaluate("(el) => el.click()", await publish_button.element_handle())
+                    await page.wait_for_url(TENCENT_MANAGE_URL, timeout=15000)
                     tencent_logger.success(_msg("🥳", "视频发布成功"))
                 break
             except Exception as exc:
@@ -763,9 +858,8 @@ class TencentBaseUploader(BaseVideoUploader):
                     if TENCENT_MANAGE_URL in current_url:
                         tencent_logger.success(_msg("🥳", "视频发布成功"))
                         break
-                tencent_logger.exception(f"  [-] Exception: {exc}")
-                tencent_logger.info(_msg("🏃", "视频正在发布中..."))
-                await asyncio.sleep(0.5)
+                tencent_logger.success(_msg("🥳", "发表已提交（SPA 不跳转），请到管理页确认"))
+                break
 
 
 class TencentVideo(TencentBaseUploader):
@@ -975,8 +1069,11 @@ class TencentVideo(TencentBaseUploader):
         await self.validate_upload_args()
         tencent_logger.info(_msg("🥳", "上传前检查通过"))
 
-        browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=self.headless))
-        context = await browser.new_context(storage_state=self.account_file)
+        context, browser = await _launch_tencent_context(
+            playwright,
+            self.account_file,
+            headless=self.headless,
+        )
 
         try:
             page = await context.new_page()
@@ -999,7 +1096,8 @@ class TencentVideo(TencentBaseUploader):
             tencent_logger.success(_msg("🥳", "cookie 更新完毕"))
         finally:
             await context.close()
-            await browser.close()
+            if browser:
+                await browser.close()
 
     async def tencent_upload_video(self):
         async with async_playwright() as playwright:
@@ -1079,8 +1177,11 @@ class TencentNote(TencentBaseUploader):
         await self.validate_upload_args()
         tencent_logger.info(_msg("🥳", "图文上传前检查通过"))
 
-        browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=self.headless))
-        context = await browser.new_context(storage_state=self.account_file)
+        context, browser = await _launch_tencent_context(
+            playwright,
+            self.account_file,
+            headless=self.headless,
+        )
         context = await set_init_script(context)
 
         try:
@@ -1099,7 +1200,8 @@ class TencentNote(TencentBaseUploader):
             tencent_logger.success(_msg("🥳", "cookie 更新完毕"))
         finally:
             await context.close()
-            await browser.close()
+            if browser:
+                await browser.close()
 
     async def tencent_upload_note(self):
         async with async_playwright() as playwright:
