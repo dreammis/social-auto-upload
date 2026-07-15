@@ -961,7 +961,7 @@ const handleDelete = (row) => {
 // 下载Cookie文件
 const handleDownloadCookie = (row) => {
   // 从后端获取Cookie文件
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
+  const baseUrl = '/api'
   const downloadUrl = `${baseUrl}/downloadCookie?filePath=${encodeURIComponent(row.filePath)}`
 
   // 创建一个隐藏的链接来触发下载
@@ -1086,8 +1086,8 @@ const connectSSE = (platform, name, accountId = null) => {
 
   const type = platformTypeMap[platform] || '1'
 
-  // SSE连接直接连后端，不经过Vite代理（代理对SSE长连接支持不好）
-  const baseUrl = 'http://localhost:5409'
+  // SSE连接走 /api 代理
+  const baseUrl = '/api'
   const params = new URLSearchParams({
     type,
     id: name
@@ -1279,7 +1279,7 @@ const submitVerificationCode = async () => {
   submittingVerification.value = true
 
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
+    const baseUrl = '/api'
     const response = await fetch(`${baseUrl}/submitVerification`, {
       method: 'POST',
       headers: {
