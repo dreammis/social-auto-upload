@@ -829,37 +829,29 @@ class TencentBaseUploader(BaseVideoUploader):
             tencent_logger.warning(_msg("😵", "保存草稿也失败，尝试直接发表"))
 
     async def submit_publish(self, page: Page) -> None:
-        # 超时存草稿后直接返回
         if getattr(self, "_draft_saved", False):
             tencent_logger.info(_msg("🥳", "草稿已保存，跳过发表步骤"))
             return
-        while True:
-            try:
-                if getattr(self, "is_draft", False):
-                    draft_button = page.locator('div.form-btns button:has-text("保存草稿")')
-                    if await draft_button.count():
-                        await draft_button.click()
-                    await page.wait_for_url("**/post/list**", timeout=5000)
-                    tencent_logger.success(_msg("🥳", "视频草稿保存成功"))
-                else:
-                    publish_button = page.locator('div.form-btns button:has-text("发表")')
-                    if await publish_button.count():
-                        await page.evaluate("(el) => el.click()", await publish_button.element_handle())
-                    await page.wait_for_url(TENCENT_MANAGE_URL, timeout=15000)
-                    tencent_logger.success(_msg("🥳", "视频发布成功"))
-                break
-            except Exception as exc:
-                current_url = page.url
-                if getattr(self, "is_draft", False):
-                    if "post/list" in current_url or "draft" in current_url:
-                        tencent_logger.success(_msg("🥳", "视频草稿保存成功"))
-                        break
-                else:
-                    if TENCENT_MANAGE_URL in current_url:
-                        tencent_logger.success(_msg("🥳", "视频发布成功"))
-                        break
-                tencent_logger.success(_msg("🥳", "发表已提交（SPA 不跳转），请到管理页确认"))
-                break
+
+        await page.evaluate(
+            "() => document.querySelectorAll('.share-card,.form-item.flex-start,.weui-desktop-dialog__wrp').forEach(e => e.remove())"
+        )
+        is_draft = getattr(self, "is_draft", False)
+        label = "保存草稿" if is_draft else "发表"
+        button = page.locator(f'div.form-btns button:has-text("{label}")')
+        if not await button.count():
+            raise RuntimeError(f"未找到视频号{label}按钮")
+
+        await page.evaluate("(el) => el.click()", await button.element_handle())
+        try:
+            await page.wait_for_url("**/post/list**" if is_draft else TENCENT_MANAGE_URL, timeout=15000)
+        except Exception as exc:
+            if "post/list" in page.url or (not is_draft and TENCENT_MANAGE_URL in page.url):
+                pass
+            else:
+                raise RuntimeError(f"视频号{label}已提交但页面未确认，禁止重复点击；请到后台核验") from exc
+
+        tencent_logger.success(_msg("🥳", "视频草稿保存成功" if is_draft else "视频发布成功"))
 
 
 class TencentVideo(TencentBaseUploader):
@@ -958,38 +950,52 @@ class TencentVideo(TencentBaseUploader):
                 return cover_dialog
         return None
 
-    async def confirm_thumbnail_crop(self, page: Page) -> None:
-        crop_dialog = page.locator("div.weui-desktop-dialog").filter(has_text="裁剪封面图").first
-        if not await crop_dialog.count():
-            return
-
-        try:
-            await crop_dialog.wait_for(state="visible", timeout=10000)
-            crop_confirm_button = crop_dialog.locator(
-                'div.weui-desktop-dialog__ft button.weui-desktop-btn_primary:has-text("确定")'
-            ).first
-            if await crop_confirm_button.count():
-                await crop_confirm_button.wait_for(state="visible", timeout=5000)
-                await crop_confirm_button.click()
-                await page.wait_for_timeout(1000)
-        except Exception as exc:
-            tencent_logger.warning(_msg("😵", f"封面裁剪确认时出错，小人继续尝试保存主弹窗: {exc}"))
-
     async def upload_thumbnail_in_dialog(self, page: Page, cover_dialog, thumbnail_path: str) -> None:
         await cover_dialog.wait_for(state="visible", timeout=5000)
         file_input = cover_dialog.locator('.single-cover-uploader-wrap input[type="file"]').first
         await file_input.wait_for(state="attached", timeout=10000)
         await file_input.set_input_files(thumbnail_path)
-        await page.wait_for_timeout(2000)
+        await page.wait_for_timeout(3000)
 
-        # 裁剪确认内嵌在同一个对话框中，无单独裁剪弹窗，直接点"确认"
         confirm_button = cover_dialog.locator(
             'div.weui-desktop-dialog__ft button.weui-desktop-btn_primary:has-text("确认")'
         ).first
+        if not await confirm_button.count():
+            raise RuntimeError("未找到可见的封面确认按钮")
         await confirm_button.wait_for(state="visible", timeout=10000)
         await confirm_button.click()
-        # 等对话框完全关闭，避免残留遮罩影响下一个封面（横版→竖版间隔太近）
-        await page.wait_for_timeout(2000)
+
+        try:
+            await cover_dialog.wait_for(state="hidden", timeout=10000)
+        except Exception as exc:
+            raise RuntimeError("封面确认后编辑弹窗未关闭，拒绝继续发布") from exc
+
+    async def _cover_preview_fingerprint(self, page: Page, selectors: list[str]) -> str | None:
+        for selector in selectors:
+            if "cover-wrap" not in selector:
+                continue
+            entry = page.locator(selector).first
+            if not await entry.count():
+                continue
+            fingerprint = await entry.evaluate("""
+                el => {
+                    const media = [];
+                    for (const node of [el, ...el.querySelectorAll('*')]) {
+                        if (node.currentSrc) media.push(`src:${node.currentSrc}`);
+                        else if (node.src) media.push(`src:${node.src}`);
+                        if (node.poster) media.push(`poster:${node.poster}`);
+                        const bg = getComputedStyle(node).backgroundImage;
+                        if (bg && bg !== 'none') media.push(`bg:${bg}`);
+                        if (node.tagName === 'CANVAS') {
+                            try { media.push(`canvas:${node.toDataURL()}`); } catch (_) {}
+                        }
+                    }
+                    return JSON.stringify(media);
+                }
+            """)
+            if fingerprint and fingerprint != "[]":
+                return fingerprint
+        return None
 
     async def set_single_thumbnail(
         self,
@@ -1000,21 +1006,31 @@ class TencentVideo(TencentBaseUploader):
         label: str,
         confirm_texts: list[str] | None = None,
     ) -> None:
+        before = await self._cover_preview_fingerprint(page, selectors)
+        if not before:
+            raise RuntimeError(f"无法读取{label}封面预览，拒绝无验证发布")
+
         cover_dialog = await self.open_thumbnail_dialog(page, selectors, dialog_titles, confirm_texts)
         if not cover_dialog:
-            tencent_logger.info(_msg("🧍", f"当前页面没有出现{label}封面编辑弹窗，小人先跳过"))
-            return
+            raise RuntimeError(f"当前页面没有出现{label}封面编辑弹窗")
 
-        try:
-            await self.upload_thumbnail_in_dialog(page, cover_dialog, thumbnail_path)
-            tencent_logger.success(_msg("🥳", f"{label}封面已经设置完成"))
-        except Exception as exc:
-            tencent_logger.warning(_msg("😵", f"{label}封面设置失败，这次先跳过: {exc}"))
+        await self.upload_thumbnail_in_dialog(page, cover_dialog, thumbnail_path)
+        for _ in range(20):
+            after = await self._cover_preview_fingerprint(page, selectors)
+            if after and after != before:
+                break
+            await page.wait_for_timeout(500)
+        else:
+            raise RuntimeError(f"{label}封面预览未更新，拒绝继续发布")
+        tencent_logger.success(_msg("🥳", f"{label}封面已经设置完成"))
 
     async def set_thumbnail(self, page: Page) -> None:
         if not self.thumbnail_landscape_path and not self.thumbnail_portrait_path:
             return
 
+        await page.evaluate(
+            "() => document.querySelectorAll('.share-card,.form-item.flex-start,.weui-desktop-dialog__wrp').forEach(e => e.remove())"
+        )
         tencent_logger.info(_msg("🖼️", "小人准备设置封面"))
 
         landscape_selectors = [
