@@ -4,13 +4,14 @@ from datetime import datetime
 import asyncio
 import inspect
 import os
+import sys
 from pathlib import Path
 
 from patchright.async_api import Page
 from patchright.async_api import Playwright
 from patchright.async_api import async_playwright
 
-from conf import DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
+from conf import BASE_DIR, DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
 from utils.login_qrcode import build_login_qrcode_path
@@ -46,6 +47,20 @@ def _build_login_result(success: bool, status: str, message: str, account_file: 
         "qrcode": qrcode,
         "current_url": current_url,
     }
+
+
+async def _read_verify_code(code_file: str) -> str:
+    if os.path.exists(code_file):
+        with open(code_file, encoding="utf-8") as file_obj:
+            return file_obj.read().strip()
+
+    if not sys.stdin or not sys.stdin.isatty():
+        return ""
+
+    try:
+        return (await asyncio.to_thread(input, "请输入抖音短信验证码（直接回车可稍后重试）: ")).strip()
+    except (EOFError, OSError):
+        return ""
 
 
 async def cookie_auth(account_file):
@@ -172,6 +187,8 @@ async def _is_douyin_login_completed(page: Page) -> bool:
 
 async def _wait_for_douyin_login(page: Page, account_file: str, qrcode_info: dict, qrcode_callback=None, poll_interval: int = 3, max_checks: int = 100) -> dict:
     qrcode_path = Path(qrcode_info["image_path"]) if qrcode_info.get("image_path") else None
+    original_url = page.url
+    saw_2fa = False
     for _ in range(max_checks):
         if await _is_douyin_login_completed(page):
             douyin_logger.info(_msg("🥳", f"扫码成功，已经跳转到登录后页面: {page.url}"))
@@ -532,6 +549,38 @@ class DouYinVideo(DouYinBaseUploader):
         self.productTitle = productTitle
         self.desc = desc or ""
 
+    async def _submit_sms_verify_code(self, page: Page, sms_input, code: str, code_file: str) -> bool:
+        douyin_logger.info(_msg("✍️", f"已获取验证码，准备填入: {code}"))
+        await sms_input.click()
+        await sms_input.fill(code)
+        douyin_logger.info(_msg("✅", "验证码已填入输入框"))
+        await page.wait_for_timeout(500)
+
+        verify_btn = page.locator('div.uc-ui-verify_sms-verify_button:has-text("验证")').first
+        if await verify_btn.count() and await verify_btn.is_visible():
+            try:
+                await verify_btn.click(force=True)
+                douyin_logger.success(_msg("✅", "已点击「验证」按钮 (force)"))
+            except Exception:
+                await page.eval_on_selector('div.uc-ui-verify_sms-verify_button', 'el => el.click()')
+                douyin_logger.success(_msg("✅", "已点击「验证」按钮 (JS)"))
+        else:
+            verify_by_text = page.get_by_text("验证", exact=True).first
+            if await verify_by_text.count():
+                await verify_by_text.click(force=True)
+                douyin_logger.success(_msg("✅", "已点击「验证」按钮 (text)"))
+            else:
+                douyin_logger.warning(_msg("⚠️", "未找到验证按钮，尝试按Enter"))
+                await page.keyboard.press("Enter")
+
+        if os.path.exists(code_file):
+            os.remove(code_file)
+            douyin_logger.info(_msg("🧹", "验证码文件已清理"))
+
+        await page.wait_for_timeout(3000)
+        douyin_logger.info(_msg("🔄", "验证码处理完成，继续发布流程"))
+        return True
+
     async def validate_upload_args(self):
         await self.validate_base_args()
         if not self.title or not str(self.title).strip():
@@ -575,7 +624,7 @@ class DouYinVideo(DouYinBaseUploader):
         douyin_logger.info(_msg("🏃", "小人正在设置视频封面"))
         # 先清掉 shepherd 新手引导浮层，否则它会拦截“选择封面”点击导致弹窗打不开
         await page.evaluate(
-            "() => document.querySelectorAll('.shepherd-element,.shepherd-modal-overlay-container').forEach(e=>e.remove())"
+            "() => { document.querySelectorAll('.shepherd-element, .shepherd-modal-overlay-container, [class*=\"mention-wrapper\"]').forEach(e => e.remove()); }"
         )
         await page.get_by_text("选择封面", exact=True).first.click(force=True)
         cover_locator_str = 'div.dy-creator-content-modal'
@@ -692,12 +741,30 @@ class DouYinVideo(DouYinBaseUploader):
         if self.publish_strategy == DOUYIN_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_douyin(page, self.publish_date)
 
+        sms_prompt_logged = False
         while True:
             try:
                 # 移除会拦截发布按钮点击的新手引导/话题下拉浮层
                 await page.evaluate(
                     "() => { document.querySelectorAll('.shepherd-element, .shepherd-modal-overlay-container, [class*=\"mention-wrapper\"]').forEach(e => e.remove()); }"
                 )
+                # 检测并处理短信验证码弹窗
+                sms_input = page.locator('input[placeholder*="验证码"], input[type="tel"], input[placeholder*="短信"], input[placeholder*="手机号"]').first
+                if await sms_input.count() and await sms_input.is_visible():
+                    douyin_logger.warning(_msg("📱", "检测到短信验证码弹窗"))
+                    # 点击「获取验证码」按钮（仅首次）
+                    get_code_btn = page.get_by_text("获取验证码").first
+                    if await get_code_btn.count() and await get_code_btn.is_visible():
+                        await get_code_btn.click()
+                        douyin_logger.info(_msg("📤", "已点击「获取验证码」，请查看手机短信"))
+                    code_file = os.path.join(BASE_DIR, "verify_code.txt")
+                    code = await _read_verify_code(code_file)
+                    if code:
+                        sms_prompt_logged = False
+                        await self._submit_sms_verify_code(page, sms_input, code, code_file)
+                    elif not sms_prompt_logged:
+                        douyin_logger.warning(_msg("⏳", f"等待验证码输入；可在交互终端直接输入，或写入文件: {code_file}"))
+                        sms_prompt_logged = True
                 publish_button = page.get_by_role("button", name="发布", exact=True)
                 if await publish_button.count():
                     await publish_button.click(force=True)

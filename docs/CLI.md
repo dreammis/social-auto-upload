@@ -52,6 +52,13 @@ sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title 
 sau douyin upload-note --account <account_name> --images videos/1.png videos/2.png --title "图文标题" --note "图文示例" --tags 图文,测试
 ```
 
+抖音短信验证码补充说明：
+
+- 视频发布过程中如果触发短信二次验证，CLI 会优先读取项目根目录下的 `verify_code.txt`
+- 如果未找到 `verify_code.txt`，并且当前命令是在交互式终端中手动运行，CLI 会直接在终端提示输入验证码
+- 对 agent、自动任务、远程桥接这类场景，仍然可以继续用写入 `verify_code.txt` 的方式喂验证码
+- 验证通过后，程序会自动清理 `verify_code.txt`
+
 ## 快手 CLI 子命令
 
 ```bash
