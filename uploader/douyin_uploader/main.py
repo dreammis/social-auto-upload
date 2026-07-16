@@ -406,12 +406,8 @@ class DouYinBaseUploader(BaseVideoUploader):
             douyin_logger.error(_msg("😢", f"设置商品链接时出错: {str(e)}"))
             return False
 
-    async def set_self_declaration(self, page: Page, declaration: str = "内容为个人观点或见解") -> None:
-        """抖音「自主声明」为发布必选项：打开声明弹窗 → 选指定类型 → 确定。
-
-        入口和弹窗都是异步渲染，等不到就记 warning 跳过、继续发布，绝不因此中断
-        （与小红书话题、视频号声明原创的容错策略保持一致）。
-        """
+    async def set_self_declaration(self, page: Page, declaration: str) -> bool:
+        """按调用方给出的平台原文选择自主声明；失败返回 False。"""
         try:
             # 发布页底部「自主声明」行，未选时显示占位文案「请选择自主声明」
             entry = page.get_by_text("请选择自主声明").first
@@ -432,8 +428,10 @@ class DouYinBaseUploader(BaseVideoUploader):
             await dialog.get_by_role("button", name="确定").click(timeout=6000)
             await dialog.wait_for(state="hidden", timeout=6000)
             douyin_logger.info(_msg("🧾", f"自主声明已选择「{declaration}」"))
+            return True
         except Exception as exc:
-            douyin_logger.warning(_msg("🧾", f"自主声明设置失败，跳过该步骤继续发布：{exc}"))
+            douyin_logger.warning(_msg("🧾", f"自主声明设置失败：{exc}"))
+            return False
 
     async def select_bgm(self, page: Page, bgm_name: str) -> bool:
         """为图文发布选择 BGM：可选增强功能，搜索无结果或异常均跳过不中断发布。"""
@@ -515,6 +513,7 @@ class DouYinVideo(DouYinBaseUploader):
         productTitle="",
         thumbnail_portrait_path=None,
         desc: str | None = None,
+        declaration: str | None = None,
         publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
@@ -534,6 +533,13 @@ class DouYinVideo(DouYinBaseUploader):
         self.productLink = productLink
         self.productTitle = productTitle
         self.desc = desc or ""
+        self.declaration = declaration.strip() if declaration and declaration.strip() else None
+
+    async def apply_self_declaration(self, page: Page) -> None:
+        if not self.declaration:
+            return
+        if not await self.set_self_declaration(page, self.declaration):
+            raise RuntimeError(f"自主声明「{self.declaration}」设置失败，拒绝继续发布")
 
     async def validate_upload_args(self):
         await self.validate_base_args()
@@ -683,7 +689,18 @@ class DouYinVideo(DouYinBaseUploader):
 
         await self.set_thumbnail(page)
 
-        await self.set_self_declaration(page)
+        try:
+            await self.apply_self_declaration(page)
+        except Exception:
+            try:
+                await context.close()
+            except Exception:
+                pass
+            try:
+                await browser.close()
+            except Exception:
+                pass
+            raise
 
         third_part_element = '[class^="info"] > [class^="first-part"] div div.semi-switch'
         if await page.locator(third_part_element).count():
