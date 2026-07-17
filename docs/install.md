@@ -77,10 +77,11 @@ Windows 也可以直接手动复制并重命名。
 当前通常还会用到这些配置项：
 
 - `LOCAL_CHROME_PATH`
-- `LOCAL_CHROME_HEADLESS`
 - `DEBUG_MODE`
 
 `XHS_SERVER` 目前只和小红书旧流程相关。
+
+浏览器 headless 模式等运行时配置可通过 Web UI 的"配置管理"页面修改。
 
 ### 6. 验证 CLI 是否可用
 

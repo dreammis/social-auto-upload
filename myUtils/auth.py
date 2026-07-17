@@ -117,6 +117,16 @@ async def check_cookie(type, file_path):
         # 快手
         case 4:
             return await cookie_auth_ks(Path(BASE_DIR / "cookiesFile" / file_path))
+        # B站
+        case 5:
+            from uploader.bilibili_uploader.main import cookie_auth as bilibili_cookie_auth
+            return await bilibili_cookie_auth(Path(BASE_DIR / "cookiesFile" / file_path))
+        # TikTok（暂不支持cookie验证，返回True）
+        case 6:
+            return True
+        # 百家号（暂不支持cookie验证，返回True）
+        case 7:
+            return True
         case _:
             return False
 

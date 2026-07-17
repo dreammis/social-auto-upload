@@ -365,6 +365,222 @@
             </div>
           </div>
         </el-tab-pane>
+        
+        <el-tab-pane label="B站" name="bilibili">
+          <div class="account-list-container">
+            <div class="account-search">
+              <el-input
+                v-model="searchKeyword"
+                placeholder="输入名称或账号搜索"
+                prefix-icon="Search"
+                clearable
+                @clear="handleSearch"
+                @input="handleSearch"
+              />
+              <div class="action-buttons">
+                <el-button type="primary" @click="handleAddAccount">添加账号</el-button>
+                <el-button type="info" @click="fetchAccounts" :loading="false">
+                  <el-icon :class="{ 'is-loading': appStore.isAccountRefreshing }"><Refresh /></el-icon>
+                  <span v-if="appStore.isAccountRefreshing">刷新中</span>
+                </el-button>
+              </div>
+            </div>
+            
+            <div v-if="filteredBilibiliAccounts.length > 0" class="account-list">
+              <el-table :data="filteredBilibiliAccounts" style="width: 100%">
+                <el-table-column label="头像" width="80">
+                  <template #default="scope">
+                    <el-avatar :src="getDefaultAvatar(scope.row.name)" :size="40" />
+                  </template>
+                </el-table-column>
+                <el-table-column prop="name" label="名称" width="180" />
+                <el-table-column prop="platform" label="平台">
+                  <template #default="scope">
+                    <el-tag
+                      :type="getPlatformTagType(scope.row.platform)"
+                      effect="plain"
+                    >
+                      {{ scope.row.platform }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="status" label="状态">
+                  <template #default="scope">
+                    <el-tag
+                      :type="getStatusTagType(scope.row.status)"
+                      effect="plain"
+                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
+                      @click="handleStatusClick(scope.row)"
+                    >
+                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
+                        <Loading />
+                      </el-icon>
+                      {{ scope.row.status }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作">
+                  <template #default="scope">
+                    <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button v-if="scope.row.status === '异常'" size="small" type="warning" @click="handleReLogin(scope.row)">重新登录</el-button>
+                    <el-button v-if="scope.row.status === '正常'" size="small" type="success" @click="handleOpenPlatformUploadPage(scope.row)">上传页</el-button>
+                    <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
+                    <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
+                    <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+            
+            <div v-else class="empty-data">
+              <el-empty description="暂无B站账号数据" />
+            </div>
+          </div>
+        </el-tab-pane>
+        
+        <el-tab-pane label="TikTok" name="tiktok">
+          <div class="account-list-container">
+            <div class="account-search">
+              <el-input
+                v-model="searchKeyword"
+                placeholder="输入名称或账号搜索"
+                prefix-icon="Search"
+                clearable
+                @clear="handleSearch"
+                @input="handleSearch"
+              />
+              <div class="action-buttons">
+                <el-button type="primary" @click="handleAddAccount">添加账号</el-button>
+                <el-button type="info" @click="fetchAccounts" :loading="false">
+                  <el-icon :class="{ 'is-loading': appStore.isAccountRefreshing }"><Refresh /></el-icon>
+                  <span v-if="appStore.isAccountRefreshing">刷新中</span>
+                </el-button>
+              </div>
+            </div>
+            
+            <div v-if="filteredTiktokAccounts.length > 0" class="account-list">
+              <el-table :data="filteredTiktokAccounts" style="width: 100%">
+                <el-table-column label="头像" width="80">
+                  <template #default="scope">
+                    <el-avatar :src="getDefaultAvatar(scope.row.name)" :size="40" />
+                  </template>
+                </el-table-column>
+                <el-table-column prop="name" label="名称" width="180" />
+                <el-table-column prop="platform" label="平台">
+                  <template #default="scope">
+                    <el-tag
+                      :type="getPlatformTagType(scope.row.platform)"
+                      effect="plain"
+                    >
+                      {{ scope.row.platform }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="status" label="状态">
+                  <template #default="scope">
+                    <el-tag
+                      :type="getStatusTagType(scope.row.status)"
+                      effect="plain"
+                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
+                      @click="handleStatusClick(scope.row)"
+                    >
+                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
+                        <Loading />
+                      </el-icon>
+                      {{ scope.row.status }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作">
+                  <template #default="scope">
+                    <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button v-if="scope.row.status === '异常'" size="small" type="warning" @click="handleReLogin(scope.row)">重新登录</el-button>
+                    <el-button v-if="scope.row.status === '正常'" size="small" type="success" @click="handleOpenPlatformUploadPage(scope.row)">上传页</el-button>
+                    <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
+                    <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
+                    <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+            
+            <div v-else class="empty-data">
+              <el-empty description="暂无TikTok账号数据" />
+            </div>
+          </div>
+        </el-tab-pane>
+        
+        <el-tab-pane label="百家号" name="baijiahao">
+          <div class="account-list-container">
+            <div class="account-search">
+              <el-input
+                v-model="searchKeyword"
+                placeholder="输入名称或账号搜索"
+                prefix-icon="Search"
+                clearable
+                @clear="handleSearch"
+                @input="handleSearch"
+              />
+              <div class="action-buttons">
+                <el-button type="primary" @click="handleAddAccount">添加账号</el-button>
+                <el-button type="info" @click="fetchAccounts" :loading="false">
+                  <el-icon :class="{ 'is-loading': appStore.isAccountRefreshing }"><Refresh /></el-icon>
+                  <span v-if="appStore.isAccountRefreshing">刷新中</span>
+                </el-button>
+              </div>
+            </div>
+            
+            <div v-if="filteredBaijiahaoAccounts.length > 0" class="account-list">
+              <el-table :data="filteredBaijiahaoAccounts" style="width: 100%">
+                <el-table-column label="头像" width="80">
+                  <template #default="scope">
+                    <el-avatar :src="getDefaultAvatar(scope.row.name)" :size="40" />
+                  </template>
+                </el-table-column>
+                <el-table-column prop="name" label="名称" width="180" />
+                <el-table-column prop="platform" label="平台">
+                  <template #default="scope">
+                    <el-tag
+                      :type="getPlatformTagType(scope.row.platform)"
+                      effect="plain"
+                    >
+                      {{ scope.row.platform }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="status" label="状态">
+                  <template #default="scope">
+                    <el-tag
+                      :type="getStatusTagType(scope.row.status)"
+                      effect="plain"
+                      :class="{'clickable-status': isStatusClickable(scope.row.status)}"
+                      @click="handleStatusClick(scope.row)"
+                    >
+                      <el-icon :class="scope.row.status === '验证中' ? 'is-loading' : ''" v-if="scope.row.status === '验证中'">
+                        <Loading />
+                      </el-icon>
+                      {{ scope.row.status }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作">
+                  <template #default="scope">
+                    <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                    <el-button v-if="scope.row.status === '异常'" size="small" type="warning" @click="handleReLogin(scope.row)">重新登录</el-button>
+                    <el-button v-if="scope.row.status === '正常'" size="small" type="success" @click="handleOpenPlatformUploadPage(scope.row)">上传页</el-button>
+                    <el-button size="small" type="primary" :icon="Download" @click="handleDownloadCookie(scope.row)">下载Cookie</el-button>
+                    <el-button size="small" type="info" :icon="Upload" @click="handleUploadCookie(scope.row)">上传Cookie</el-button>
+                    <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+            
+            <div v-else class="empty-data">
+              <el-empty description="暂无百家号账号数据" />
+            </div>
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </div>
     
@@ -389,6 +605,9 @@
             <el-option label="抖音" value="抖音" />
             <el-option label="视频号" value="视频号" />
             <el-option label="小红书" value="小红书" />
+            <el-option label="B站" value="B站" />
+            <el-option label="TikTok" value="TikTok" />
+            <el-option label="百家号" value="百家号" />
           </el-select>
         </el-form-item>
         <el-form-item label="名称" prop="name">
@@ -555,7 +774,10 @@ const getPlatformTagType = (platform) => {
     '快手': 'success',
     '抖音': 'danger',
     '视频号': 'warning',
-    '小红书': 'info'
+    '小红书': 'info',
+    'B站': 'primary',
+    'TikTok': '',
+    '百家号': 'success'
   }
   return typeMap[platform] || 'info'
 }
@@ -607,6 +829,18 @@ const filteredChannelsAccounts = computed(() => {
 
 const filteredXiaohongshuAccounts = computed(() => {
   return filteredAccounts.value.filter(account => account.platform === '小红书')
+})
+
+const filteredBilibiliAccounts = computed(() => {
+  return filteredAccounts.value.filter(account => account.platform === 'B站')
+})
+
+const filteredTiktokAccounts = computed(() => {
+  return filteredAccounts.value.filter(account => account.platform === 'TikTok')
+})
+
+const filteredBaijiahaoAccounts = computed(() => {
+  return filteredAccounts.value.filter(account => account.platform === '百家号')
 })
 
 // 搜索处理
@@ -727,7 +961,7 @@ const handleDelete = (row) => {
 // 下载Cookie文件
 const handleDownloadCookie = (row) => {
   // 从后端获取Cookie文件
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
+  const baseUrl = '/api'
   const downloadUrl = `${baseUrl}/downloadCookie?filePath=${encodeURIComponent(row.filePath)}`
 
   // 创建一个隐藏的链接来触发下载
@@ -844,13 +1078,16 @@ const connectSSE = (platform, name, accountId = null) => {
     '小红书': '1',
     '视频号': '2',
     '抖音': '3',
-    '快手': '4'
+    '快手': '4',
+    'B站': '5',
+    'TikTok': '6',
+    '百家号': '7'
   }
 
   const type = platformTypeMap[platform] || '1'
 
-  // 创建SSE连接
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
+  // SSE连接走 /api 代理
+  const baseUrl = '/api'
   const params = new URLSearchParams({
     type,
     id: name
@@ -865,6 +1102,27 @@ const connectSSE = (platform, name, accountId = null) => {
   // 监听消息
   eventSource.onmessage = (event) => {
     const data = event.data
+
+    // 处理MESSAGE:前缀的消息（用于显示提示信息）
+    if (data.startsWith('MESSAGE:')) {
+      const message = data.substring(8)
+      ElMessage.info(message)
+      return
+    }
+
+    // 处理错误消息（500:前缀）
+    if (data.startsWith('500:')) {
+      const errorMsg = data.substring(4)
+      ElMessage.error(errorMsg)
+      loginStatus.value = '500'
+      closeSSEConnection()
+      setTimeout(() => {
+        sseConnecting.value = false
+        qrCodeData.value = ''
+        loginStatus.value = ''
+      }, 2000)
+      return
+    }
 
     // 只有抖音平台才处理验证码相关消息
     if (accountForm.platform === '抖音') {
@@ -972,7 +1230,10 @@ const submitAccountForm = () => {
             '小红书': 1,
             '视频号': 2,
             '抖音': 3,
-            '快手': 4
+            '快手': 4,
+            'B站': 5,
+            'TikTok': 6,
+            '百家号': 7
           };
           const type = platformTypeMap[accountForm.platform] || 1;
 
@@ -1018,7 +1279,7 @@ const submitVerificationCode = async () => {
   submittingVerification.value = true
 
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409'
+    const baseUrl = '/api'
     const response = await fetch(`${baseUrl}/submitVerification`, {
       method: 'POST',
       headers: {

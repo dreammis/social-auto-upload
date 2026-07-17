@@ -20,7 +20,7 @@
         <el-form-item>
           <template #label>
             <div class="label-wrap">
-              <span>LOCAL_CHROME_HEADLESS</span>
+              <span>上传浏览器无头模式</span>
               <span class="field-desc">控制平台上传、打开上传页、cookie 检测等通用浏览器是否无头运行。</span>
             </div>
           </template>

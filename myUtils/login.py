@@ -486,5 +486,188 @@ async def xiaohongshu_cookie_gen(id, status_queue, account_id=None, existing_fil
         print("✅ 用户状态已记录")
         status_queue.put("200")
 
-# a = asyncio.run(xiaohongshu_cookie_gen(4,None))
-# print(a)
+
+async def baijiahao_cookie_gen(id, status_queue, account_id=None, existing_file_path=None):
+    """百家号登录"""
+    url_changed_event = asyncio.Event()
+
+    async def on_url_change():
+        if page.url != original_url:
+            url_changed_event.set()
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(**get_browser_options())
+        context = await browser.new_context()
+        context = await set_init_script(context)
+        page = await context.new_page()
+        page.on("framenavigated", lambda frame: asyncio.create_task(on_url_change()))
+
+        original_url = "https://baijiahao.baidu.com/"
+        await page.goto(original_url)
+        status_queue.put("200")
+
+        try:
+            await asyncio.wait_for(url_changed_event.wait(), timeout=300)
+            print("监听页面跳转成功")
+        except asyncio.TimeoutError:
+            status_queue.put("500")
+            print("监听页面跳转超时")
+            await page.close()
+            await context.close()
+            await browser.close()
+            return None
+
+        cookie_path, file_name = resolve_cookie_target(existing_file_path)
+        await context.storage_state(path=cookie_path)
+
+        await page.close()
+        await context.close()
+        await browser.close()
+
+        persist_account_login(7, file_name, id, account_id)
+        print("✅ 百家号用户状态已记录")
+        status_queue.put("200")
+
+
+async def tiktok_cookie_gen(id, status_queue, account_id=None, existing_file_path=None):
+    """TikTok登录（复用抖音登录逻辑）"""
+    url_changed_event = asyncio.Event()
+
+    async def on_url_change():
+        if page.url != original_url:
+            url_changed_event.set()
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(**get_browser_options())
+        context = await browser.new_context()
+        context = await set_init_script(context)
+        page = await context.new_page()
+        page.on("framenavigated", lambda frame: asyncio.create_task(on_url_change()))
+
+        original_url = "https://www.tiktok.com/"
+        await page.goto(original_url)
+        status_queue.put("200")
+
+        try:
+            await asyncio.wait_for(url_changed_event.wait(), timeout=300)
+            print("监听页面跳转成功")
+        except asyncio.TimeoutError:
+            status_queue.put("500")
+            print("监听页面跳转超时")
+            await page.close()
+            await context.close()
+            await browser.close()
+            return None
+
+        cookie_path, file_name = resolve_cookie_target(existing_file_path)
+        await context.storage_state(path=cookie_path)
+
+        await page.close()
+        await context.close()
+        await browser.close()
+
+        persist_account_login(6, file_name, id, account_id)
+        print("✅ TikTok用户状态已记录")
+        status_queue.put("200")
+
+
+async def bilibili_cookie_gen(id, status_queue, account_id=None, existing_file_path=None):
+    """B站登录（使用 playwright，和其他平台保持一致）"""
+    url_changed_event = asyncio.Event()
+
+    async def on_url_change():
+        if page.url != original_url:
+            url_changed_event.set()
+
+    async with async_playwright() as playwright:
+        options = get_browser_options()
+        browser = await playwright.chromium.launch(**options)
+        context = await browser.new_context()
+        context = await set_init_script(context)
+        page = await context.new_page()
+
+        # 直接访问B站登录页
+        original_url = "https://passport.bilibili.com/login"
+        await page.goto(original_url)
+
+        # 等待页面加载完成
+        await page.wait_for_load_state('networkidle')
+
+        # 获取登录二维码图片
+        try:
+            img_locator = page.get_by_role("img", name="Scan me!")
+            await img_locator.wait_for(state="visible", timeout=10000)
+            src = await img_locator.get_attribute("src")
+            print("✅ B站二维码地址:", src)
+            status_queue.put(src)
+            status_queue.put("MESSAGE:请使用B站APP扫码登录...")
+        except Exception as e:
+            print(f"❌ 获取二维码失败: {e}")
+            status_queue.put("500:获取二维码失败，请重试")
+            await page.close()
+            await context.close()
+            await browser.close()
+            return None
+
+        # 监听页面跳转
+        page.on('framenavigated',
+                lambda frame: asyncio.create_task(on_url_change()) if frame == page.main_frame else None)
+
+        try:
+            # 等待 URL 变化或超时（最多等待200秒）
+            await asyncio.wait_for(url_changed_event.wait(), timeout=200)
+            print("✅ 监听页面跳转成功，登录完成")
+            print(f"当前URL: {page.url}")
+
+            # 扫码成功后，访问上传页以获取完整的cookie
+            print("正在访问B站上传页以获取完整cookie...")
+            await page.goto("https://member.bilibili.com/platform/upload/video/frame")
+            try:
+                await page.wait_for_load_state('networkidle', timeout=10000)
+                print(f"上传页加载完成，当前URL: {page.url}")
+            except Exception as e:
+                print(f"上传页加载超时: {e}")
+
+            # 检查是否成功进入上传页
+            if "passport.bilibili.com" in page.url:
+                print("❌ 访问上传页失败，跳转到登录页")
+                status_queue.put("500:登录成功但访问上传页失败，请重试")
+                await page.close()
+                await context.close()
+                await browser.close()
+                return None
+
+        except asyncio.TimeoutError:
+            status_queue.put("500:登录超时，请重试")
+            print("❌ 监听页面跳转超时")
+            await page.close()
+            await context.close()
+            await browser.close()
+            return None
+
+        # 保存cookie
+        cookie_path, file_name = resolve_cookie_target(existing_file_path)
+        await context.storage_state(path=cookie_path)
+        print(f"✅ Cookie已保存到: {cookie_path}")
+
+        # 验证cookie是否有效
+        result = await check_cookie(5, file_name)
+        if not result:
+            status_queue.put("500:登录成功但cookie验证失败，请重试")
+            print("❌ B站登录成功但cookie验证失败")
+            await page.close()
+            await context.close()
+            await browser.close()
+            return None
+
+        await page.close()
+        await context.close()
+        await browser.close()
+
+        # 保存账号信息到数据库
+        persist_account_login(5, file_name, id, account_id)
+        print("✅ B站用户状态已记录")
+        status_queue.put("MESSAGE:B站登录成功！")
+        status_queue.put("200")
+
+

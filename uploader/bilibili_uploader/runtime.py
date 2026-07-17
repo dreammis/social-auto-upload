@@ -188,3 +188,4 @@ def run_biliup_command(arguments: list[str], interactive: bool = False) -> subpr
         encoding="utf-8",
         errors="replace",
     )
+

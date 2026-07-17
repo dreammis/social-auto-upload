@@ -13,12 +13,37 @@ from myUtils.auth import check_cookie
 from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 from werkzeug.utils import secure_filename
 from conf import BASE_DIR, LOCAL_CHROME_PATH
-from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
-from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs
+from myUtils.login import (
+    get_tencent_cookie,
+    douyin_cookie_gen,
+    get_ks_cookie,
+    xiaohongshu_cookie_gen,
+    baijiahao_cookie_gen,
+    tiktok_cookie_gen,
+    bilibili_cookie_gen
+)
+from myUtils.postVideo import (
+    post_video_tencent,
+    post_video_DouYin,
+    post_video_ks,
+    post_video_xhs,
+    post_video_baijiahao,
+    post_video_tiktok,
+    post_video_bilibili
+)
 from uploader.douyin_uploader.main import DouYinVideo
 from uploader.ks_uploader.main import KSVideo
 from uploader.tencent_uploader.main import TencentVideo
 from uploader.xiaohongshu_uploader.main import XiaoHongShuVideo
+from uploader.bilibili_uploader.main import (
+    BILIBILI_PUBLISH_STRATEGY_IMMEDIATE,
+    BILIBILI_PUBLISH_STRATEGY_SCHEDULED,
+    BilibiliVideo,
+    bilibili_setup,
+    cookie_auth as bilibili_cookie_auth,
+)
+from uploader.tk_uploader.main import TiktokVideo
+from uploader.baijiahao_uploader.main import BaiJiaHaoVideo
 from utils.base_social_media import set_init_script
 from utils.runtime_config import get_runtime_config, update_runtime_config
 
@@ -58,7 +83,10 @@ UPLOAD_PAGE_CLASS_MAP = {
     1: XiaoHongShuVideo,
     2: TencentVideo,
     3: DouYinVideo,
-    4: KSVideo
+    4: KSVideo,
+    5: BilibiliVideo,
+    6: TiktokVideo,
+    7: BaiJiaHaoVideo
 }
 
 #允许所有来源跨域访问
@@ -105,66 +133,86 @@ def upload_file():
             "msg": "No selected file"
         }), 400
     try:
-        # 保存文件到指定位置
         uuid_v1 = uuid.uuid1()
-        print(f"UUID v1: {uuid_v1}")
-        safe_name = secure_filename(file.filename)
-        if not safe_name:
-            return jsonify({"code": 400, "data": None, "msg": "Invalid filename"}), 400
-        filepath = Path(BASE_DIR / "videoFile" / f"{uuid_v1}_{safe_name}")
+        original_filename = file.filename
+        file_ext = ''
+        if '.' in original_filename:
+            file_ext = '.' + original_filename.rsplit('.', 1)[-1]
+        safe_name = secure_filename(original_filename)
+        if safe_name and '.' in safe_name:
+            # secure_filename 保留了文件名和扩展名（如 'test.mp4'）
+            final_name = f"{uuid_v1}_{safe_name}"
+        else:
+            # 用 UUID 替代中文部分，手动拼接扩展名
+            final_name = f"{uuid_v1}{file_ext}"
+        filepath = Path(BASE_DIR / "videoFile" / final_name)
         file.save(filepath)
-        return jsonify({"code":200,"msg": "File uploaded successfully", "data": f"{uuid_v1}_{safe_name}"}), 200
+        return jsonify({"code":200,"msg": "File uploaded successfully", "data": final_name}), 200
     except Exception as e:
         return jsonify({"code":500,"msg": str(e),"data":None}), 500
 
 @app.route('/getFile', methods=['GET'])
 def get_file():
     filename = request.args.get('filename')
-
     if not filename:
         return jsonify({"code": 400, "msg": "filename is required", "data": None}), 400
-
     # 防止路径穿越攻击
     if '..' in filename or filename.startswith('/'):
         return jsonify({"code": 400, "msg": "Invalid filename", "data": None}), 400
-
     # 拼接完整路径
     file_path = str(Path(BASE_DIR / "videoFile"))
-
     # 返回文件
     return send_from_directory(file_path,filename)
 
 
 def sync_video_file_records(conn):
+    """同步 videoFile 目录与数据库记录
+    1. 将目录中存在但数据库中不存在的文件添加到数据库
+    2. 删除数据库中存在但目录中不存在的记录
+    """
     video_dir = Path(BASE_DIR / "videoFile")
     video_dir.mkdir(parents=True, exist_ok=True)
 
     cursor = conn.cursor()
-    cursor.execute("SELECT file_path FROM file_records WHERE file_path IS NOT NULL")
-    existing_paths = {row[0] for row in cursor.fetchall()}
-
-    synced_count = 0
+    
+    # 获取数据库中的所有记录
+    cursor.execute("SELECT id, file_path FROM file_records WHERE file_path IS NOT NULL")
+    db_records = cursor.fetchall()  # [(id, file_path), ...]
+    db_paths = {row[1] for row in db_records}  # {file_path1, file_path2, ...}
+    
+    # 获取目录中的所有实际文件
+    actual_files = set()
     for video_path in video_dir.iterdir():
-        if not video_path.is_file():
-            continue
-
-        relative_path = video_path.name
-        if relative_path in existing_paths:
-            continue
-
-        cursor.execute(
-            '''
-            INSERT INTO file_records (filename, filesize, file_path)
-            VALUES (?, ?, ?)
-            ''',
-            ("未命名", round(video_path.stat().st_size / (1024 * 1024), 2), relative_path)
-        )
-        existing_paths.add(relative_path)
-        synced_count += 1
-
-    if synced_count:
+        if video_path.is_file():
+            actual_files.add(video_path.name)
+    
+    # 添加目录中存在但数据库中不存在的文件
+    added_count = 0
+    for file_name in actual_files:
+        if file_name not in db_paths:
+            file_path = video_dir / file_name
+            cursor.execute(
+                '''
+                INSERT INTO file_records (filename, filesize, file_path)
+                VALUES (?, ?, ?)
+                ''',
+                ("未命名", round(file_path.stat().st_size / (1024 * 1024), 2), file_name)
+            )
+            added_count += 1
+    
+    # 删除数据库中存在但目录中不存在的记录
+    removed_count = 0
+    for record_id, file_path in db_records:
+        if file_path not in actual_files:
+            cursor.execute("DELETE FROM file_records WHERE id = ?", (record_id,))
+            removed_count += 1
+    
+    if added_count or removed_count:
         conn.commit()
-        print(f"✅ 已补录 {synced_count} 个 videoFile 文件到数据库")
+        if added_count:
+            print(f"✅ 已补录 {added_count} 个 videoFile 文件到数据库")
+        if removed_count:
+            print(f"🗑️ 已清理 {removed_count} 个不存在文件的数据库记录")
 
 
 @app.route('/uploadSave', methods=['POST'])
@@ -186,10 +234,38 @@ def upload_save():
 
     # 获取表单中的自定义文件名（可选）
     custom_filename = request.form.get('filename', None)
+    original_filename = file.filename
+    # 获取文件扩展名（在 secure_filename 处理之前）
+    file_ext = ''
+    if '.' in original_filename:
+        file_ext = '.' + original_filename.rsplit('.', 1)[-1]
+    
+    # 处理文件名
     if custom_filename:
-        filename = secure_filename(custom_filename + "." + file.filename.split('.')[-1])
+        # 用户自定义文件名，使用 secure_filename 处理
+        safe_custom = secure_filename(custom_filename)
+        if safe_custom and '.' in safe_custom:
+            # secure_filename 保留了文件名和扩展名
+            filename = safe_custom
+        else:
+            # 自定义文件名包含非ASCII字符，使用 UUID
+            import uuid as uuid_module
+            filename = f"{uuid_module.uuid4().hex}{file_ext}"
     else:
-        filename = secure_filename(file.filename)
+        # 使用原始文件名
+        safe_filename_result = secure_filename(original_filename)
+        # secure_filename 对中文文件名的处理结果是只有扩展名（不包含点号）
+        # 例如：'横的.jpg' -> 'jpg'
+        # 检查是否是这种情况：结果不包含点号，且与扩展名相同（去掉点号后）
+        if safe_filename_result and '.' in safe_filename_result:
+            # secure_filename 保留了文件名和扩展名（如 'test.jpg'）
+            filename = safe_filename_result
+        else:
+            # 文件名包含非ASCII字符（如中文），secure_filename 只返回了扩展名
+            # 使用 UUID 作为文件名
+            import uuid as uuid_module
+            filename = f"{uuid_module.uuid4().hex}{file_ext}"
+    
     if not filename:
         return jsonify({"code": 400, "data": None, "msg": "Invalid filename"}), 400
 
@@ -608,15 +684,32 @@ def postVideo():
     productLink = data.get('productLink', '')
     productTitle = data.get('productTitle', '')
     desc = data.get('desc', '')
-    thumbnail_landscape = data.get('thumbnailLandscape', data.get('thumbnail', ''))
     thumbnail_portrait = data.get('thumbnailPortrait', '')
     is_draft = data.get('isDraft', False)  # 新增参数：是否保存为草稿
+    tencent_declare_original = data.get('tencentDeclareOriginal', data.get('declareOriginal', False))
+    tencent_declaration = data.get('tencentDeclaration')
 
     declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
 
     videos_per_day = data.get('videosPerDay')
     daily_times = data.get('dailyTimes')
     start_days = data.get('startDays')
+
+    # 快手特有参数
+    kuaishou_declaration = data.get('kuaishouDeclaration', '内容为AI生成')
+    xiaohongshu_declaration = data.get('xiaohongshuDeclaration', '')
+    allow_duet = data.get('allowDuet', True)
+    allow_download = data.get('allowDownload', True)
+    show_in_city = data.get('showInCity', True)
+
+    # B站特有参数
+    bilibili_tid = data.get('bilibiliTid', 218)  # B站分区ID，默认218（动物圈）
+    bilibili_is_original = data.get('declareOriginal', False)  # B站原创声明：默认不声明
+    bilibili_ai_declaration = data.get('bilibiliAiDeclaration', False)  # B站创作声明：含AI生成内容
+    bilibili_no_reprint = data.get('noReprint', 1 if bilibili_is_original else 0)  # 禁止转载
+
+    # 合集参数
+    collection = data.get('collection', None)  # 合集名称
 
     # 参数校验
     if not file_list:
@@ -635,21 +728,43 @@ def postVideo():
     print("File List:", file_list)
     print("Account List:", account_list)
 
-    thumbnail_path = data.get('thumbnail', '') or thumbnail_landscape or thumbnail_portrait
+    thumbnail_path = data.get('thumbnail', '') or thumbnail_portrait
+
+    # 封面参数（B站使用单封面）- 复用 thumbnail 字段
+    bilibili_cover = thumbnail_path  # B站封面路径
 
     try:
         match type:
             case 1:
-                post_video_xhs(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                                   start_days)
+                declare_original = data.get('declareOriginal', False)
+                xhs_category = category if category else (1 if declare_original else None)
+                xhs_declaration_info = {"declaration_type": xiaohongshu_declaration} if xiaohongshu_declaration else None
+                print(f"[小红书] declareOriginal={declare_original}, xhs_category={xhs_category}, xiaohongshu_declaration={xiaohongshu_declaration}, declaration_info={xhs_declaration_info}")
+                post_video_xhs(title, file_list, tags, account_list, xhs_category, enableTimer, videos_per_day, daily_times,
+                                   start_days, desc, thumbnail_path, collection=collection, declaration_info=xhs_declaration_info)
             case 2:
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                                   start_days, is_draft, thumbnail_path)
+                                   start_days, is_draft, thumbnail_path, desc, collection=collection,
+                                   declare_original=tencent_declare_original, declaration=tencent_declaration)
             case 3:
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_landscape, thumbnail_portrait, productLink, productTitle, declaration_info, desc)
+                          start_days, thumbnail_path, thumbnail_portrait, productLink, productTitle, declaration_info, desc,
+                          collection=collection)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days, desc, thumbnail_path, kuaishou_declaration, allow_duet, allow_download, show_in_city,
+                          collection=collection)
+            case 5:
+                post_video_bilibili(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days, tid=bilibili_tid, desc=desc,
+                          copyright_type=1 if bilibili_is_original else 2,
+                          cover_path=bilibili_cover, collection=collection,
+                          ai_declaration=bilibili_ai_declaration)
+            case 6:
+                post_video_tiktok(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days)
+            case 7:
+                post_video_baijiahao(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
             case _:
                 return jsonify({"code": 400, "msg": f"不支持的平台类型: {type}", "data": None}), 400
@@ -728,6 +843,8 @@ def postVideoBatch():
         productTitle = data.get('productTitle', '')
         desc = data.get('desc', '')
         is_draft = data.get('isDraft', False)
+        tencent_declare_original = data.get('tencentDeclareOriginal', data.get('declareOriginal', False))
+        tencent_declaration = data.get('tencentDeclaration')
         declaration_info = data.get('declaration_info', None)# 新增参数：添加声明
 
         videos_per_day = data.get('videosPerDay')
@@ -736,22 +853,56 @@ def postVideoBatch():
         # 打印获取到的数据（仅作为示例）
         print("File List:", file_list)
         print("Account List:", account_list)
-        thumbnail_path = data.get('thumbnail', '') or thumbnail_landscape or thumbnail_portrait
+
+        # 平台特有参数
+        thumbnail_portrait = data.get('thumbnailPortrait', '')
+        thumbnail_path = data.get('thumbnail', '') or thumbnail_portrait
+        bilibili_tid = data.get('bilibiliTid', 218)
+        kuaishou_declaration = data.get('kuaishouDeclaration', None)
+        xiaohongshu_declaration = data.get('xiaohongshuDeclaration', '')
+        allow_duet = data.get('allowDuet', True)
+        allow_download = data.get('allowDownload', True)
+        show_in_city = data.get('showInCity', True)
+
+        # B站特有参数（批量发布）
+        bilibili_is_original = data.get('declareOriginal', False)  # B站原创声明：默认不声明
+        bilibili_ai_declaration = data.get('bilibiliAiDeclaration', False)  # B站创作声明：含AI生成内容
+        bilibili_no_reprint = data.get('noReprint', 1 if bilibili_is_original else 0)  # 禁止转载
+        bilibili_cover = thumbnail_path  # B站封面
+
+        collection = data.get('collection', None)  # 合集名称
 
         match type:
             case 1:
-                post_video_xhs(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                               start_days)
+                declare_original = data.get('declareOriginal', False)
+                xhs_category = category if category else (1 if declare_original else None)
+                xhs_declaration_info = {"declaration_type": xiaohongshu_declaration} if xiaohongshu_declaration else None
+                print(f"[小红书] declareOriginal={declare_original}, xhs_category={xhs_category}, xiaohongshu_declaration={xiaohongshu_declaration}, declaration_info={xhs_declaration_info}")
+                post_video_xhs(title, file_list, tags, account_list, xhs_category, enableTimer, videos_per_day, daily_times,
+                               start_days, desc, thumbnail_path, collection=collection, declaration_info=xhs_declaration_info)
             case 2:
                 post_video_tencent(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                                   start_days, is_draft, thumbnail_path)
+                                   start_days, is_draft, thumbnail_path, desc, collection=collection,
+                                   declare_original=tencent_declare_original, declaration=tencent_declaration)
             case 3:
-                thumbnail_landscape = data.get('thumbnailLandscape', thumbnail_path)
-                thumbnail_portrait = data.get('thumbnailPortrait', '')
                 post_video_DouYin(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
-                          start_days, thumbnail_landscape, thumbnail_portrait, productLink, productTitle, declaration_info, desc)
+                          start_days, thumbnail_path, thumbnail_portrait, productLink, productTitle, declaration_info, desc,
+                          collection=collection)
             case 4:
                 post_video_ks(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days, desc, thumbnail_path, kuaishou_declaration, allow_duet, allow_download, show_in_city,
+                          collection=collection)
+            case 5:
+                post_video_bilibili(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days, tid=bilibili_tid, desc=desc,
+                          copyright_type=1 if bilibili_is_original else 2,
+                          cover_path=bilibili_cover, collection=collection,
+                          ai_declaration=bilibili_ai_declaration)
+            case 6:
+                post_video_tiktok(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
+                          start_days)
+            case 7:
+                post_video_baijiahao(title, file_list, tags, account_list, category, enableTimer, videos_per_day, daily_times,
                           start_days)
     # 返回响应给客户端
     return jsonify(
@@ -760,6 +911,451 @@ def postVideoBatch():
             "msg": None,
             "data": None
         }), 200
+
+# ==================== 统一发布（一键发布）API ====================
+@app.route('/batchUnifiedPublish', methods=['POST'])
+def batchUnifiedPublish():
+    """
+    统一发布API - 一次填写信息，批量发布到多平台
+    
+    请求格式:
+    {
+        files: [视频路径列表],
+        coverPath: 封面路径,
+        title: 标题,
+        desc: 描述,
+        
+        platforms: [平台ID列表],  // 如 [1,3,5] 表示小红书、抖音、B站
+        accounts: {
+            1: [账号ID],
+            3: [账号ID],
+            5: [账号ID]
+        },
+        
+        config: {  // 各平台差异化配置（每个平台独立标签）
+            xiaohongshu: { tags: [], declaration, isOriginal },
+            channels: { tags: [], isDraft, isOriginal },
+            douyin: { tags: [], collection, productTitle, productLink, declaration_type },
+            kuaishou: { tags: [], declaration },
+            bilibili: { tags: [], tid, aiDeclaration, isOriginal },
+            tiktok: { tags: [] },
+            baijiahao: { tags: [] }
+        }
+    }
+    
+    响应格式:
+    {
+        code: 200,
+        msg: None,
+        data: {
+            results: [
+                { platform: "B站", status: "success", message: "发布成功" },
+                { platform: "抖音", status: "error", message: "错误信息" }
+            ]
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+
+        # 提取公共参数
+        files = data.get('files', [])
+        title = data.get('title', '')
+        desc = data.get('desc', '')
+
+        # 提取2种尺寸封面
+        covers = data.get('covers', {})
+        cover_portrait = covers.get('portrait')   # 竖版 (3:4)
+        cover_square = covers.get('square')        # 方形 (4:3)
+
+        # 提取平台配置（标签在各平台的config中）
+        platforms = data.get('platforms', [])  # 平台ID列表
+        accounts = data.get('accounts', {})   # 各平台账号
+        config = data.get('config', {})       # 各平台差异化配置
+
+        if not files:
+            return jsonify({
+                "code": 400,
+                "msg": "请上传视频文件",
+                "data": None
+            }), 400
+            
+        if not title:
+            return jsonify({
+                "code": 400,
+                "msg": "请输入标题",
+                "data": None
+            }), 400
+            
+        if not platforms:
+            return jsonify({
+                "code": 400,
+                "msg": "请选择至少一个平台",
+                "data": None
+            }), 400
+        
+        results = []  # 存储每个平台的发布结果
+        
+        # 按顺序发布到各平台
+        for platform_id in platforms:
+            platform_name = get_platform_name(platform_id)
+
+            try:
+                print(f"\n{'='*50}")
+                print(f"[统一发布] 开始发布到: {platform_name} (平台ID: {platform_id})")
+                print(f"{'='*50}\n")
+
+                # 获取该平台的账号
+                platform_accounts = accounts.get(str(platform_id), accounts.get(platform_id, []))
+
+                if not platform_accounts:
+                    raise ValueError("未选择该平台的账号")
+
+                # 将账号ID转换为账号文件路径
+                account_file_paths = []
+                for account_id in platform_accounts:
+                    file_path = get_account_file_path(account_id)
+                    if file_path:
+                        account_file_paths.append(file_path)
+                    else:
+                        print(f"警告: 无法找到账号ID {account_id} 的文件路径")
+
+                if not account_file_paths:
+                    raise ValueError("无法获取该平台的账号文件路径")
+
+                # 根据平台获取对应的封面
+                coverPath = get_cover_for_platform(
+                    platform_id,
+                    cover_portrait=cover_portrait,
+                    cover_square=cover_square
+                )
+
+                # 根据平台调用对应的发布函数（标签从config中读取）
+                publish_to_platform(
+                    platform_id=platform_id,
+                    title=title,
+                    files=files,
+                    coverPath=coverPath,
+                    tags=[],  # 已废弃，标签从config中读取
+                    accounts=account_file_paths,
+                    desc=desc,
+                    config=config
+                )
+                
+                # 发布成功
+                results.append({
+                    "platform": platform_name,
+                    "status": "success",
+                    "message": "发布成功"
+                })
+                print(f"[统一发布] ✅ {platform_name} 发布成功\n")
+                
+            except Exception as e:
+                error_msg = str(e)
+                print(f"[统一发布] ❌ {platform_name} 发布失败: {error_msg}\n")
+                
+                # 获取最新截图路径
+                screenshot_url = get_latest_screenshot_for_platform(platform_name)
+                
+                results.append({
+                    "platform": platform_name,
+                    "status": "error",
+                    "message": error_msg,
+                    "screenshot": screenshot_url
+                })
+        
+        # 统计结果
+        success_count = sum(1 for r in results if r['status'] == 'success')
+        fail_count = sum(1 for r in results if r['status'] == 'error')
+        
+        return jsonify({
+            "code": 200,
+            "msg": f"发布完成：{success_count} 成功，{fail_count} 失败",
+            "data": {
+                "results": results,
+                "summary": {
+                    "total": len(results),
+                    "success": success_count,
+                    "failed": fail_count
+                }
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"[统一发布] 致命错误: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            "code": 500,
+            "msg": f"统一发布出错: {str(e)}",
+            "data": None
+        }), 500
+
+
+def get_account_file_path(account_id):
+    """根据账号ID获取账号文件路径"""
+    try:
+        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT filePath FROM user_info WHERE id = ?', (account_id,))
+            row = cursor.fetchone()
+            if row:
+                return row['filePath']
+            return None
+    except Exception as e:
+        print(f"获取账号文件路径失败: {str(e)}")
+        return None
+
+
+def get_platform_name(platform_id):
+    """获取平台名称"""
+    platform_map = {
+        1: "小红书",
+        2: "视频号",
+        3: "抖音",
+        4: "快手",
+        5: "B站",
+        6: "TikTok",
+        7: "百家号"
+    }
+    return platform_map.get(platform_id, f"未知平台({platform_id})")
+
+
+def get_cover_for_platform(platform_id, cover_portrait=None, cover_square=None):
+    """
+    根据平台ID获取对应的封面路径
+
+    封面分配规则:
+    - 小红书 (1): 竖版 (3:4)
+    - 视频号 (2): 竖版 (3:4)
+    - 抖音 (3): 竖版 (3:4) + 方形 (4:3) [双封面]
+    - 快手 (4): 竖版 (3:4)
+    - B站 (5): 方形 (4:3)
+
+    注意：
+    - 抖音的横封面是4:3比例，使用cover_square
+    - B站目前只需要方形封面（4:3）
+    """
+    cover_mapping = {
+        # 小红书 → 竖版
+        1: cover_portrait,
+        # 视频号 → 竖版
+        2: cover_portrait,
+        # 抖音 → 竖版（主封面）
+        3: cover_portrait,
+        # 快手 → 竖版
+        4: cover_portrait,
+        # B站 → 方形
+        5: cover_square,
+    }
+
+    main_cover = cover_mapping.get(platform_id)
+
+    # 对于需要双封面的平台（抖音），返回字典
+    if platform_id == 3:  # 抖音
+        return {
+            'main': main_cover or cover_portrait,
+            'portrait': cover_portrait,
+            'square': cover_square
+        }
+
+    return main_cover
+
+
+def publish_to_platform(platform_id, title, files, coverPath, tags, accounts, desc, config):
+    """
+    根据平台ID发布视频（核心分发逻辑）
+
+    参数:
+        platform_id: 平台ID (1-7)
+        title: 标题
+        files: 视频文件路径列表
+        coverPath: 封面路径
+        tags: 标签列表
+        accounts: 账号ID列表
+        desc: 描述/简介
+        config: 差异化配置字典
+    """
+    # 提取公共设置
+    common_config = config.get('common', {})
+    collection = common_config.get('collection', '')  # 合集
+
+    # 提取各平台特有配置（包括独立标签）
+    douyin_config = config.get('douyin', {})
+    bilibili_config = config.get('bilibili', {})
+    channels_config = config.get('channels', {})
+    xiaohongshu_config = config.get('xiaohongshu', {})
+    kuaishou_config = config.get('kuaishou', {})
+    tiktok_config = config.get('tiktok', {})
+    baijiahao_config = config.get('baijiahao', {})
+
+    match platform_id:
+        case 1:  # 小红书
+            xhs_tags = xiaohongshu_config.get('tags', [])  # 小红书独立标签
+            xhs_declaration = xiaohongshu_config.get('declaration', '')
+            xhs_is_original = xiaohongshu_config.get('isOriginal', False)
+            xhs_category = 1 if xhs_is_original else None
+            declaration_info = {"declaration_type": xhs_declaration} if xhs_declaration else None
+
+            post_video_xhs(
+                title=title,
+                files=files,
+                tags=xhs_tags,  # 使用小红书独立标签
+                account_file=accounts,
+                category=xhs_category,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0,
+                desc=desc,
+                thumbnail_path=coverPath,
+                collection=collection,
+                declaration_info=declaration_info
+            )
+
+        case 2:  # 视频号
+            channels_tags = channels_config.get('tags', [])  # 视频号独立标签
+            is_draft = channels_config.get('isDraft', False)
+            is_original = channels_config.get('isOriginal', False)
+            declaration = channels_config.get('declaration')
+
+            post_video_tencent(
+                title=title,
+                files=files,
+                tags=channels_tags,  # 使用视频号独立标签
+                account_file=accounts,
+                category=None,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0,
+                is_draft=is_draft,
+                thumbnail_path=coverPath,
+                desc=desc,
+                collection=collection,
+                declare_original=is_original,
+                declaration=declaration
+            )
+
+        case 3:  # 抖音
+            douyin_tags = douyin_config.get('tags', [])  # 抖音独立标签
+            declaration_type = douyin_config.get('declaration_type', '')
+            declaration_info = {"declaration_type": declaration_type} if declaration_type else None
+
+            # 处理抖音双封面（竖版3:4 + 方形4:3）
+            if isinstance(coverPath, dict):
+                douyin_portrait = coverPath.get('portrait')
+                douyin_square = coverPath.get('square')
+            else:
+                douyin_portrait = coverPath
+                douyin_square = coverPath
+
+            post_video_DouYin(
+                title=title,
+                files=files,
+                tags=douyin_tags,  # 使用抖音独立标签
+                account_file=accounts,
+                category=None,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0,
+                thumbnail_landscape_path=douyin_square,
+                thumbnail_portrait_path=douyin_portrait,
+                productLink=douyin_config.get('productLink', ''),
+                productTitle=douyin_config.get('productTitle', ''),
+                declaration_info=declaration_info,
+                desc=desc,
+                collection=collection
+            )
+
+        case 4:  # 快手
+            kuaishou_tags = kuaishou_config.get('tags', [])  # 快手独立标签
+            kuaishou_declaration = kuaishou_config.get('declaration', '内容为AI生成')
+
+            post_video_ks(
+                title=title,
+                files=files,
+                tags=kuaishou_tags,  # 使用快手独立标签
+                account_file=accounts,
+                category=None,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0,
+                desc=desc,
+                thumbnail_path=coverPath,
+                kuaishou_declaration=kuaishou_declaration,
+                allow_duet=True,
+                allow_download=True,
+                show_in_city=True,
+                collection=collection
+            )
+            
+        case 5:  # B站
+            bilibili_tags = bilibili_config.get('tags', [])  # B站独立标签
+            bilibili_tid = bilibili_config.get('tid', 218)
+            bilibili_ai_decl = bilibili_config.get('aiDeclaration', False)
+            bilibili_orig = bilibili_config.get('isOriginal', False)
+
+            # 处理B站封面（只需要方形4:3）
+            if isinstance(coverPath, dict):
+                bilibili_cover = coverPath.get('square')
+            else:
+                bilibili_cover = coverPath
+
+            post_video_bilibili(
+                title=title,
+                files=files,
+                tags=bilibili_tags,  # 使用B站独立标签
+                account_file=accounts,
+                category=None,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0,
+                tid=bilibili_tid,
+                desc=desc,
+                copyright_type=1 if bilibili_orig else 2,
+                cover_path=bilibili_cover,
+                collection=collection,
+                ai_declaration=bilibili_ai_decl
+            )
+            
+        case 6:  # TikTok
+            tiktok_tags = tiktok_config.get('tags', [])  # TikTok独立标签
+            
+            post_video_tiktok(
+                title=title,
+                files=files,
+                tags=tiktok_tags,  # 使用TikTok独立标签
+                account_file=accounts,
+                category=None,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0
+            )
+            
+        case 7:  # 百家号
+            baijiahao_tags = baijiahao_config.get('tags', [])  # 百家号独立标签
+            
+            post_video_baijiahao(
+                title=title,
+                files=files,
+                tags=baijiahao_tags,  # 使用百家号独立标签
+                account_file=accounts,
+                category=None,
+                enableTimer=False,
+                videos_per_day=1,
+                daily_times=[10],
+                start_days=0
+            )
+            
+        case _:
+            raise ValueError(f"不支持的平台ID: {platform_id}")
 
 # Cookie文件上传API
 @app.route('/uploadCookie', methods=['POST'])
@@ -942,9 +1538,11 @@ def open_upload_page():
                 "data": None
             }), 404
 
+        actual_cookie_path = str(cookie_file_path)
+
         thread = threading.Thread(
             target=run_open_upload_page,
-            args=(str(cookie_file_path), uploader_cls.upload_page, account['userName']),
+            args=(actual_cookie_path, uploader_cls.upload_page, account['userName']),
             daemon=True
         )
         thread.start()
@@ -988,6 +1586,24 @@ def run_async_function(type, id, status_queue, account_id=None, existing_file_pa
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(get_ks_cookie(id, status_queue, account_id, existing_file_path))
+            loop.close()
+        case '5':
+            # B站登录（使用biliup工具）
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(bilibili_cookie_gen(id, status_queue, account_id, existing_file_path))
+            loop.close()
+        case '6':
+            # TikTok登录（复用抖音登录逻辑）
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(tiktok_cookie_gen(id, status_queue, account_id, existing_file_path))
+            loop.close()
+        case '7':
+            # 百家号登录（复用抖音登录逻辑）
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(baijiahao_cookie_gen(id, status_queue, account_id, existing_file_path))
             loop.close()
 
 
@@ -1084,6 +1700,254 @@ def submit_verification():
             "msg": f"提交验证码失败: {str(e)}",
             "data": None
         }), 500
+
+
+# ==================== 截图管理接口 ====================
+
+import os
+from pathlib import Path
+
+SCREENSHOTS_DIR = Path("screenshots")
+SCREENSHOTS_DIR.mkdir(exist_ok=True)
+
+
+def get_latest_screenshot_for_platform(platform_name):
+    """
+    获取指定平台的最新截图路径
+    
+    Args:
+        platform_name: 平台名称（如 'B站', '抖音', '小红书'）
+        
+    Returns:
+        截图URL路径（如 '/screenshots/view/bilibili/20260618_123456_account/001_ERROR.png'）
+        如果没有截图则返回 None
+    """
+    # 平台名称映射到目录名
+    platform_map = {
+        'B站': 'bilibili',
+        '抖音': 'douyin',
+        '小红书': 'xiaohongshu',
+        '快手': 'kuaishou',
+        '视频号': 'tencent',
+        'TikTok': 'tiktok',
+        '百家号': 'baijiahao'
+    }
+    
+    platform_dir_name = platform_map.get(platform_name, platform_name.lower())
+    platform_dir = SCREENSHOTS_DIR / platform_dir_name
+    
+    if not platform_dir.exists():
+        return None
+    
+    # 获取最新的session目录
+    session_dirs = sorted(
+        platform_dir.iterdir(),
+        key=lambda x: x.stat().st_mtime,
+        reverse=True
+    )
+    
+    if not session_dirs:
+        return None
+    
+    latest_session = session_dirs[0]
+    
+    # 获取该session中包含ERROR的截图（优先）
+    error_screenshots = sorted(latest_session.glob("*ERROR*.png"), reverse=True)
+    if error_screenshots:
+        screenshot = error_screenshots[0]
+        return f"/screenshots/view/{platform_dir_name}/{latest_session.name}/{screenshot.name}"
+    
+    # 如果没有ERROR截图，获取最新的截图
+    all_screenshots = sorted(latest_session.glob("*.png"), reverse=True)
+    if all_screenshots:
+        screenshot = all_screenshots[0]
+        return f"/screenshots/view/{platform_dir_name}/{latest_session.name}/{screenshot.name}"
+    
+    return None
+
+
+@app.route('/screenshots/list', methods=['GET'])
+def list_screenshots():
+    """获取截图列表
+
+    Query params:
+        platform: 平台名称（可选，如 'douyin', 'xiaohongshu'）
+        limit: 返回数量限制（默认20）
+    """
+    platform = request.args.get('platform')
+    limit = int(request.args.get('limit', 20))
+
+    screenshots = []
+
+    try:
+        if platform:
+            # 指定平台的截图
+            platform_dir = SCREENSHOTS_DIR / platform
+            if platform_dir.exists():
+                for session_dir in sorted(platform_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)[:limit]:
+                    for screenshot in sorted(session_dir.glob("*.png")):
+                        screenshots.append({
+                            "path": str(screenshot),
+                            "platform": platform,
+                            "session": session_dir.name,
+                            "filename": screenshot.name,
+                            "mtime": screenshot.stat().st_mtime
+                        })
+        else:
+            # 所有平台的截图
+            for platform_dir in SCREENSHOTS_DIR.iterdir():
+                if platform_dir.is_dir():
+                    for session_dir in sorted(platform_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)[:limit]:
+                        for screenshot in sorted(session_dir.glob("*.png")):
+                            screenshots.append({
+                                "path": str(screenshot),
+                                "platform": platform_dir.name,
+                                "session": session_dir.name,
+                                "filename": screenshot.name,
+                                "mtime": screenshot.stat().st_mtime
+                            })
+
+        # 按时间排序
+        screenshots.sort(key=lambda x: x['mtime'], reverse=True)
+        screenshots = screenshots[:limit]
+
+        return jsonify({
+            "code": 200,
+            "msg": "获取截图列表成功",
+            "data": screenshots
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "code": 500,
+            "msg": f"获取截图列表失败: {str(e)}",
+            "data": []
+        }), 500
+
+
+@app.route('/screenshots/view/<platform>/<session>/<filename>', methods=['GET'])
+def view_screenshot(platform, session, filename):
+    """查看单个截图
+
+    Args:
+        platform: 平台名称
+        session: 会话目录名
+        filename: 截图文件名
+    """
+    try:
+        screenshot_path = SCREENSHOTS_DIR / platform / session / filename
+
+        if not screenshot_path.exists():
+            return jsonify({
+                "code": 404,
+                "msg": "截图文件不存在",
+                "data": None
+            }), 404
+
+        return send_from_directory(
+            str(SCREENSHOTS_DIR / platform / session),
+            filename,
+            mimetype='image/png'
+        )
+
+    except Exception as e:
+        return jsonify({
+            "code": 500,
+            "msg": f"查看截图失败: {str(e)}",
+            "data": None
+        }), 500
+
+
+@app.route('/screenshots/latest', methods=['GET'])
+def get_latest_screenshots():
+    """获取最新上传的截图目录
+
+    Query params:
+        platform: 平台名称（可选）
+    """
+    platform = request.args.get('platform')
+
+    try:
+        latest_sessions = []
+
+        if platform:
+            platform_dir = SCREENSHOTS_DIR / platform
+            if platform_dir.exists():
+                sessions = sorted(platform_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)[:5]
+                for session in sessions:
+                    screenshots = [s.name for s in sorted(session.glob("*.png"))]
+                    latest_sessions.append({
+                        "platform": platform,
+                        "session": session.name,
+                        "screenshots": screenshots,
+                        "mtime": session.stat().st_mtime
+                    })
+        else:
+            for platform_dir in SCREENSHOTS_DIR.iterdir():
+                if platform_dir.is_dir():
+                    sessions = sorted(platform_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)[:2]
+                    for session in sessions:
+                        screenshots = [s.name for s in sorted(session.glob("*.png"))]
+                        latest_sessions.append({
+                            "platform": platform_dir.name,
+                            "session": session.name,
+                            "screenshots": screenshots,
+                            "mtime": session.stat().st_mtime
+                        })
+
+        latest_sessions.sort(key=lambda x: x['mtime'], reverse=True)
+
+        return jsonify({
+            "code": 200,
+            "msg": "获取最新截图成功",
+            "data": latest_sessions
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "code": 500,
+            "msg": f"获取最新截图失败: {str(e)}",
+            "data": []
+        }), 500
+
+
+@app.route('/screenshots/cleanup', methods=['POST'])
+def cleanup_screenshots():
+    """清理旧截图
+
+    Body params:
+        days: 保留天数（默认7天）
+    """
+    days = request.json.get('days', 7)
+
+    try:
+        cutoff_time = time.time() - (days * 24 * 60 * 60)
+        deleted_count = 0
+
+        for platform_dir in SCREENSHOTS_DIR.iterdir():
+            if platform_dir.is_dir():
+                for session_dir in platform_dir.iterdir():
+                    if session_dir.is_dir():
+                        dir_time = session_dir.stat().st_mtime
+                        if dir_time < cutoff_time:
+                            for file in session_dir.glob("*"):
+                                file.unlink()
+                            session_dir.rmdir()
+                            deleted_count += 1
+
+        return jsonify({
+            "code": 200,
+            "msg": f"清理完成，删除了 {deleted_count} 个旧截图目录",
+            "data": {"deleted_count": deleted_count}
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "code": 500,
+            "msg": f"清理截图失败: {str(e)}",
+            "data": None
+        }), 500
+
 
 if __name__ == '__main__':
     threading.Thread(target=nightly_account_status_checker, daemon=True).start()

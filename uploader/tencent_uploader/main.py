@@ -12,6 +12,7 @@ from patchright.async_api import Playwright
 from patchright.async_api import async_playwright
 
 from conf import BASE_DIR, DEBUG_MODE, LOCAL_CHROME_PATH
+from myUtils.screenshot_manager import ScreenshotManager
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
 from utils.log import tencent_logger
@@ -451,6 +452,7 @@ class TencentBaseUploader(BaseVideoUploader):
         publish_strategy: str = TENCENT_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool | None = None,
+        screenshot_manager = None,  # 截图管理器
     ):
         self.publish_date = publish_date
         self.account_file = _resolve_account_file(account_file)
@@ -458,6 +460,7 @@ class TencentBaseUploader(BaseVideoUploader):
         self.debug = debug
         self.headless = get_local_chrome_headless() if headless is None else headless
         self.local_executable_path = LOCAL_CHROME_PATH
+        self.screenshot_manager = screenshot_manager  # 截图管理器
 
     async def validate_base_args(self):
         if not os.path.exists(self.account_file):
@@ -514,128 +517,217 @@ class TencentBaseUploader(BaseVideoUploader):
         if await short_title_element.count():
             await short_title_element.fill(short_title or format_str_for_short_title(title))
 
-    async def fill_title_and_tags(self, page: Page) -> None:
+    async def fill_title_and_description(self, page: Page) -> None:
+        """视频号"视频描述"统一填写：标题 + 换行 + 描述"""
         await page.locator("div.input-editor").click()
         await page.keyboard.type(self.title)
+        if self.desc:
+            await page.keyboard.press("Enter")
+            await page.keyboard.type(self.desc)
         await page.keyboard.press("Enter")
         for tag in self.tags:
             await page.keyboard.type("#" + tag)
             await page.keyboard.press("Space")
-        tencent_logger.info(_msg("🏷️", f"成功添加 hashtag: {len(self.tags)}"))
+        tencent_logger.info(_msg("🏷️", f"成功添加视频描述(标题+描述+话题): 标题={len(self.title)}, 描述={len(self.desc)}, 话题={len(self.tags)}"))
 
     async def fill_description(self, page: Page) -> None:
-        await page.keyboard.press("Enter")
-        await page.keyboard.type(self.desc)
-        tencent_logger.info(_msg("🏷️", f"成功添加 desc: {len(self.desc)}"))
+        pass
 
     async def apply_collection(self, page: Page) -> None:
-        collection_elements = (
-            page.get_by_text("添加到合集")
-            .locator("xpath=following-sibling::div")
-            .locator(".option-list-wrap > div")
-        )
-        if await collection_elements.count() > 1:
-            await page.get_by_text("添加到合集").locator("xpath=following-sibling::div").click()
-            await collection_elements.first.click()
+        """视频号「合集」选择：点击"选择合集"区域 → 展开选项列表 → 模糊匹配选择包含关键字的选项。
 
-    async def apply_original_statement(self, page: Page) -> None:
-        original_set = False
-        if await page.get_by_label("视频为原创").count():
-            await page.get_by_label("视频为原创").check()
-            original_set = True
+        如果self.collection为None或空字符串，则跳过合集选择。
+        """
+        collection_name = getattr(self, 'collection', None)
+        if not collection_name:
+            tencent_logger.debug(_msg("📚", "未指定合集名称，跳过合集选择"))
+            return
 
         try:
-            label_locator = await page.locator('label:has-text("我已阅读并同意 《视频号原创声明使用条款》")').is_visible()
-        except Exception:
-            label_locator = False
+            # 定位"添加到合集"区域（使用用户提供的HTML结构）
+            # 外层容器: div.form-item.cell-center
+            # label: div.label 文本为"添加到合集"
+            # 显示区域: div.post-album-display > div.post-album-display-wrap > div.display-text "选择合集"
+            collection_label = page.locator("div.label").filter(has_text="添加到合集").first
+            if not await collection_label.count():
+                tencent_logger.warning(_msg("📚", "未找到「添加到合集」标签，跳过合集选择"))
+                return
 
-        if label_locator:
-            await page.get_by_label("我已阅读并同意 《视频号原创声明使用条款》").check()
-            await page.get_by_role("button", name="声明原创").click()
-            original_set = True
+            # 从label向上找到form-item容器，再定位post-album-display区域
+            form_item = collection_label.locator("xpath=ancestor::div[contains(@class, 'form-item')]").first
+            album_display = form_item.locator(".post-album-display").first
 
-        declaration_entry = page.locator(
-            'div.label span:has-text("声明原创"), '
-            'div:has-text("声明原创"):has(input.ant-checkbox-input), '
-            'div:has-text("原创声明"):has(input.ant-checkbox-input)'
-        ).first
-        if await declaration_entry.count():
-            original_checkbox = page.locator("div.declare-original-checkbox input.ant-checkbox-input").first
-            if await original_checkbox.count() and not await original_checkbox.is_disabled():
-                await original_checkbox.click()
-                await page.wait_for_timeout(500)
-                checked_locator = page.locator(
-                    "div.declare-original-dialog "
-                    "label.ant-checkbox-wrapper.ant-checkbox-wrapper-checked:visible"
-                )
-                if not await checked_locator.count():
-                    await page.locator("div.declare-original-dialog input.ant-checkbox-input:visible").first.click()
+            if not await album_display.count():
+                tencent_logger.warning(_msg("📚", "未找到合集显示区域，跳过合集选择"))
+                return
 
-            original_type_form = page.locator('div.original-type-form > div.form-label:has-text("原创类型"):visible')
-            if await original_type_form.count():
-                category = getattr(self, "category", None)
-                await page.locator("div.form-content:visible").click()
-                option = None
-                if category:
-                    option = page.locator(
-                        "ul.weui-desktop-dropdown__list "
-                        f'li.weui-desktop-dropdown__list-ele:has-text("{category}")'
-                    ).first
-                    if not await option.count():
-                        option = None
-                if option is None:
-                    option = page.locator(
-                        "ul.weui-desktop-dropdown__list "
-                        "li.weui-desktop-dropdown__list-ele:visible"
-                    ).first
-                if await option.count():
-                    await option.click()
-                await page.wait_for_timeout(1000)
+            await album_display.wait_for(state="visible", timeout=6000)
 
-            declare_button = page.locator('button:has-text("声明原创"):visible')
-            if await declare_button.count():
-                await declare_button.first.click()
-                original_set = True
-                await page.wait_for_timeout(1000)
+            # 点击显示区域展开下拉列表
+            await album_display.click()
+            tencent_logger.debug(_msg("📚", "已点击合集显示区域，等待选项列表出现"))
+            await asyncio.sleep(1)  # 等待下拉列表渲染
 
-        if not original_set:
-            for original_text in ("声明原创", "原创声明", "视频为原创"):
-                try:
-                    modern_original = page.locator(f'text="{original_text}"').first
-                    if await modern_original.count() and await modern_original.is_visible():
-                        await modern_original.click()
-                        original_set = True
-                        await page.wait_for_timeout(1000)
-                        break
-                except Exception:
+            # 查找选项列表容器（使用用户提供的HTML结构）
+            # 选项列表: div.option-list-wrap > div.option-item > div.item > div.name
+            option_list = page.locator(".option-list-wrap").first
+            if not await option_list.count() or not await option_list.is_visible():
+                tencent_logger.warning(_msg("📚", "未找到合集选项列表，可能已收起"))
+                return
+
+            # 查找所有选项项
+            options = option_list.locator("> .option-item")
+            option_count = await options.count()
+
+            if option_count == 0:
+                tencent_logger.warning(_msg("📚", "合集选项列表为空"))
+                return
+
+            # 遍历选项查找包含关键字的项
+            found = False
+            for i in range(option_count):
+                option = options.nth(i)
+                # 获取选项名称（从 div.name 元素）
+                name_element = option.locator(".name").first
+                if not await name_element.count():
                     continue
 
-        content_declaration = page.locator('text="内容声明"').first
-        try:
-            if await content_declaration.count() and await content_declaration.is_visible():
-                await content_declaration.click()
-                for option_text in ("无需声明", "不声明", "无"):
-                    option = page.locator(f'text="{option_text}"').first
-                    if await option.count() and await option.is_visible():
-                        await option.click()
-                        tencent_logger.info(_msg("🧾", f"内容声明已选择: {option_text}"))
-                        break
-            else:
-                tencent_logger.info(_msg("🧾", "当前页面未发现内容声明字段"))
+                option_text = await name_element.text_content()
+                if option_text and collection_name in option_text:
+                    await option.click()
+                    tencent_logger.info(_msg("📚", f"已选择合集：{option_text}"))
+                    found = True
+                    break
+
+            if not found:
+                tencent_logger.warning(_msg("📚", f"未找到包含「{collection_name}」的合集选项"))
+
         except Exception as exc:
-            tencent_logger.warning(_msg("😵", f"内容声明设置失败，继续前先人工确认页面: {exc}"))
+            tencent_logger.warning(_msg("📚", f"合集设置失败，跳过该步骤继续发布：{exc}"))
+
+    async def set_original_declaration(self, page: Page) -> None:
+        """视频号「声明原创」功能。
+
+        根据declare_original参数决定是否声明原创；category仅用于兼容旧调用。
+        """
+        # 检查是否需要声明原创
+        category = getattr(self, "category", None)
+        declare_original = getattr(self, "declare_original", bool(category))
+        if not declare_original:
+            tencent_logger.info(_msg("🧾", "未勾选声明原创，跳过"))
+            return
+
+        async def is_ant_checkbox_checked(label) -> bool:
+            return await label.evaluate(
+                """el => el.classList.contains("ant-checkbox-wrapper-checked")
+                    || !!el.querySelector(".ant-checkbox-checked")
+                    || !!el.querySelector("input.ant-checkbox-input")?.checked"""
+            )
+
+        original_set = False
+
+        try:
+            original_form = page.locator(
+                'div.form-item:has(div.label span:has-text("声明原创"))'
+            ).first
+
+            original_label = original_form.locator(
+                'div.declare-original-checkbox label.ant-checkbox-wrapper'
+            ).first
+            if not await original_label.count():
+                original_label = page.locator(
+                    'div.declare-original-checkbox label.ant-checkbox-wrapper'
+                ).first
+
+            if not await original_label.count():
+                tencent_logger.warning(_msg("📭", "未找到视频号原创声明复选框"))
+            elif await is_ant_checkbox_checked(original_label):
+                original_set = True
+                tencent_logger.info(_msg("🧾", "视频号原创声明已勾选"))
+            else:
+                tencent_logger.info(_msg("🧾", "小人正在勾选视频号原创声明"))
+                await original_label.click()
+                await page.wait_for_timeout(500)
+
+                dialog = page.locator(
+                    "div.declare-original-dialog div.weui-desktop-dialog__wrp:visible"
+                ).first
+                if not await dialog.count():
+                    original_set = await is_ant_checkbox_checked(original_label)
+                else:
+                    protocol_label = dialog.locator(
+                        "div.original-proto-wrapper label.ant-checkbox-wrapper"
+                    ).first
+                    if await protocol_label.count() and not await is_ant_checkbox_checked(protocol_label):
+                        tencent_logger.info(_msg("🧾", "小人正在勾选原创声明须知"))
+                        await protocol_label.click()
+                        await page.wait_for_timeout(500)
+
+                    declare_button = dialog.locator(
+                        'button.weui-desktop-btn_primary:has-text("声明原创")'
+                    ).first
+                    if await declare_button.count():
+                        for _ in range(10):
+                            button_class = await declare_button.get_attribute("class") or ""
+                            if "weui-desktop-btn_disabled" not in button_class:
+                                await declare_button.click()
+                                await page.wait_for_timeout(1000)
+                                original_set = True
+                                break
+                            await page.wait_for_timeout(300)
+
+                    if not original_set:
+                        tencent_logger.warning(_msg("😵", "声明原创按钮仍处于禁用状态或未找到按钮"))
+
+            if original_set:
+                tencent_logger.success(_msg("✅", "已完成视频号原创声明"))
+        except Exception as exc:
+            tencent_logger.warning(_msg("😵", f"视频号原创声明设置失败: {exc}"))
 
         if not original_set:
             try:
-                diagnostic_path = Path(BASE_DIR) / "debug_tencent_original_missing.png"
-                await page.screenshot(path=str(diagnostic_path), full_page=True)
+                # 使用统一的截图管理器（如果有）
+                if hasattr(self, 'screenshot_manager') and self.screenshot_manager:
+                    await self.screenshot_manager.take_error_screenshot(page, "未确认声明原创")
+                    tencent_logger.warning(_msg("😵", "未确认声明原创，已截图保存"))
                 visible_text = (await page.locator("body").first.inner_text())[-4000:]
-                tencent_logger.warning(_msg("😵", f"未确认声明原创，诊断截图: {diagnostic_path}"))
                 tencent_logger.warning(_msg("🧾", f"页面末尾文本: {visible_text}"))
             except Exception as exc:
                 tencent_logger.warning(_msg("😵", f"生成原创声明诊断信息失败: {exc}"))
-            # 视频号「声明原创」为可选项：页面无对应入口时跳过并继续发布，而非中止。
             tencent_logger.warning(_msg("📭", "本视频未声明原创（页面无入口或为可选项），跳过并继续发布"))
+
+    async def set_declaration(self, page: Page, declaration: str | None = None) -> None:
+        """视频号「视频标注」功能：选择声明类型（如"含AI生成内容"等）。
+        declaration 为 None 时跳过，不设置任何声明。
+        """
+        if not declaration:
+            return
+        try:
+            mark_tag_select = page.locator("div.mark-tag-select").first
+            if not await mark_tag_select.count():
+                tencent_logger.info(_msg("🧍", "未找到视频标注区域，跳过"))
+                return
+
+            await mark_tag_select.scroll_into_view_if_needed()
+            # 点击展开选项列表
+            await mark_tag_select.click()
+            await page.wait_for_timeout(500)
+
+            options = mark_tag_select.locator("div.mark-tag-option")
+            option_count = await options.count()
+            for i in range(option_count):
+                option = options.nth(i)
+                option_main = option.locator("div.option-main").first
+                if await option_main.count():
+                    text = (await option_main.inner_text()).strip()
+                    if text == declaration:
+                        await option.click()
+                        await page.wait_for_timeout(500)
+                        tencent_logger.info(_msg("🥳", f"视频标注已选择「{declaration}」"))
+                        return
+            tencent_logger.warning(_msg("😵", f"未找到视频标注选项「{declaration}」，跳过"))
+        except Exception as exc:
+            tencent_logger.warning(_msg("😵", f"设置视频标注失败，继续发布: {exc}"))
 
     async def set_location(self, page: Page, location_name: str = "不显示位置") -> None:
         try:
@@ -681,7 +773,10 @@ class TencentBaseUploader(BaseVideoUploader):
                 await asyncio.sleep(2)
 
     async def submit_publish(self, page: Page) -> None:
-        while True:
+        tencent_logger.info(_msg("🚀", "小人正在点击发布按钮"))
+        max_retries = 3  # 最大重试次数
+        retry_count = 0
+        while retry_count < max_retries:
             try:
                 if getattr(self, "is_draft", False):
                     draft_button = page.locator('div.form-btns button:has-text("保存草稿")')
@@ -697,6 +792,7 @@ class TencentBaseUploader(BaseVideoUploader):
                     tencent_logger.success(_msg("🥳", "视频发布成功"))
                 break
             except Exception as exc:
+                retry_count += 1
                 current_url = page.url
                 if getattr(self, "is_draft", False):
                     if "post/list" in current_url or "draft" in current_url:
@@ -706,12 +802,20 @@ class TencentBaseUploader(BaseVideoUploader):
                     if TENCENT_MANAGE_URL in current_url:
                         tencent_logger.success(_msg("🥳", "视频发布成功"))
                         break
-                tencent_logger.exception(f"  [-] Exception: {exc}")
-                tencent_logger.info(_msg("🏃", "视频正在发布中..."))
+                tencent_logger.info(_msg("🏃", f"视频正在发布中，重试 {retry_count}/{max_retries}: {exc}"))
+                # 只在最后一次失败时截图
+                if retry_count == max_retries and self.debug and self.screenshot_manager:
+                    await self.screenshot_manager.take_screenshot(page, f"发布失败_重试{retry_count}次")
                 await asyncio.sleep(0.5)
+        
+        # 如果重试3次都失败，抛出异常
+        if retry_count >= max_retries:
+            raise Exception(f"发布失败：已重试{max_retries}次仍未成功")
 
 
 class TencentVideo(TencentBaseUploader):
+    upload_page = "https://channels.weixin.qq.com/platform/post/create"
+
     def __init__(
         self,
         title,
@@ -720,6 +824,7 @@ class TencentVideo(TencentBaseUploader):
         publish_date: datetime | int,
         account_file,
         category=None,
+        declare_original: bool | None = None,
         is_draft=False,
         desc: str | None = None,
         thumbnail_path: str | None = None,
@@ -729,6 +834,9 @@ class TencentVideo(TencentBaseUploader):
         publish_strategy: str = TENCENT_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool | None = None,
+        collection: str | None = None,  # 合集名称
+        declaration: str | None = None,  # 视频标注（如"含AI生成内容"）
+        screenshot_manager: ScreenshotManager | None = None,  # 截图管理器（异常诊断）
     ):
         super().__init__(
             publish_date=publish_date,
@@ -736,17 +844,27 @@ class TencentVideo(TencentBaseUploader):
             publish_strategy=publish_strategy,
             debug=debug,
             headless=headless,
+            screenshot_manager=screenshot_manager,  # 传递截图管理器
         )
         self.title = title
         self.file_path = file_path
         self.tags = tags or []
         self.category = category
+        self.declare_original = bool(category) if declare_original is None else bool(declare_original)
         self.is_draft = is_draft
         self.desc = desc or ""
         self.thumbnail_path = thumbnail_path
         self.thumbnail_landscape_path = thumbnail_landscape_path
         self.thumbnail_portrait_path = thumbnail_portrait_path or thumbnail_path
         self.short_title = short_title
+        self.collection = collection  # 合集名称
+        self.declaration = declaration  # 视频标注
+        self.screenshot_manager = screenshot_manager  # 截图管理器
+
+    async def _take_error_screenshot(self, page: Page, error_msg: str = None) -> None:
+        """辅助方法：错误时截图"""
+        if self.screenshot_manager:
+            await self.screenshot_manager.take_error_screenshot(page, error_msg)
 
     async def validate_upload_args(self):
         await self.validate_base_args()
@@ -869,9 +987,8 @@ class TencentVideo(TencentBaseUploader):
             )
 
     async def prepare_video_for_publish(self, page: Page) -> None:
-        await self.fill_title_and_tags(page)
-        await self.fill_description(page)
-        await self.apply_collection(page)
+        await self.fill_title_and_description(page)
+        # await self.apply_collection(page)
 
     async def upload(self, playwright: Playwright) -> None:
         tencent_logger.info(_msg("🧍", "小人先检查 cookie、视频文件和发布时间"))
@@ -881,6 +998,7 @@ class TencentVideo(TencentBaseUploader):
         browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=self.headless))
         context = await browser.new_context(storage_state=self.account_file)
 
+        page = None
         try:
             page = await context.new_page()
             await self.open_upload_page(page)
@@ -890,7 +1008,16 @@ class TencentVideo(TencentBaseUploader):
             await self.prepare_video_for_publish(page)
             await self.wait_for_upload_complete(page)
             await self.set_location(page)
-            await self.apply_original_statement(page)
+            await self.set_original_declaration(page)
+            await self.set_declaration(page, self.declaration)
+
+            # 设置合集
+            if self.collection:
+                tencent_logger.info(_msg("📚", f"小人正在设置合集：{self.collection}"))
+                await asyncio.sleep(1)  # 等待页面渲染合集组件
+                await self.apply_collection(page)
+                tencent_logger.info(_msg("🥳", "合集设置完成"))
+
             await self.set_thumbnail(page)
 
             if self.publish_strategy == TENCENT_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
@@ -901,6 +1028,11 @@ class TencentVideo(TencentBaseUploader):
 
             await context.storage_state(path=self.account_file)
             tencent_logger.success(_msg("🥳", "cookie 更新完毕"))
+        except Exception as e:
+            tencent_logger.error(_msg("❌", f"上传过程中发生错误: {e}"))
+            if page and self.screenshot_manager:
+                await self._take_error_screenshot(page, str(e))
+            raise
         finally:
             await context.close()
             await browser.close()

@@ -1,9 +1,9 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
-// 创建axios实例
+// 创建axios实例 — 走 /api 代理，同源无跨域
 const request = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409',
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json'
   }
