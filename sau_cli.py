@@ -63,10 +63,10 @@ class DouyinVideoUploadRequest:
     thumbnail_portrait_file: Path | None = None
     product_link: str = ""
     product_title: str = ""
-    declaration: str | None = None
     publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE
     debug: bool = True
     headless: bool = True
+    declaration: str | None = None
 
 
 @dataclass(slots=True)

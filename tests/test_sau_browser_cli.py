@@ -90,6 +90,16 @@ class BrowserCliParserTests(unittest.TestCase):
             ])
         self.assertIsNone(args.declaration)
 
+    def test_douyin_request_legacy_positional_runtime_flags_keep_their_meaning(self):
+        request = sau_cli.DouyinVideoUploadRequest(
+            "creator", Path("demo.mp4"), "标题", "简介", [], 0,
+            None, None, None, "", "", "scheduled", False, False,
+        )
+        self.assertEqual(request.publish_strategy, "scheduled")
+        self.assertFalse(request.debug)
+        self.assertFalse(request.headless)
+        self.assertIsNone(request.declaration)
+
     def test_tencent_upload_video_accepts_dual_thumbnail_aspects(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             video_path = Path(tmp_dir) / "demo.mp4"
