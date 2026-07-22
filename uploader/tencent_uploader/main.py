@@ -113,18 +113,22 @@ async def cookie_auth(account_file):
             context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
             page = await context.new_page()
-            await page.goto(TENCENT_UPLOAD_URL)
-            await page.wait_for_url(TENCENT_UPLOAD_URL, timeout=5000)
+            await page.goto(TENCENT_UPLOAD_URL, wait_until="domcontentloaded")
 
-            login_markers = [
-                page.get_by_text("扫码登录", exact=True).first,
-                page.get_by_text("发表视频", exact=True).first,
-                page.get_by_role("button", name="发表").first,
-            ]
-
-            if await login_markers[0].count():
-                tencent_logger.info(_msg("🥹", "cookie 已失效，得重新登录一下"))
+            # cookie 失效时, 页面先停在 post/create, 随后由前端 JS 跳转到登录页;
+            # 必须等待跳转完成再判断, 否则会误报"cookie 有效"
+            try:
+                await page.wait_for_url("**/login.html**", timeout=8000)
+                tencent_logger.info(_msg("🥹", "cookie 已失效（页面跳转到登录页），得重新登录一下"))
                 return False
+            except Exception:
+                pass  # 8 秒内未跳转, 大概率已登录
+
+            # 双保险: 页面里出现微信扫码登录 iframe 也视为失效
+            for fr in page.frames:
+                if "open.weixin.qq.com/connect/qrconnect" in fr.url:
+                    tencent_logger.info(_msg("🥹", "cookie 已失效（页面出现扫码登录框），得重新登录一下"))
+                    return False
 
             tencent_logger.success(_msg("🥳", "cookie 有效"))
             return True
@@ -541,7 +545,16 @@ class TencentBaseUploader(BaseVideoUploader):
 
     async def open_upload_page(self, page: Page) -> None:
         await page.goto(TENCENT_UPLOAD_URL, timeout=120000, wait_until="domcontentloaded")
-        await page.wait_for_url(TENCENT_UPLOAD_URL, timeout=120000)
+        # cookie 失效时前端 JS 会跳转到登录页, 提前发现并报明确的错误
+        redirected = True
+        try:
+            await page.wait_for_url("**/login.html**", timeout=8000)
+        except Exception:
+            redirected = False  # 8 秒内未跳转, 正常
+        if redirected or any(
+            "open.weixin.qq.com/connect/qrconnect" in fr.url for fr in page.frames
+        ):
+            raise RuntimeError("视频号 cookie 已失效（被跳转到登录页），请重新扫码登录后再发布")
 
     async def upload_video_file(self, page: Page, file_path: str) -> None:
         async def find_file_input():
