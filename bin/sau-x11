@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# SAU X11 wrapper — auto-wraps sau with xvfb-run on WSL when no X server is available
+# Usage: sau-x11 [sau args...]
+#   SAU_FORCE_XVFB=1  always wrap with xvfb-run
+#   SAU_NO_XVFB=1     never wrap (use existing DISPLAY or fail)
+#   SAU_X11_VERBOSE=1 print detection decision to stderr
+
+set -euo pipefail
+
+SAU_BIN="/mnt/d/social-auto-upload/.venv/bin/sau"
+VERBOSE="${SAU_X11_VERBOSE:-}"
+
+log() {
+    if [ -n "$VERBOSE" ]; then
+        echo "[sau-x11] $*" >&2
+    fi
+}
+
+if [ ! -x "$SAU_BIN" ]; then
+    echo "sau-x11: sau binary not found at $SAU_BIN" >&2
+    echo "  fix: ensure /mnt/d/social-auto-upload/.venv exists and is built" >&2
+    exit 127
+fi
+
+# Handle --help
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    cat <<'EOF'
+sau-x11 — auto-wrap sau with xvfb-run on headless WSL
+
+Usage: sau-x11 [sau args...]
+
+Examples:
+  sau-x11 douyin check --account Pawly
+  sau-x11 --headed douyin upload-video --account Pawly --file ./v.mp4 --title "x"
+
+Environment:
+  SAU_FORCE_XVFB=1   always wrap with xvfb-run
+  SAU_NO_XVFB=1      never wrap (use existing DISPLAY or fail)
+  SAU_X11_VERBOSE=1  print detection decision to stderr
+EOF
+    exit 0
+fi
+
+need_xvfb=0
+reason=""
+
+if [ "${SAU_FORCE_XVFB:-}" = "1" ]; then
+    need_xvfb=1
+    reason="SAU_FORCE_XVFB=1"
+elif [ "${SAU_NO_XVFB:-}" = "1" ]; then
+    need_xvfb=0
+    reason="SAU_NO_XVFB=1"
+elif [ -n "${DISPLAY:-}" ] && [ -e "/tmp/.X11-unix/X${DISPLAY#*:}" ]; then
+    need_xvfb=0
+    reason="DISPLAY=$DISPLAY with active X socket"
+elif [ -n "${DISPLAY:-}" ]; then
+    # DISPLAY set but no socket → real X server probably unreachable from WSL
+    need_xvfb=1
+    reason="DISPLAY=$DISPLAY set but no X socket at /tmp/.X11-unix/X${DISPLAY#*:}"
+else
+    # No DISPLAY → need xvfb
+    if command -v xvfb-run >/dev/null 2>&1; then
+        need_xvfb=1
+        reason="no DISPLAY set, xvfb-run available"
+    else
+        echo "sau-x11: no DISPLAY set and xvfb-run not found in PATH" >&2
+        echo "  On Debian/Ubuntu/Kali: sudo apt install xvfb" >&2
+        echo "  Or set DISPLAY to a real X server (e.g. export DISPLAY=:0 for Windows X server)" >&2
+        exit 1
+    fi
+fi
+
+log "detection: need_xvfb=$need_xvfb ($reason)"
+
+if [ "$need_xvfb" = "1" ]; then
+    log "wrapping with xvfb-run -a"
+    exec xvfb-run -a "$SAU_BIN" "$@"
+else
+    log "passing through to sau directly"
+    exec "$SAU_BIN" "$@"
+fi

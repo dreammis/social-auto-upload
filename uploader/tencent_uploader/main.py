@@ -72,7 +72,9 @@ def _build_launch_kwargs(headless: bool) -> dict:
     if LOCAL_CHROME_PATH:
         launch_kwargs["executable_path"] = LOCAL_CHROME_PATH
     else:
-        launch_kwargs["channel"] = "chrome"
+        # channel: 默认 chromium (patchright bundled),SAU_BROWSER_CHANNEL 可覆盖回 "chrome"
+        # 原来默认 chrome 要求系统装 Google Chrome,WSL2 / Linux server fail
+        launch_kwargs["channel"] = os.environ.get("SAU_BROWSER_CHANNEL", "chromium").strip() or "chromium"
     return launch_kwargs
 
 
