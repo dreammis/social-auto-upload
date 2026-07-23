@@ -66,6 +66,7 @@ class DouyinVideoUploadRequest:
     publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE
     debug: bool = True
     headless: bool = True
+    declaration: str | None = None
 
 
 @dataclass(slots=True)
@@ -354,6 +355,7 @@ async def upload_video(request: DouyinVideoUploadRequest) -> Path:
         ) if request.thumbnail_portrait_file or request.thumbnail_file else None,
         productLink=request.product_link,
         productTitle=request.product_title,
+        declaration=request.declaration,
         publish_strategy=request.publish_strategy,
         debug=request.debug,
         headless=request.headless,
@@ -600,6 +602,10 @@ def build_parser() -> argparse.ArgumentParser:
     upload_video_parser.add_argument("--thumbnail-portrait", type=existing_file_path, help="Optional 3:4 portrait thumbnail path")
     upload_video_parser.add_argument("--product-link", default="", help="Optional product link")
     upload_video_parser.add_argument("--product-title", default="", help="Optional product title")
+    upload_video_parser.add_argument(
+        "--declaration",
+        help="Exact Douyin self-declaration option text; omitted means do not set one",
+    )
     add_runtime_flags(upload_video_parser)
 
     upload_note_parser = douyin_actions.add_parser("upload-note", help="Upload one note to Douyin")
@@ -762,6 +768,7 @@ async def dispatch(args: argparse.Namespace) -> int:
                 thumbnail_portrait_file=args.thumbnail_portrait,
                 product_link=args.product_link,
                 product_title=args.product_title,
+                declaration=args.declaration,
                 publish_strategy=publish_strategy,
                 debug=args.debug,
                 headless=args.headless,
