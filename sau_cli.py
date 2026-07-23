@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import shutil
+import sqlite3
 import sys
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -218,9 +221,67 @@ def parse_schedule(raw_schedule: str | None) -> datetime | int:
     return datetime.strptime(raw_schedule, SCHEDULE_FORMAT)
 
 
-async def login_douyin_account(account_name: str, headless: bool = True) -> dict:
+def register_cli_cookie_to_webui(platform: str, account_name: str, cookie_path: str):
+    """将CLI登录的cookie注册到Web UI账号表，使前端可见。"""
+    platform_type_map = {
+        "xiaohongshu": 1,
+        "tencent": 2,
+        "douyin": 3,
+        "kuaishou": 4,
+    }
+    platform_type = platform_type_map.get(platform)
+    if not platform_type:
+        print(f"[register] 未知平台: {platform}")
+        return
+
+    new_filename = f"{uuid.uuid1()}.json"
+    target_dir = Path(BASE_DIR) / "cookiesFile"
+    target_dir.mkdir(exist_ok=True)
+    target_path = target_dir / new_filename
+
+    shutil.copy2(cookie_path, target_path)
+
+    db_path = Path(BASE_DIR) / "db" / "database.db"
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+    existing = cursor.execute(
+        "SELECT id FROM user_info WHERE type = ? AND userName = ?",
+        (platform_type, account_name),
+    ).fetchone()
+
+    if existing:
+        cursor.execute(
+            "UPDATE user_info SET filePath = ?, status = 1 WHERE id = ?",
+            (new_filename, existing[0]),
+        )
+        print(f"[register] 已更新Web UI账号: {platform}/{account_name}")
+    else:
+        cursor.execute(
+            "INSERT INTO user_info (type, filePath, userName, status) VALUES (?, ?, ?, 1)",
+            (platform_type, new_filename, account_name),
+        )
+        print(f"[register] 已注册到Web UI: {platform}/{account_name}")
+
+    conn.commit()
+
+    # Clean up any cookiesFile blobs no longer referenced by user_info
+    referenced = {
+        row[0]
+        for row in cursor.execute("SELECT filePath FROM user_info").fetchall()
+    }
+    for path in target_dir.iterdir():
+        if path.is_file() and path.name not in referenced:
+            path.unlink(missing_ok=True)
+
+    conn.close()
+
+
+async def login_douyin_account(account_name: str, headless: bool = True, cdp_url: str | None = None) -> dict:
     account_file = resolve_account_file("douyin", account_name)
-    return await douyin_setup(str(account_file), handle=True, return_detail=True, headless=headless)
+    result = await douyin_setup(str(account_file), handle=True, return_detail=True, headless=headless, cdp_url=cdp_url)
+    if result["success"]:
+        register_cli_cookie_to_webui("douyin", account_name, str(account_file))
+    return result
 
 
 async def check_douyin_account(account_name: str) -> bool:
@@ -230,9 +291,12 @@ async def check_douyin_account(account_name: str) -> bool:
     return await douyin_cookie_auth(str(account_file))
 
 
-async def login_kuaishou_account(account_name: str, headless: bool = True) -> dict:
+async def login_kuaishou_account(account_name: str, headless: bool = True, cdp_url: str | None = None) -> dict:
     account_file = resolve_account_file("kuaishou", account_name)
-    return await ks_setup(str(account_file), handle=True, return_detail=True, headless=headless)
+    result = await ks_setup(str(account_file), handle=True, return_detail=True, headless=headless, cdp_url=cdp_url)
+    if result["success"]:
+        register_cli_cookie_to_webui("kuaishou", account_name, str(account_file))
+    return result
 
 
 async def check_kuaishou_account(account_name: str) -> bool:
@@ -242,9 +306,9 @@ async def check_kuaishou_account(account_name: str) -> bool:
     return await kuaishou_cookie_auth(str(account_file))
 
 
-async def login_xiaohongshu_account(account_name: str, headless: bool = True) -> dict:
+async def login_xiaohongshu_account(account_name: str, headless: bool = True, cdp_url: str | None = None) -> dict:
     account_file = resolve_account_file("xiaohongshu", account_name)
-    return await xiaohongshu_setup(str(account_file), handle=True, return_detail=True, headless=headless)
+    return await xiaohongshu_setup(str(account_file), handle=True, return_detail=True, headless=headless, cdp_url=cdp_url)
 
 
 async def check_xiaohongshu_account(account_name: str) -> bool:
@@ -284,9 +348,9 @@ async def check_bilibili_account(account_name: str) -> bool:
     return result.returncode == 0
 
 
-async def login_tencent_account(account_name: str, headless: bool = True) -> dict:
+async def login_tencent_account(account_name: str, headless: bool = True, cdp_url: str | None = None) -> dict:
     account_file = resolve_account_file("tencent", account_name)
-    return await tencent_setup(str(account_file), handle=True, return_detail=True, headless=headless)
+    return await tencent_setup(str(account_file), handle=True, return_detail=True, headless=headless, cdp_url=cdp_url)
 
 
 async def check_tencent_account(account_name: str) -> bool:
@@ -296,9 +360,9 @@ async def check_tencent_account(account_name: str) -> bool:
     return await tencent_cookie_auth(str(account_file))
 
 
-async def login_youtube_account(account_name: str, headless: bool = False) -> dict:
+async def login_youtube_account(account_name: str, headless: bool = False, cdp_url: str | None = None) -> dict:
     account_file = resolve_account_file("youtube", account_name)
-    return await youtube_setup(str(account_file), handle=True, return_detail=True, headless=headless)
+    return await youtube_setup(str(account_file), handle=True, return_detail=True, headless=headless, cdp_url=cdp_url)
 
 
 async def check_youtube_account(account_name: str) -> bool:
@@ -589,6 +653,7 @@ def build_parser() -> argparse.ArgumentParser:
         action_parser.add_argument("--account", required=True, help="Douyin user-defined account_name")
         if action_name == "login":
             add_runtime_flags(action_parser)
+            action_parser.add_argument("--cdp-url", help="Attach to an existing Chrome via CDP, e.g. http://127.0.0.1:9222")
 
     upload_video_parser = douyin_actions.add_parser("upload-video", help="Upload one video to Douyin")
     upload_video_parser.add_argument("--account", required=True, help="Douyin user-defined account_name")
@@ -627,6 +692,7 @@ def build_parser() -> argparse.ArgumentParser:
         action_parser.add_argument("--account", required=True, help="Kuaishou user-defined account_name")
         if action_name == "login":
             add_runtime_flags(action_parser)
+            action_parser.add_argument("--cdp-url", help="Attach to an existing Chrome via CDP, e.g. http://127.0.0.1:9222")
 
     kuaishou_upload_video_parser = kuaishou_actions.add_parser("upload-video", help="Upload one video to Kuaishou")
     kuaishou_upload_video_parser.add_argument("--account", required=True, help="Kuaishou user-defined account_name")
@@ -655,6 +721,7 @@ def build_parser() -> argparse.ArgumentParser:
         action_parser.add_argument("--account", required=True, help="Xiaohongshu user-defined account_name")
         if action_name == "login":
             add_runtime_flags(action_parser)
+            action_parser.add_argument("--cdp-url", help="Attach to an existing Chrome via CDP, e.g. http://127.0.0.1:9222")
 
     xiaohongshu_upload_video_parser = xiaohongshu_actions.add_parser("upload-video", help="Upload one video to Xiaohongshu")
     xiaohongshu_upload_video_parser.add_argument("--account", required=True, help="Xiaohongshu user-defined account_name")
@@ -700,6 +767,7 @@ def build_parser() -> argparse.ArgumentParser:
         action_parser.add_argument("--account", required=True, help="Tencent user-defined account_name")
         if action_name == "login":
             add_runtime_flags(action_parser)
+            action_parser.add_argument("--cdp-url", help="Attach to an existing Chrome via CDP, e.g. http://127.0.0.1:9222")
 
     tencent_upload_video_parser = tencent_actions.add_parser("upload-video", help="Upload one video to WeChat Channels")
     tencent_upload_video_parser.add_argument("--account", required=True, help="Tencent user-defined account_name")
@@ -724,6 +792,7 @@ def build_parser() -> argparse.ArgumentParser:
         action_parser.add_argument("--account", required=True, help="YouTube user-defined account_name")
         if action_name == "login":
             add_runtime_flags(action_parser)
+            action_parser.add_argument("--cdp-url", help="Attach to an existing Chrome via CDP, e.g. http://127.0.0.1:9222")
 
     youtube_upload_video_parser = youtube_actions.add_parser("upload-video", help="Upload one video to YouTube")
     youtube_upload_video_parser.add_argument("--account", required=True, help="YouTube user-defined account_name")
@@ -742,7 +811,7 @@ def build_parser() -> argparse.ArgumentParser:
 async def dispatch(args: argparse.Namespace) -> int:
     if args.platform == "douyin":
         if args.action == "login":
-            result = await login_douyin_account(args.account, headless=args.headless)
+            result = await login_douyin_account(args.account, headless=args.headless, cdp_url=args.cdp_url)
             if not result["success"]:
                 raise RuntimeError(result["message"])
             print(f"Douyin login flow completed: {result['account_file']}")
@@ -807,7 +876,7 @@ async def dispatch(args: argparse.Namespace) -> int:
 
     if args.platform == "kuaishou":
         if args.action == "login":
-            result = await login_kuaishou_account(args.account, headless=args.headless)
+            result = await login_kuaishou_account(args.account, headless=args.headless, cdp_url=args.cdp_url)
             if not result["success"]:
                 raise RuntimeError(result["message"])
             print(f"Kuaishou login flow completed: {result['account_file']}")
@@ -857,7 +926,7 @@ async def dispatch(args: argparse.Namespace) -> int:
 
     if args.platform == "xiaohongshu":
         if args.action == "login":
-            result = await login_xiaohongshu_account(args.account, headless=args.headless)
+            result = await login_xiaohongshu_account(args.account, headless=args.headless, cdp_url=args.cdp_url)
             if not result["success"]:
                 raise RuntimeError(result["message"])
             print(f"Xiaohongshu login flow completed: {result['account_file']}")
@@ -947,7 +1016,7 @@ async def dispatch(args: argparse.Namespace) -> int:
 
     if args.platform == "tencent":
         if args.action == "login":
-            result = await login_tencent_account(args.account, headless=args.headless)
+            result = await login_tencent_account(args.account, headless=args.headless, cdp_url=args.cdp_url)
             if not result["success"]:
                 raise RuntimeError(result["message"])
             print(f"Tencent/WeChat Channels login flow completed: {result['account_file']}")
@@ -986,7 +1055,7 @@ async def dispatch(args: argparse.Namespace) -> int:
 
     if args.platform == "youtube":
         if args.action == "login":
-            result = await login_youtube_account(args.account, headless=args.headless)
+            result = await login_youtube_account(args.account, headless=args.headless, cdp_url=args.cdp_url)
             if not result["success"]:
                 raise RuntimeError(result["message"])
             print(f"YouTube login flow completed: {result['account_file']}")

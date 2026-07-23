@@ -72,7 +72,9 @@ def _build_launch_kwargs(headless: bool) -> dict:
     if LOCAL_CHROME_PATH:
         launch_kwargs["executable_path"] = LOCAL_CHROME_PATH
     else:
-        launch_kwargs["channel"] = "chrome"
+        # channel: 默认 chromium (patchright bundled),SAU_BROWSER_CHANNEL 可覆盖回 "chrome"
+        # 原来默认 chrome 要求系统装 Google Chrome,WSL2 / Linux server fail
+        launch_kwargs["channel"] = os.environ.get("SAU_BROWSER_CHANNEL", "chromium").strip() or "chromium"
     return launch_kwargs
 
 
@@ -381,13 +383,21 @@ async def tencent_cookie_gen(
     poll_interval: int = 3,
     max_checks: int = 100,
     headless: bool = LOCAL_CHROME_HEADLESS,
+    cdp_url: str | None = None,
 ):
     account_file = _resolve_account_file(account_file)
     Path(account_file).parent.mkdir(parents=True, exist_ok=True)
 
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=headless))
-        context = await browser.new_context()
+        if cdp_url:
+            # CDP 模式 (WSL2 + Windows Chrome via Python TCP proxy) — 不关 browser
+            browser = await playwright.chromium.connect_over_cdp(cdp_url)
+            context = browser.contexts[0] if browser.contexts else await browser.new_context()
+            should_close_browser = False
+        else:
+            browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=headless))
+            context = await browser.new_context()
+            should_close_browser = True
         qrcode_path = None
         result = _build_login_result(False, "failed", "视频号登录失败", account_file)
         try:
@@ -440,7 +450,8 @@ async def tencent_cookie_gen(
             if not result["success"]:
                 tencent_logger.error(_msg("😢", f"登录失败: {result['message']}"))
             await context.close()
-            await browser.close()
+            if should_close_browser:
+                await browser.close()
 
 
 async def tencent_setup(
@@ -449,6 +460,7 @@ async def tencent_setup(
     return_detail=False,
     qrcode_callback=None,
     headless: bool = LOCAL_CHROME_HEADLESS,
+    cdp_url: str | None = None,
 ):
     account_file = _resolve_account_file(account_file)
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
@@ -457,15 +469,15 @@ async def tencent_setup(
             return result if return_detail else False
 
         tencent_logger.info(_msg("🥹", "cookie 失效了，准备打开浏览器重新登录"))
-        result = await tencent_cookie_gen(account_file, qrcode_callback=qrcode_callback, headless=headless)
+        result = await tencent_cookie_gen(account_file, qrcode_callback=qrcode_callback, headless=headless, cdp_url=cdp_url)
         return result if return_detail else result["success"]
 
     result = _build_login_result(True, "cookie_valid", "cookie有效", account_file)
     return result if return_detail else True
 
 
-async def get_tencent_cookie(account_file, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS):
-    return await tencent_cookie_gen(account_file, qrcode_callback=qrcode_callback, headless=headless)
+async def get_tencent_cookie(account_file, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS, cdp_url: str | None = None):
+    return await tencent_cookie_gen(account_file, qrcode_callback=qrcode_callback, headless=headless, cdp_url=cdp_url)
 
 
 async def weixin_setup(
