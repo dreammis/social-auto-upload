@@ -419,6 +419,14 @@ class KSVideo(KSBaseUploader):
         kuaishou_logger.warning(_msg("😵", "视频上传摔了一跤，小人马上重新上传"))
         await page.locator('div.progress-div [class^="upload-btn-input"]').set_input_files(self.file_path)
 
+    async def _cover_preview_src(self, page: Page) -> str:
+        cover_label = page.locator("span").filter(has_text="封面设置")
+        sibling = cover_label.locator("xpath=../following-sibling::div[1]")
+        try:
+            return await sibling.locator("img").first.get_attribute("src") or ""
+        except Exception:
+            return ""
+
     async def set_thumbnail(self, page: Page):
         if not self.thumbnail_path:
             return
@@ -427,26 +435,131 @@ class KSVideo(KSBaseUploader):
 
         cover_label = page.locator("span").filter(has_text="封面设置")
         await cover_label.wait_for(state="visible", timeout=30000)
-        await cover_label.locator("xpath=../following-sibling::div[1]").locator('div').nth(0).click()
+        before_src = await self._cover_preview_src(page)
+        await cover_label.locator("xpath=../following-sibling::div[1]").locator("div").nth(0).click()
 
         modal = page.locator('div[role="document"].ant-modal')
         await modal.wait_for(state="visible", timeout=30000)
 
+        # Platform defaults to「封面截取」(video frame). Custom cover must stay on
+        #「上传封面」and be confirmed as soon as「清空上传」appears — waiting for
+        # generic <img> is wrong (SVG icons / frame strip), and ~1s later the UI
+        # often snaps back to「封面截取」, so a late 确认 applies the default frame.
         upload_cover_tab = modal.get_by_text("上传封面", exact=True)
         await upload_cover_tab.wait_for(state="visible", timeout=10000)
         await upload_cover_tab.click()
+        await asyncio.sleep(0.3)
 
-        file_input = modal.locator('input[type="file"]')
-        await file_input.wait_for(state="attached", timeout=30000)
-        await file_input.set_input_files(self.thumbnail_path)
-        await asyncio.sleep(1)
+        ratio_916 = modal.get_by_text("9:16", exact=True)
+        if await ratio_916.count():
+            try:
+                await ratio_916.first.click(timeout=3000)
+            except Exception:
+                pass
 
-        confirm_button = modal.get_by_role("button", name="确认", exact=True)
-        await confirm_button.wait_for(state="visible", timeout=10000)
-        await confirm_button.click()
+        uploaded = False
+        for attempt in range(3):
+            if await modal.get_by_text("清空上传", exact=True).count():
+                uploaded = True
+                break
 
-        await modal.wait_for(state="hidden", timeout=30000)
-        kuaishou_logger.success(_msg("🥳", "封面已经设置完成"))
+            # Prefer the visible「上传图片」chooser; hidden input alone can race the tab switch.
+            try:
+                async with page.expect_file_chooser(timeout=5000) as fc_info:
+                    upload_btn = modal.get_by_text("上传图片", exact=True)
+                    if await upload_btn.count():
+                        await upload_btn.first.click()
+                    else:
+                        await modal.get_by_text("拖拽图片到此或点击上传").click()
+                await (await fc_info.value).set_files(self.thumbnail_path)
+            except Exception:
+                file_input = modal.locator('input[type="file"]')
+                await file_input.wait_for(state="attached", timeout=10000)
+                input_count = await file_input.count()
+                target_input = file_input.nth(input_count - 1) if input_count > 1 else file_input.first
+                await target_input.set_input_files(self.thumbnail_path)
+
+            for _ in range(50):
+                if await modal.get_by_text("上传失败").count():
+                    raise RuntimeError("快手封面上传失败（页面显示上传失败）")
+                modal_text = await modal.inner_text()
+                if "清空上传" in modal_text:
+                    uploaded = True
+                    break
+                # Tab snapped back to frame picker — re-enter upload tab and retry.
+                if "拖拽图片到此或点击上传" not in modal_text and "清空上传" not in modal_text:
+                    if await upload_cover_tab.count():
+                        await upload_cover_tab.click()
+                        await asyncio.sleep(0.2)
+                    break
+                await asyncio.sleep(0.2)
+
+            if uploaded:
+                break
+            kuaishou_logger.info(_msg("🏃", f"封面预览未稳住，小人重试上传 ({attempt + 1}/3)"))
+
+        if not uploaded:
+            raise RuntimeError("快手封面未出现「清空上传」预览，已中止发布以免提交默认封面")
+
+        # 「确认」才会把裁剪后的封面 POST 到 cover/upload，拿到 coverType=2 的 coverKey。
+        # 只等 toast/预览不够稳，发布前必须等上传接口成功。
+        cover_key_holder: dict[str, str] = {}
+
+        async def _on_cover_upload(response):
+            url = response.url or ""
+            if response.request.method != "POST":
+                return
+            if "cover/upload" not in url and "cover/edit/cover/upload" not in url:
+                return
+            try:
+                payload = await response.json()
+            except Exception:
+                return
+            data = (payload or {}).get("data") or {}
+            key = data.get("coverKey") or ""
+            if key and (payload or {}).get("result") == 1:
+                cover_key_holder["coverKey"] = key
+
+        page.on("response", _on_cover_upload)
+        try:
+            confirm_button = modal.get_by_role("button", name="确认", exact=True)
+            await confirm_button.click()
+            await modal.wait_for(state="hidden", timeout=30000)
+
+            applied = False
+            for _ in range(40):
+                if cover_key_holder.get("coverKey"):
+                    applied = True
+                    break
+                if await page.get_by_text("封面应用成功").count():
+                    # toast 可能先于 coverKey；再多等几拍接口
+                    after_src = await self._cover_preview_src(page)
+                    if after_src and after_src != before_src:
+                        applied = True
+                await asyncio.sleep(0.25)
+
+            if not cover_key_holder.get("coverKey"):
+                # toast/预览变了但没抓到 key 时，再给接口一点时间
+                for _ in range(20):
+                    if cover_key_holder.get("coverKey"):
+                        break
+                    await asyncio.sleep(0.25)
+
+            if not cover_key_holder.get("coverKey") and not applied:
+                raise RuntimeError("快手封面确认后未见 coverKey/应用成功，已中止发布")
+
+            if cover_key_holder.get("coverKey"):
+                kuaishou_logger.info(
+                    _msg("🖼️", f"封面 coverKey 已就绪: {cover_key_holder['coverKey']}")
+                )
+            # 给 snapshot/save 一点时间写入 coverType=2，避免立刻点发布仍带旧封面
+            await asyncio.sleep(1.0)
+            kuaishou_logger.success(_msg("🥳", "封面已经设置完成"))
+        finally:
+            try:
+                page.remove_listener("response", _on_cover_upload)
+            except Exception:
+                pass
 
     async def upload(self, playwright: Playwright) -> None:
         kuaishou_logger.info(_msg("🧍", "小人先检查 cookie、视频文件、封面和发布时间"))
@@ -530,7 +643,13 @@ class KSVideo(KSBaseUploader):
             if retry_count == max_retries:
                 kuaishou_logger.warning(_msg("😵", "超过最大重试次数，视频上传可能未完成"))
 
-            await self.set_thumbnail(page)
+            try:
+                await self.set_thumbnail(page)
+            except Exception as exc:
+                kuaishou_logger.error(
+                    _msg("😵", f"封面未设置成功，已中止发布: {exc}")
+                )
+                raise
 
             if self.publish_strategy == KUAISHOU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
                 await self.set_schedule_time(page, self.publish_date)
