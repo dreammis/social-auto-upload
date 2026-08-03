@@ -68,7 +68,10 @@ async def cookie_auth(account_file):
     # 即便有头，页面慢/瞬时跳转仍会让 wait_for_url(精确URL,5s) 误判→重试3次+宽松判定(URL含 content/upload 且无登录文案)。
     # 允许 linux server 用户通过 env var 强制无头: DOUYIN_COOKIE_AUTH_HEADLESS=true
     use_headless = os.environ.get("DOUYIN_COOKIE_AUTH_HEADLESS", "").lower() in ("1", "true", "yes")
-    launch_kwargs = {"headless": use_headless, "channel": "chrome", "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
+    # channel: 默认 "chromium" (patchright/playwright bundled),W通过 "SAU_BROWSER_CHANNEL" env 覆盖。
+    # 原来默认 "chrome" 要求系统装 Google Chrome,在 WSL2 / Linux server 上 fail → 'Chromium 仍需装 chrome'。
+    channel = os.environ.get("SAU_BROWSER_CHANNEL", "chromium").strip() or "chromium"
+    launch_kwargs = {"headless": use_headless, "channel": channel, "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
     for _attempt in range(3):
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(**launch_kwargs)
