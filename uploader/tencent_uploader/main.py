@@ -16,6 +16,7 @@ from patchright.async_api import async_playwright
 from conf import BASE_DIR, DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
+from utils.browser_profile import launch_profile
 from utils.log import tencent_logger
 
 TENCENT_LOGIN_URL = "https://channels.weixin.qq.com"
@@ -108,9 +109,15 @@ def format_str_for_short_title(origin_title: str) -> str:
 async def cookie_auth(account_file):
     account_file = _resolve_account_file(account_file)
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=True))
+        context = await launch_profile(
+            playwright,
+            "tencent",
+            account_file,
+            headless=True,
+            executable_path=LOCAL_CHROME_PATH or None,
+            channel=None if LOCAL_CHROME_PATH else "chrome",
+        )
         try:
-            context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
             page = await context.new_page()
             await page.goto(TENCENT_UPLOAD_URL, wait_until="domcontentloaded")
@@ -136,7 +143,7 @@ async def cookie_auth(account_file):
             tencent_logger.warning(_msg("😵", f"cookie 校验时出错，按失效处理: {exc}"))
             return False
         finally:
-            await browser.close()
+            await context.close()
 
 
 async def _extract_tencent_qrcode_src(page: Page) -> str:
@@ -935,8 +942,14 @@ class TencentVideo(TencentBaseUploader):
         await self.validate_upload_args()
         tencent_logger.info(_msg("🥳", "上传前检查通过"))
 
-        browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=self.headless))
-        context = await browser.new_context(storage_state=self.account_file)
+        context = await launch_profile(
+            playwright,
+            "tencent",
+            self.account_file,
+            headless=self.headless,
+            executable_path=LOCAL_CHROME_PATH or None,
+            channel=None if LOCAL_CHROME_PATH else "chrome",
+        )
 
         try:
             page = await context.new_page()
@@ -959,7 +972,6 @@ class TencentVideo(TencentBaseUploader):
             tencent_logger.success(_msg("🥳", "cookie 更新完毕"))
         finally:
             await context.close()
-            await browser.close()
 
     async def tencent_upload_video(self):
         async with async_playwright() as playwright:
@@ -1039,8 +1051,14 @@ class TencentNote(TencentBaseUploader):
         await self.validate_upload_args()
         tencent_logger.info(_msg("🥳", "图文上传前检查通过"))
 
-        browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=self.headless))
-        context = await browser.new_context(storage_state=self.account_file)
+        context = await launch_profile(
+            playwright,
+            "tencent",
+            self.account_file,
+            headless=self.headless,
+            executable_path=LOCAL_CHROME_PATH or None,
+            channel=None if LOCAL_CHROME_PATH else "chrome",
+        )
         context = await set_init_script(context)
 
         try:
@@ -1059,7 +1077,6 @@ class TencentNote(TencentBaseUploader):
             tencent_logger.success(_msg("🥳", "cookie 更新完毕"))
         finally:
             await context.close()
-            await browser.close()
 
     async def tencent_upload_note(self):
         async with async_playwright() as playwright:

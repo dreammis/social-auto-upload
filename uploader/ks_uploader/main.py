@@ -14,6 +14,7 @@ from patchright.async_api import async_playwright
 from conf import DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
+from utils.browser_profile import launch_profile
 from utils.files_times import get_absolute_path
 from utils.login_qrcode import build_login_qrcode_path
 from utils.login_qrcode import decode_qrcode_from_path
@@ -153,11 +154,22 @@ async def _is_ks_login_page_gone(page: Page) -> bool:
 async def cookie_auth(account_file):
     async with async_playwright() as playwright:
         if LOCAL_CHROME_PATH:
-            browser = await playwright.chromium.launch(headless=True, executable_path=LOCAL_CHROME_PATH)
+            context = await launch_profile(
+                playwright,
+                "kuaishou",
+                account_file,
+                headless=True,
+                executable_path=LOCAL_CHROME_PATH,
+            )
         else:
-            browser = await playwright.chromium.launch(headless=True, channel="chromium")
+            context = await launch_profile(
+                playwright,
+                "kuaishou",
+                account_file,
+                headless=True,
+                channel="chromium",
+            )
         try:
-            context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
             page = await context.new_page()
             await page.goto(KUAISHOU_UPLOAD_URL)
@@ -171,7 +183,7 @@ async def cookie_auth(account_file):
             kuaishou_logger.warning(_msg("😵", f"cookie 校验时出错，按失效处理: {exc}"))
             return False
         finally:
-            await browser.close()
+            await context.close()
 
 
 async def ks_setup(account_file, handle=False, return_detail=False, qrcode_callback=None, headless: bool = LOCAL_CHROME_HEADLESS, cdp_url: str | None = None):
@@ -566,17 +578,14 @@ class KSVideo(KSBaseUploader):
         await self.validate_upload_args()
         kuaishou_logger.info(_msg("🥳", "上传前检查通过"))
 
-        if self.local_executable_path:
-            browser = await playwright.chromium.launch(
-                headless=self.headless,
-                executable_path=self.local_executable_path,
-            )
-        else:
-            browser = await playwright.chromium.launch(
-                headless=self.headless,
-                channel="chromium",
-            )
-        context = await browser.new_context(storage_state=self.account_file)
+        context = await launch_profile(
+            playwright,
+            "kuaishou",
+            self.account_file,
+            headless=self.headless,
+            executable_path=self.local_executable_path,
+            channel=None if self.local_executable_path else "chromium",
+        )
         context = await set_init_script(context)
 
         upload_success = False
@@ -681,7 +690,6 @@ class KSVideo(KSBaseUploader):
                 kuaishou_logger.success(_msg("🥳", "cookie 更新完毕"))
                 await asyncio.sleep(2)
             await context.close()
-            await browser.close()
 
     async def main(self):
         async with async_playwright() as playwright:
@@ -818,17 +826,14 @@ class KSNote(KSBaseUploader):
         await self.validate_upload_args()
         kuaishou_logger.info(_msg("🥳", "图文上传前检查通过"))
 
-        if self.local_executable_path:
-            browser = await playwright.chromium.launch(
-                headless=self.headless,
-                executable_path=self.local_executable_path,
-            )
-        else:
-            browser = await playwright.chromium.launch(
-                headless=self.headless,
-                channel="chromium",
-            )
-        context = await browser.new_context(storage_state=self.account_file)
+        context = await launch_profile(
+            playwright,
+            "kuaishou",
+            self.account_file,
+            headless=self.headless,
+            executable_path=self.local_executable_path,
+            channel=None if self.local_executable_path else "chromium",
+        )
         context = await set_init_script(context)
 
         upload_success = False
@@ -846,7 +851,6 @@ class KSNote(KSBaseUploader):
                 kuaishou_logger.success(_msg("🥳", "cookie 更新完毕"))
                 await asyncio.sleep(2)
             await context.close()
-            await browser.close()
 
     async def main(self):
         async with async_playwright() as playwright:
