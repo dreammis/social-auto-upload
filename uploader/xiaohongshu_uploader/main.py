@@ -202,6 +202,7 @@ async def xiaohongshu_setup(
     return_detail=False,
     qrcode_callback=None,
     headless: bool = LOCAL_CHROME_HEADLESS,
+    cdp_url: str | None = None,
 ):
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
@@ -212,6 +213,7 @@ async def xiaohongshu_setup(
             account_file,
             qrcode_callback=qrcode_callback,
             headless=headless,
+            cdp_url=cdp_url,
         )
         return result if return_detail else result["success"]
 
@@ -225,6 +227,7 @@ async def xiaohongshu_cookie_gen(
     poll_interval: int = 3,
     max_checks: int = 100,
     headless: bool = LOCAL_CHROME_HEADLESS,
+    cdp_url: str | None = None,
 ):
     if headless:
         xiaohongshu_logger.info(_msg("🖼️", "小红书登录将以无头模式运行，小人会输出终端二维码并保存本地二维码图片"))
@@ -233,8 +236,16 @@ async def xiaohongshu_cookie_gen(
     account_path.parent.mkdir(parents=True, exist_ok=True)
 
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=headless, channel="chromium")
-        context = await browser.new_context()
+        if cdp_url:
+            # 接已开浏览器 (WSL2 + Windows Chrome via Python TCP proxy)
+            # CDP 模式下不要 close browser — 会关掉用户的 Chrome
+            browser = await playwright.chromium.connect_over_cdp(cdp_url)
+            context = browser.contexts[0] if browser.contexts else await browser.new_context()
+            should_close_browser = False
+        else:
+            browser = await playwright.chromium.launch(headless=headless, channel="chromium")
+            context = await browser.new_context()
+            should_close_browser = True
         context = await set_init_script(context)
         qrcode_path = None
         qrcode_info = None
@@ -282,7 +293,8 @@ async def xiaohongshu_cookie_gen(
             if not result["success"]:
                 xiaohongshu_logger.error(_msg("😢", f"登录失败: {result['message']}"))
             await context.close()
-            await browser.close()
+            if should_close_browser:
+                await browser.close()
         return result
 
 
