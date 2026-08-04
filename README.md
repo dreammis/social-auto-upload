@@ -81,9 +81,55 @@
 | TikTok | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 当前示例走 Chrome 版实现 |
 | YouTube | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化（Studio），支持加入播放列表/可见性 |
 
+## 🧠 核心原理
+
+这个项目的本质，不是“调用平台官方上传 API”，而是“用 Python 控制真实浏览器，替你完成人工上传动作”。
+
+你可以把它理解成四层：
+
+- `sau_cli.py`：命令入口，只负责接收命令、解析参数、分发动作
+- `uploader/`：多数平台的实际自动化实现，负责登录、上传、发布
+- `patchright`：浏览器驱动层，负责启动和控制 Chromium
+- 平台创作者后台：真正执行上传动作的页面
+
+Bilibili 是一个例外，它不是走浏览器 uploader 主链路，而是由 CLI 调到 `uploader/bilibili_uploader/runtime.py`，再去调用外部 `biliup` 进程完成上传。
+
+完整运行链路通常是：
+
+```text
+sau 命令
+  ↓
+CLI 解析参数
+  ↓
+进入对应平台实现
+  ↓
+多数平台：启动/复用浏览器 → 恢复账号登录态 → 打开创作者后台 → 填写信息 → 提交发布
+  ↓
+Bilibili：CLI → runtime.py → 外部 biliup 进程 → 上传发布
+```
+
+登录态会按“平台 + 账号名”单独保存成本地文件，所以第一次一般需要扫码或人工登录，之后可以复用。二维码、cookie 校验、登录态保存这几步，主要在 `utils/login_qrcode.py`、`utils/base_social_media.py` 和各平台的 `login/check` 流程里完成。
+
+### 新人 / 新 Agent 的最短阅读顺序
+
+如果你第一次接触这个仓库，建议按这个顺序看：
+
+1. `README.md`：先看项目定位和当前主线
+2. `docs/CLI.md`：看 CLI 暴露了哪些命令和参数
+3. `sau_cli.py`：看命令怎么分发到各平台
+4. `uploader/<platform>/main.py`：看多数平台到底怎么登录和上传
+5. `uploader/bilibili_uploader/runtime.py`：看 Bilibili 为什么是外部 `biliup` 链路
+6. `utils/login_qrcode.py`、`utils/base_social_media.py`：看二维码和浏览器公共处理
+
+### 这项目的设计边界
+
+- 主线是 CLI + uploader，不是历史 Web 页面
+- 当前重点是浏览器自动化和可重复执行，不是重新造一套前端
+- 新增平台或新能力时，优先沿着现有 `sau_cli.py -> uploader -> utils` 这条链路扩展
+
 ### AI这么强，为什么还需要这个项目
-在你使用AI的能力，browser agent等等，每次都让 agent 重新解析网页、截图理解, 临场判断
-该项目经过大量验证，上传这种 高频，重复，无聊的工作交给脚本和程序去执行
+在你使用AI的能力，browser agent等等，每次都让 agent 重新解析网页、截图理解，临场判断
+该项目经过大量验证，上传这种 高频、重复、无聊的工作交给脚本和程序去执行
 
 
 ## 💾安装指南
