@@ -12,6 +12,7 @@ Login is interactive (Google account, no QR code): the browser opens, the user s
 the storage_state is saved. Reuse it afterwards for fully unattended uploads.
 """
 import asyncio
+import os
 from pathlib import Path
 
 from patchright.async_api import Page, Playwright, async_playwright
@@ -32,6 +33,10 @@ STUDIO_URL = "https://studio.youtube.com"
 UPLOAD_URL = "https://www.youtube.com/upload"
 VISIBILITY = {"public": "PUBLIC", "unlisted": "UNLISTED", "private": "PRIVATE"}
 
+# channel: 默认 chromium (patchright bundled),SAU_BROWSER_CHANNEL 可覆盖回 "chrome"
+# 原来默认 chrome 要求系统装 Google Chrome,WSL2 / Linux server fail
+YT_CHANNEL = os.environ.get("SAU_BROWSER_CHANNEL", "chromium").strip() or "chromium"
+
 
 def _msg(emoji: str, text: str) -> str:
     return f"{emoji} {text}"
@@ -50,7 +55,7 @@ def _build_login_result(success, status, message, account_file, current_url=""):
 async def cookie_auth(account_file) -> bool:
     """登录态是否仍有效：带 cookie 打开 Studio，没被踢到 Google 登录页且进入了频道页即有效。"""
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True, channel="chrome")
+        browser = await playwright.chromium.launch(headless=True, channel=YT_CHANNEL)
         try:
             context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
@@ -71,7 +76,7 @@ async def youtube_cookie_gen(account_file, headless: bool = False):
     """交互式登录：开浏览器让用户登录 Google/YouTube，进入频道页后保存 storage_state。"""
     async with async_playwright() as playwright:
         # 登录必须显形，让用户输账号密码/二步验证
-        browser = await playwright.chromium.launch(headless=False, channel="chrome")
+        browser = await playwright.chromium.launch(headless=False, channel=YT_CHANNEL)
         context = await browser.new_context()
         context = await set_init_script(context)
         page = await context.new_page()
@@ -199,7 +204,7 @@ class YouTubeVideo(BaseVideoUploader):
 
     async def upload(self, playwright: Playwright) -> None:
         browser = await playwright.chromium.launch(
-            headless=self.headless, channel="chrome",
+            headless=self.headless, channel=YT_CHANNEL,
             proxy={"server": YT_PROXY} if YT_PROXY else None,
         )
         context = await browser.new_context(storage_state=self.account_file)

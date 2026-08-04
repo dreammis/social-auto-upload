@@ -68,7 +68,10 @@ async def cookie_auth(account_file):
     # 即便有头，页面慢/瞬时跳转仍会让 wait_for_url(精确URL,5s) 误判→重试3次+宽松判定(URL含 content/upload 且无登录文案)。
     # 允许 linux server 用户通过 env var 强制无头: DOUYIN_COOKIE_AUTH_HEADLESS=true
     use_headless = os.environ.get("DOUYIN_COOKIE_AUTH_HEADLESS", "").lower() in ("1", "true", "yes")
-    launch_kwargs = {"headless": use_headless, "channel": "chrome", "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
+    # channel: 默认 "chromium" (patchright/playwright bundled),W通过 "SAU_BROWSER_CHANNEL" env 覆盖。
+    # 原来默认 "chrome" 要求系统装 Google Chrome,在 WSL2 / Linux server 上 fail → 'Chromium 仍需装 chrome'。
+    channel = os.environ.get("SAU_BROWSER_CHANNEL", "chromium").strip() or "chromium"
+    launch_kwargs = {"headless": use_headless, "channel": channel, "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
     for _attempt in range(3):
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(**launch_kwargs)
@@ -554,6 +557,38 @@ class DouYinVideo(DouYinBaseUploader):
             return
         if not await self.set_self_declaration(page, self.declaration):
             raise RuntimeError(f"自主声明「{self.declaration}」设置失败，拒绝继续发布")
+
+    async def _submit_sms_verify_code(self, page: Page, sms_input, code: str, code_file: str) -> bool:
+        douyin_logger.info(_msg("✍️", f"已获取验证码，准备填入: {code}"))
+        await sms_input.click()
+        await sms_input.fill(code)
+        douyin_logger.info(_msg("✅", "验证码已填入输入框"))
+        await page.wait_for_timeout(500)
+
+        verify_btn = page.locator('div.uc-ui-verify_sms-verify_button:has-text("验证")').first
+        if await verify_btn.count() and await verify_btn.is_visible():
+            try:
+                await verify_btn.click(force=True)
+                douyin_logger.success(_msg("✅", "已点击「验证」按钮 (force)"))
+            except Exception:
+                await page.eval_on_selector('div.uc-ui-verify_sms-verify_button', 'el => el.click()')
+                douyin_logger.success(_msg("✅", "已点击「验证」按钮 (JS)"))
+        else:
+            verify_by_text = page.get_by_text("验证", exact=True).first
+            if await verify_by_text.count():
+                await verify_by_text.click(force=True)
+                douyin_logger.success(_msg("✅", "已点击「验证」按钮 (text)"))
+            else:
+                douyin_logger.warning(_msg("⚠️", "未找到验证按钮，尝试按Enter"))
+                await page.keyboard.press("Enter")
+
+        if os.path.exists(code_file):
+            os.remove(code_file)
+            douyin_logger.info(_msg("🧹", "验证码文件已清理"))
+
+        await page.wait_for_timeout(3000)
+        douyin_logger.info(_msg("🔄", "验证码处理完成，继续发布流程"))
+        return True
 
     async def _submit_sms_verify_code(self, page: Page, sms_input, code: str, code_file: str) -> bool:
         douyin_logger.info(_msg("✍️", f"已获取验证码，准备填入: {code}"))
