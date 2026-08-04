@@ -5,6 +5,7 @@ import asyncio
 import base64
 import inspect
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
@@ -24,6 +25,8 @@ TENCENT_UPLOAD_URL = "https://channels.weixin.qq.com/platform/post/create"
 TENCENT_MANAGE_URL = "https://channels.weixin.qq.com/platform/post/list"
 TENCENT_PUBLISH_STRATEGY_IMMEDIATE = "immediate"
 TENCENT_PUBLISH_STRATEGY_SCHEDULED = "scheduled"
+TENCENT_UPLOAD_TIMEOUT_SEC = 300
+TENCENT_PUBLISH_TIMEOUT_SEC = 60
 
 
 def _msg(emoji: str, text: str) -> str:
@@ -724,6 +727,7 @@ class TencentBaseUploader(BaseVideoUploader):
             tencent_logger.warning(_msg("📭", "本视频未声明原创（页面无入口或为可选项），跳过并继续发布"))
 
     async def wait_for_upload_complete(self, page: Page) -> None:
+        started_at = time.monotonic()
         while True:
             try:
                 publish_button = page.get_by_role("button", name="发表")
@@ -740,11 +744,27 @@ class TencentBaseUploader(BaseVideoUploader):
                 if upload_failed and delete_button:
                     tencent_logger.error(_msg("😵", "发现上传出错了，准备重试"))
                     await self.handle_upload_error(page)
+
+                if time.monotonic() - started_at > TENCENT_UPLOAD_TIMEOUT_SEC:
+                    try:
+                        diagnostic_path = Path(BASE_DIR) / "debug_tencent_upload_timeout.png"
+                        await page.screenshot(path=str(diagnostic_path), full_page=True)
+                        visible_text = (await page.locator("body").inner_text())[-2000:]
+                    except Exception as diagnostic_exc:
+                        diagnostic_path = "unavailable"
+                        visible_text = f"diagnostic failed: {diagnostic_exc}"
+                    raise TimeoutError(
+                        f"视频号上传/封面生成超过 {TENCENT_UPLOAD_TIMEOUT_SEC} 秒；"
+                        f"诊断截图: {diagnostic_path}；页面文本: {visible_text}"
+                    )
             except Exception:
+                if time.monotonic() - started_at > TENCENT_UPLOAD_TIMEOUT_SEC:
+                    raise
                 tencent_logger.info(_msg("🏃", "正在上传视频中..."))
                 await asyncio.sleep(2)
 
     async def submit_publish(self, page: Page) -> None:
+        started_at = time.monotonic()
         while True:
             try:
                 if getattr(self, "is_draft", False):
@@ -771,6 +791,10 @@ class TencentBaseUploader(BaseVideoUploader):
                         tencent_logger.success(_msg("🥳", "视频发布成功"))
                         break
                 tencent_logger.exception(f"  [-] Exception: {exc}")
+                if time.monotonic() - started_at > TENCENT_PUBLISH_TIMEOUT_SEC:
+                    raise TimeoutError(
+                        f"视频号点击发表后超过 {TENCENT_PUBLISH_TIMEOUT_SEC} 秒未跳转，当前页面: {current_url}"
+                    ) from exc
                 tencent_logger.info(_msg("🏃", "视频正在发布中..."))
                 await asyncio.sleep(0.5)
 

@@ -77,7 +77,8 @@ async def cookie_auth(account_file):
                 "douyin",
                 account_file,
                 headless=use_headless,
-                channel="chrome",
+                executable_path=LOCAL_CHROME_PATH or None,
+                channel=None if LOCAL_CHROME_PATH else "chromium",
                 args=launch_kwargs["args"],
             )
             try:
@@ -238,7 +239,13 @@ async def douyin_cookie_gen(
             context = browser.contexts[0] if browser.contexts else await browser.new_context()
             should_close_context = False
         else:
-            browser = await playwright.chromium.launch(headless=headless, channel="chromium")
+            if LOCAL_CHROME_PATH:
+                browser = await playwright.chromium.launch(
+                    headless=headless,
+                    executable_path=LOCAL_CHROME_PATH,
+                )
+            else:
+                browser = await playwright.chromium.launch(headless=headless, channel="chromium")
             context = await browser.new_context()
             should_close_context = True
         context = await set_init_script(context)
@@ -686,7 +693,8 @@ class DouYinVideo(DouYinBaseUploader):
             "douyin",
             self.account_file,
             headless=self.headless,
-            channel="chromium",
+            executable_path=LOCAL_CHROME_PATH or None,
+            channel=None if LOCAL_CHROME_PATH else "chromium",
             permissions=["geolocation"],
         )
         context = await set_init_script(context)
@@ -931,7 +939,8 @@ class DouYinNote(DouYinBaseUploader):
             "douyin",
             self.account_file,
             headless=self.headless,
-            channel="chromium",
+            executable_path=LOCAL_CHROME_PATH or None,
+            channel=None if LOCAL_CHROME_PATH else "chromium",
             permissions=["geolocation"],
         )
         context = await set_init_script(context)

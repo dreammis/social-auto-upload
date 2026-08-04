@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import tempfile
 from pathlib import Path
 
 from patchright.async_api import Playwright
@@ -40,12 +42,31 @@ async def launch_profile(
         options["executable_path"] = executable_path
     elif channel:
         options["channel"] = channel
-    if args:
-        options["args"] = args
+    browser_args = list(args or [])
+    if "--disable-crash-reporter" not in browser_args:
+        browser_args.append("--disable-crash-reporter")
+    options["args"] = browser_args
     if permissions:
         options["permissions"] = permissions
 
-    context = await playwright.chromium.launch_persistent_context(str(profile), **options)
+    try:
+        context = await playwright.chromium.launch_persistent_context(
+            str(profile), **options
+        )
+    except Exception as first_exc:
+        # A stale Chromium lock or a transient Patchright driver disconnect
+        # should not consume a scheduled publish. Keep the stable profile and
+        # retry once in an isolated recovery profile.
+        await asyncio.sleep(1)
+        recovery = Path(
+            tempfile.mkdtemp(prefix=f".recovery-{platform}-", dir=str(PROFILE_ROOT))
+        )
+        try:
+            context = await playwright.chromium.launch_persistent_context(
+                str(recovery), **options
+            )
+        except Exception:
+            raise first_exc
 
     # launch_persistent_context has no storage_state option. Import the legacy
     # account file explicitly so existing logins can seed the new profile.
