@@ -569,12 +569,22 @@ class TencentBaseUploader(BaseVideoUploader):
 
         fi = await find_file_input()
         if fi is None:
-            # 助手落在首页：先点「发表视频」唤出编辑器与上传控件
-            publish_btn = page.get_by_text("发表视频").first
-            if await publish_btn.count():
-                await publish_btn.click()
-                await asyncio.sleep(3)
-            for _ in range(20):
+            # 新版视频号助手先落在首页；必须点击唯一可见的「发表视频」按钮，
+            # 路由切到 /platform/post/create 后上传 input 才会挂载。
+            publish_buttons = page.get_by_role("button", name="发表视频", exact=True)
+            clicked_publish = False
+            for index in range(await publish_buttons.count()):
+                candidate = publish_buttons.nth(index)
+                if await candidate.is_visible():
+                    await candidate.click(force=True)
+                    clicked_publish = True
+                    break
+            if clicked_publish:
+                try:
+                    await page.wait_for_url("**/platform/post/create", timeout=30000)
+                except Exception:
+                    pass
+            for _ in range(45):
                 fi = await find_file_input()
                 if fi is not None:
                     break
@@ -717,13 +727,20 @@ class TencentBaseUploader(BaseVideoUploader):
             tencent_logger.warning(_msg("📭", "本视频未声明原创（页面无入口或为可选项），跳过并继续发布"))
 
     async def wait_for_upload_complete(self, page: Page) -> None:
+        deadline = asyncio.get_running_loop().time() + 20 * 60
         while True:
+            if asyncio.get_running_loop().time() >= deadline:
+                raise TimeoutError("等待视频号上传完成超过 20 分钟")
             try:
-                publish_button = page.get_by_role("button", name="发表")
-                button_class = await publish_button.get_attribute("class")
-                if button_class and "weui-desktop-btn_disabled" not in button_class:
-                    tencent_logger.info(_msg("🥳", "视频上传完毕"))
-                    break
+                publish_button = page.locator('div.form-btns button:has-text("发表"):visible').first
+                if await publish_button.count():
+                    button_class = await publish_button.get_attribute("class")
+                    if (
+                        not await publish_button.is_disabled()
+                        and (not button_class or "weui-desktop-btn_disabled" not in button_class)
+                    ):
+                        tencent_logger.info(_msg("🥳", "视频上传完毕"))
+                        break
 
                 tencent_logger.info(_msg("🏃", "正在上传视频中..."))
                 await asyncio.sleep(2)
