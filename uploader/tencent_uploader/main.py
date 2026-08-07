@@ -568,26 +568,29 @@ class TencentBaseUploader(BaseVideoUploader):
             return None
 
         fi = await find_file_input()
-        if fi is None:
-            # 新版视频号助手先落在首页；必须点击唯一可见的「发表视频」按钮，
-            # 路由切到 /platform/post/create 后上传 input 才会挂载。
-            publish_buttons = page.get_by_role("button", name="发表视频", exact=True)
-            clicked_publish = False
-            for index in range(await publish_buttons.count()):
-                candidate = publish_buttons.nth(index)
-                if await candidate.is_visible():
-                    await candidate.click(force=True)
-                    clicked_publish = True
-                    break
-            if clicked_publish:
+        clicked_publish = False
+        for _ in range(60):
+            if fi is not None:
+                break
+            if not clicked_publish:
+                # 新版视频号助手可能先落在首页，且「发表视频」按钮异步出现。
+                # 持续轮询所有可访问 button；Patchright 在当前页面上按名称精确匹配不稳定。
                 try:
-                    await page.wait_for_url("**/platform/post/create", timeout=30000)
+                    publish_buttons = await page.get_by_role("button").all()
                 except Exception:
-                    pass
-            for _ in range(45):
-                fi = await find_file_input()
-                if fi is not None:
-                    break
+                    publish_buttons = []
+                for candidate in publish_buttons:
+                    try:
+                        button_text = (await candidate.inner_text()).strip()
+                        is_visible = await candidate.is_visible()
+                    except Exception:
+                        continue
+                    if "发表视频" in button_text and is_visible:
+                        await candidate.click(force=True)
+                        clicked_publish = True
+                        break
+            fi = await find_file_input()
+            if fi is None:
                 await asyncio.sleep(1)
         if fi is None:
             raise RuntimeError("未找到视频号文件上传框")
