@@ -513,6 +513,33 @@ class TencentBaseUploader(BaseVideoUploader):
         else:
             self.publish_date = 0
 
+    async def wait_for_realtime_verification(
+        self,
+        page: Page,
+        qr_path: str | Path | None = None,
+        timeout_seconds: float = 10 * 60,
+        poll_interval_seconds: float = 2,
+    ) -> Path | None:
+        dialog = page.locator("div.weui-desktop-dialog__wrp:visible").filter(has_text="实名验证").first
+        if not await dialog.count() or not await dialog.is_visible():
+            return None
+
+        output_path = Path(qr_path) if qr_path else Path(self.account_file).with_name(
+            f"{Path(self.account_file).stem}_verification_qr.png"
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        await dialog.screenshot(path=str(output_path))
+        tencent_logger.warning(_msg("📱", f"需要管理员微信扫码完成实名验证: {output_path}"))
+
+        deadline = asyncio.get_running_loop().time() + timeout_seconds
+        while await dialog.count() and await dialog.is_visible():
+            if asyncio.get_running_loop().time() >= deadline:
+                raise TimeoutError("等待视频号管理员实名验证超时")
+            await asyncio.sleep(poll_interval_seconds)
+
+        tencent_logger.success(_msg("🥳", "管理员实名验证已完成，继续发表"))
+        return output_path
+
     async def set_schedule_time_tencent(self, page: Page, publish_date: datetime):
         label_element = page.locator("label").filter(has_text="定时").nth(1)
         await label_element.click()
@@ -946,6 +973,7 @@ class TencentVideo(TencentBaseUploader):
             )
 
     async def prepare_video_for_publish(self, page: Page) -> None:
+        await self.wait_for_realtime_verification(page)
         await self.fill_title_and_tags(page)
         await self.fill_description(page)
         await self.apply_collection(page)
