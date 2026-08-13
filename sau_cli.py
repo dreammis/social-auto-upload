@@ -95,6 +95,7 @@ class KuaishouVideoUploadRequest:
     publish_strategy: str = KUAISHOU_PUBLISH_STRATEGY_IMMEDIATE
     debug: bool = True
     headless: bool = True
+    collection_name: str | None = None
 
 
 @dataclass(slots=True)
@@ -407,6 +408,7 @@ async def upload_kuaishou_video(request: KuaishouVideoUploadRequest) -> Path:
         publish_strategy=request.publish_strategy,
         debug=request.debug,
         headless=request.headless,
+        collection_name=request.collection_name,
     )
     await app.main()
     return account_file
@@ -636,6 +638,7 @@ def build_parser() -> argparse.ArgumentParser:
     kuaishou_upload_video_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
     kuaishou_upload_video_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
     kuaishou_upload_video_parser.add_argument("--thumbnail", type=existing_file_path, help="Optional thumbnail path")
+    kuaishou_upload_video_parser.add_argument("--collection", default=None, help="Optional collection name to add the work into (must already exist)")
     add_runtime_flags(kuaishou_upload_video_parser)
 
     kuaishou_upload_note_parser = kuaishou_actions.add_parser("upload-note", help="Upload one note to Kuaishou")
@@ -832,6 +835,7 @@ async def dispatch(args: argparse.Namespace) -> int:
                 publish_strategy=publish_strategy,
                 debug=args.debug,
                 headless=args.headless,
+                collection_name=args.collection,
             )
             await upload_kuaishou_video(request)
             print(f"Kuaishou video upload submitted: {request.video_file}")
