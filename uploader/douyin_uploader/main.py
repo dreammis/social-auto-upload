@@ -14,6 +14,7 @@ from patchright.async_api import async_playwright
 from conf import BASE_DIR, DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
+from utils.browser_profile import launch_profile
 from utils.login_qrcode import build_login_qrcode_path
 from utils.login_qrcode import decode_qrcode_from_path
 from utils.login_qrcode import print_terminal_qrcode
@@ -71,9 +72,16 @@ async def cookie_auth(account_file):
     launch_kwargs = {"headless": use_headless, "channel": "chrome", "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
     for _attempt in range(3):
         async with async_playwright() as playwright:
-            browser = await playwright.chromium.launch(**launch_kwargs)
+            context = await launch_profile(
+                playwright,
+                "douyin",
+                account_file,
+                headless=use_headless,
+                executable_path=LOCAL_CHROME_PATH or None,
+                channel=None if LOCAL_CHROME_PATH else "chromium",
+                args=launch_kwargs["args"],
+            )
             try:
-                context = await browser.new_context(storage_state=account_file)
                 context = await set_init_script(context)
                 page = await context.new_page()
                 await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
@@ -84,7 +92,7 @@ async def cookie_auth(account_file):
             except Exception:
                 pass
             finally:
-                await browser.close()
+                await context.close()
     return False
 
 
@@ -231,7 +239,13 @@ async def douyin_cookie_gen(
             context = browser.contexts[0] if browser.contexts else await browser.new_context()
             should_close_context = False
         else:
-            browser = await playwright.chromium.launch(headless=headless, channel="chromium")
+            if LOCAL_CHROME_PATH:
+                browser = await playwright.chromium.launch(
+                    headless=headless,
+                    executable_path=LOCAL_CHROME_PATH,
+                )
+            else:
+                browser = await playwright.chromium.launch(headless=headless, channel="chromium")
             context = await browser.new_context()
             should_close_context = True
         context = await set_init_script(context)
@@ -674,9 +688,13 @@ class DouYinVideo(DouYinBaseUploader):
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium")
-        context = await browser.new_context(
-            storage_state=f"{self.account_file}",
+        context = await launch_profile(
+            playwright,
+            "douyin",
+            self.account_file,
+            headless=self.headless,
+            executable_path=LOCAL_CHROME_PATH or None,
+            channel=None if LOCAL_CHROME_PATH else "chromium",
             permissions=["geolocation"],
         )
         context = await set_init_script(context)
@@ -744,10 +762,6 @@ class DouYinVideo(DouYinBaseUploader):
                 await context.close()
             except Exception:
                 pass
-            try:
-                await browser.close()
-            except Exception:
-                pass
             raise
 
         third_part_element = '[class^="info"] > [class^="first-part"] div div.semi-switch'
@@ -802,7 +816,6 @@ class DouYinVideo(DouYinBaseUploader):
         douyin_logger.success(_msg("🥳", "cookie 更新完毕"))
         await asyncio.sleep(2)
         await context.close()
-        await browser.close()
 
     async def douyin_upload_video(self):
         async with async_playwright() as playwright:
@@ -921,9 +934,13 @@ class DouYinNote(DouYinBaseUploader):
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "图文上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium")
-        context = await browser.new_context(
-            storage_state=f"{self.account_file}",
+        context = await launch_profile(
+            playwright,
+            "douyin",
+            self.account_file,
+            headless=self.headless,
+            executable_path=LOCAL_CHROME_PATH or None,
+            channel=None if LOCAL_CHROME_PATH else "chromium",
             permissions=["geolocation"],
         )
         context = await set_init_script(context)
