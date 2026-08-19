@@ -172,6 +172,7 @@ class TencentVideoUploadRequest:
     publish_strategy: str = TENCENT_PUBLISH_STRATEGY_IMMEDIATE
     debug: bool = True
     headless: bool = True
+    collection_name: str | None = None
 
 
 @dataclass(slots=True)
@@ -564,6 +565,7 @@ async def upload_tencent_video(request: TencentVideoUploadRequest) -> Path:
         publish_strategy=request.publish_strategy,
         debug=request.debug,
         headless=request.headless,
+        collection_name=request.collection_name,
     )
     await app.tencent_upload_video()
     return account_file
@@ -770,6 +772,7 @@ def build_parser() -> argparse.ArgumentParser:
     tencent_upload_video_parser.add_argument("--short-title", help="Optional WeChat Channels short title")
     tencent_upload_video_parser.add_argument("--category", help="Optional original content category")
     tencent_upload_video_parser.add_argument("--draft", action="store_true", help="Save as draft instead of publishing")
+    tencent_upload_video_parser.add_argument("--collection", default=None, help="Optional collection name to add the work into (must already exist)")
     add_runtime_flags(tencent_upload_video_parser)
 
     youtube_parser = platform_parsers.add_parser("youtube", help="YouTube operations")
@@ -1054,6 +1057,7 @@ async def dispatch(args: argparse.Namespace) -> int:
                 publish_strategy=publish_strategy,
                 debug=args.debug,
                 headless=args.headless,
+                collection_name=args.collection,
             )
             await upload_tencent_video(request)
             print(f"Tencent/WeChat Channels video upload submitted: {request.video_file}")
