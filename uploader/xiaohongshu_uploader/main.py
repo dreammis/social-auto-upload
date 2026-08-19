@@ -44,6 +44,26 @@ def _msg(emoji: str, text: str) -> str:
     return f"{emoji} {text}"
 
 
+async def _js_click_by_text(page: Page, text: str) -> bool:
+    """用 JS 找到文字完全匹配的最内层元素并点击它及其祖先（绕过 span pointer-events:none / 遮罩拦截）。
+
+    小红书很多可点项文字在 <span class="d-text"> 里，pointer-events 常被禁用，
+    Playwright 常规 click 会超时。用原生 click 冒泡触发 Vue 事件更可靠。
+    """
+    return await page.evaluate(
+        """(t) => {
+            const nodes = [...document.querySelectorAll('*')].filter(
+                e => e.children.length === 0 && (e.textContent || '').trim() === t
+            );
+            if (!nodes.length) return false;
+            let el = nodes[nodes.length - 1];
+            for (let i = 0; i < 4 && el; i++) { try { el.click(); } catch (e) {} el = el.parentElement; }
+            return true;
+        }""",
+        text,
+    )
+
+
 async def _emit_qrcode_callback(qrcode_callback, payload: dict):
     if not qrcode_callback:
         return
@@ -447,25 +467,58 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
         await self.fill_tags(page)
 
     async def check_original_declaration(self, page: Page) -> None:
-        """勾选原创声明（如果页面上有的话）"""
+        """设置「来源转载」声明，填写转载来源。
+
+        流程（对应 codegen 录制）：
+          点「添加内容类型声明」→ 点包含「来源转载」的 div
+          → 填 placeholder「请输入媒体名称」→ 点 button「确认」。
+        容错：任一步失败记 warning 跳过、继续发布，不中断。
+        """
+        source = getattr(self, "repost_source", "") or ""
         try:
-            # 小红书的原创声明通常是 checkbox 或 switch 组件
-            original_checkbox = page.locator('div.original-declaration checkbox, div.original-declaration input[type="checkbox"], label:has-text("原创") input[type="checkbox"]').first
-            if await original_checkbox.count() and not await original_checkbox.is_checked():
-                await original_checkbox.check()
-                xiaohongshu_logger.success(_msg("✅", "原创声明已勾选"))
-                return
+            # 1. 点「添加内容类型声明」
+            trigger = page.get_by_text("添加内容类型声明", exact=False).first
+            try:
+                await trigger.scroll_into_view_if_needed(timeout=5000)
+            except Exception:
+                pass
+            await trigger.click(force=True)
+            await page.wait_for_timeout(1500)
 
-            # 尝试通过文本匹配找到原创声明区域并点击
-            original_text = page.locator('div:has-text("原创声明"), span:has-text("原创声明"), div:has-text("原创"), label:has-text("原创")').first
-            if await original_text.count():
-                await original_text.click()
-                xiaohongshu_logger.success(_msg("✅", "原创声明已勾选"))
-                return
+            # 2. 选「来源转载」选项
+            import re as _re
+            repost_option = page.locator("#publish-container div").filter(
+                has_text=_re.compile(r"^来源转载$")
+            ).last
+            if await repost_option.count():
+                await repost_option.click(force=True)
+            else:
+                await _js_click_by_text(page, "来源转载")
+            await page.wait_for_timeout(1500)
 
-            xiaohongshu_logger.info(_msg("🧾", "未发现原创声明选项，跳过"))
+            # 3. 填写媒体名称
+            source_input = page.get_by_placeholder("请输入媒体名称").first
+            await source_input.wait_for(state="visible", timeout=8000)
+            await source_input.click()
+            await source_input.fill(source)
+            await page.wait_for_timeout(500)
+
+            # 4. 点「确认」按钮
+            confirm = page.get_by_role("button", name="确认").first
+            try:
+                await confirm.wait_for(state="visible", timeout=5000)
+                await confirm.click()
+            except Exception:
+                await _js_click_by_text(page, "确认")
+
+            await page.wait_for_timeout(1000)
+            xiaohongshu_logger.success(_msg("🧾", f"来源转载已声明（来源：{source}）"))
         except Exception as exc:
-            xiaohongshu_logger.warning(_msg("⚠️", f"勾选原创声明时出错，跳过: {exc}"))
+            xiaohongshu_logger.warning(_msg("⚠️", f"设置来源转载失败，跳过继续发布: {exc}"))
+            try:
+                await page.keyboard.press("Escape")
+            except Exception:
+                pass
 
 
 class XiaoHongShuVideo(XiaoHongShuBaseUploader):
@@ -514,28 +567,58 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
 
         xiaohongshu_logger.info(_msg("🖼️", "小人准备设置封面"))
 
-        cover_plugin_title = page.locator("div.cover-plugin-title").filter(has_text="设置封面")
-        cover_upload_dialog = cover_plugin_title.locator(
-            "xpath=ancestor::div[contains(@class, 'cover-plugin-preview')]"
-        ).locator("div.cover > div.default:visible")
-        await cover_upload_dialog.wait_for(state="visible", timeout=30000)
+        # 封面设置为增强步骤：失败时记 warning 跳过、继续发布（用视频首帧兜底）。
+        try:
+            # 发布页封面区域内嵌，点击 div.upload-cover 打开封面弹窗（d-modal）。
+            cover_section = page.locator("text=设置封面").first
+            try:
+                await cover_section.scroll_into_view_if_needed(timeout=5000)
+            except Exception:
+                pass
+            await page.wait_for_timeout(2000)
 
-        await cover_upload_dialog.click(force=True)
+            # 1. 点击 div.upload-cover 打开封面弹窗
+            upload_cover = page.locator("div.upload-cover").first
+            if not await upload_cover.count():
+                upload_cover = page.locator("div.cover-plugin-preview div.default.pointer").first
+            await upload_cover.click(force=True)
+            await page.wait_for_timeout(3000)
 
-        modal = page.locator("div.d-modal.cover-modal")
-        await modal.wait_for(state="visible", timeout=30000)
+            # 2. 切换到「上传封面」tab（默认在「截取封面」）
+            upload_tab = page.get_by_text("上传封面", exact=True).first
+            await upload_tab.wait_for(state="visible", timeout=10000)
+            await upload_tab.click()
+            await page.wait_for_timeout(2000)
 
-        file_input = modal.locator('input[type="file"][accept*="image"]').first
-        await file_input.wait_for(state="attached", timeout=10000)
-        await file_input.set_input_files(thumbnail_path)
-        await page.wait_for_timeout(2000)
+            # 3. 找到图片 file input（parent class: upload-wrapper）并上传
+            file_input = page.locator('div.upload-wrapper input[type="file"][accept*="image"]').first
+            if not await file_input.count():
+                file_input = page.locator('input[type="file"][accept*="image"]').last
+            await file_input.set_input_files(thumbnail_path)
+            await page.wait_for_timeout(4000)  # 等图片加载+裁剪渲染
 
-        confirm_button = modal.locator("button.mojito-button").filter(has_text="确定").first
-        await confirm_button.wait_for(state="visible", timeout=10000)
-        await confirm_button.click()
+            # 4. 点「确定」按钮
+            modal_footer = page.locator("div.d-modal-footer")
+            confirm = modal_footer.get_by_text("确定", exact=True).first
+            if not await confirm.count():
+                confirm = page.get_by_role("button", name="确定").first
+            await confirm.wait_for(state="visible", timeout=10000)
+            await confirm.click()
 
-        await modal.wait_for(state="hidden", timeout=30000)
-        xiaohongshu_logger.success(_msg("🥳", "封面已经设置完成"))
+            # 5. 等弹窗关闭
+            modal = page.locator("div.d-modal")
+            try:
+                await modal.first.wait_for(state="hidden", timeout=15000)
+            except Exception:
+                pass
+            xiaohongshu_logger.success(_msg("🥳", "封面已经设置完成"))
+        except Exception as exc:
+            xiaohongshu_logger.warning(_msg("🖼️", f"封面设置失败，跳过该步骤继续发布（用视频首帧）：{exc}"))
+            try:
+                await page.keyboard.press("Escape")
+                await page.wait_for_timeout(500)
+            except Exception:
+                pass
 
     async def upload_video_content(self, page: Page) -> None:
         xiaohongshu_logger.info(_msg("🏃", f"小人开始搬运视频: {self.title}.mp4"))
