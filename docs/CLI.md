@@ -9,6 +9,8 @@
 - `tencent`
 - `baijiahao`
 - `alipay`
+- `weibo`
+- `hupu`
 - `youtube`
 
 实现说明：
@@ -41,6 +43,8 @@ sau bilibili --help
 sau tencent --help
 sau baijiahao --help
 sau alipay --help
+sau weibo --help
+sau hupu --help
 sau youtube --help
 ```
 
@@ -160,9 +164,29 @@ sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title
 
 YouTube 登录需要在浏览器中完成 Google 账号登录，不使用二维码。`--visibility` 可选 `public`、`unlisted` 或 `private`，`--playlist` 可选。
 
+## 微博 CLI 子命令
+
+```bash
+sau weibo login --account <account_name>
+sau weibo check --account <account_name>
+sau weibo upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags 微博,测试 --thumbnail covers/demo.png
+```
+
+微博当前支持登录、账号检查和视频上传；标题最多 30 个字，封面图建议小于 5 MB，暂不支持图文上传和 `--schedule`。
+
+## 虎扑 CLI 子命令
+
+```bash
+sau hupu login --account <account_name>
+sau hupu check --account <account_name>
+sau hupu upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags 虎扑,测试 --thumbnail covers/demo.png
+```
+
+虎扑当前支持登录、账号检查和视频上传；标题长度要求为 4–40 个字，暂不支持图文上传和 `--schedule`。虎扑登录可能需要在浏览器中完成 QQ 或手机号登录，需要人工查看页面时可以加 `--headed`。
+
 ## 登录二维码说明
 
-- 抖音、快手、小红书、视频号、百家号和支付宝生活号登录过程中，CLI / uploader 可能会生成临时二维码图片
+- 抖音、快手、小红书、视频号、百家号、支付宝生活号、微博和虎扑登录过程中，CLI / uploader 可能会生成临时二维码图片
 - 对普通用户来说，可以直接打开该图片扫码
 - 对可操作本地文件的 agent 来说，不要只把图片路径告诉用户
 - 这类二维码图片本身就是给用户扫码的，agent 应优先直接展示/发送本地图片给用户
@@ -170,7 +194,7 @@ YouTube 登录需要在浏览器中完成 Google 账号登录，不使用二维�
 
 ## 定时发布
 
-抖音、快手、小红书、视频号的图文或视频上传，以及 Bilibili 的视频上传支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到对应平台的定时发布策略；不传则默认立即发布。百家号和支付宝生活号当前不支持 `--schedule`。
+抖音、快手、小红书、视频号的图文或视频上传，以及 Bilibili 的视频上传支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到对应平台的定时发布策略；不传则默认立即发布。百家号、支付宝生活号、微博和虎扑当前不支持 `--schedule`。
 
 ```bash
 sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --schedule "2026-03-24 21:30"

@@ -1,7 +1,7 @@
 # social-auto-upload
 
 `social-auto-upload` 是一个强大的自动化工具，旨在帮助内容创作者和运营者高效地将视频内容一键发布到多个国内外主流社交媒体平台。
-项目实现了对 `抖音`、`Bilibili`、`小红书`、`快手`、`视频号`、`百家号`、`支付宝生活号`、`TikTok` 以及 `YouTube` 等平台的视频上传、定时发布等功能。
+项目实现了对 `抖音`、`Bilibili`、`小红书`、`快手`、`视频号`、`百家号`、`支付宝生活号`、`微博`、`虎扑`、`TikTok` 以及 `YouTube` 等平台的视频上传、定时发布等功能。
 结合各平台 `uploader` 模块，您可以轻松配置和扩展支持的平台，并通过示例脚本快速上手。
 
 <img src="media/show/tkupload.gif" alt="tiktok show" width="800"/>
@@ -79,6 +79,8 @@
 | 视频号 | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | 浏览器自动化，对应 `tencent_uploader` |
 | 百家号 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化 |
 | 支付宝生活号 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，支持生活号视频 |
+| 微博 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，标题最多 30 字 |
+| 虎扑 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，标题 4–40 字 |
 | TikTok | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 当前示例走 Chrome 版实现 |
 | YouTube | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化（Studio），支持加入播放列表/可见性 |
 
@@ -167,7 +169,7 @@ Web 端相关代码仍然保留，但已经不是当前主线，不保证可直�
 
 ### 方式 1：使用 CLI
 
-当前抖音、快手、小红书、Bilibili、视频号、百家号和支付宝生活号已经接入 CLI：
+当前抖音、快手、小红书、Bilibili、视频号、百家号、支付宝生活号、微博和虎扑已经接入 CLI：
 
 ```bash
 sau douyin login --account <account_name>
@@ -200,6 +202,14 @@ sau baijiahao upload-video --account <account_name> --file videos/demo.mp4 --tit
 sau alipay login --account <account_name>
 sau alipay check --account <account_name>
 sau alipay upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2
+
+sau weibo login --account <account_name>
+sau weibo check --account <account_name>
+sau weibo upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2
+
+sau hupu login --account <account_name>
+sau hupu check --account <account_name>
+sau hupu upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2
 
 sau youtube login --account <account_name>
 sau youtube check --account <account_name>
