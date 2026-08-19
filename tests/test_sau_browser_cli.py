@@ -201,6 +201,25 @@ class BrowserCliParserTests(unittest.TestCase):
 
 
 class BrowserCliDispatchTests(unittest.TestCase):
+    def test_upload_tencent_video_forwards_collection_name_to_uploader(self):
+        request = sau_cli.TencentVideoUploadRequest(
+            account_name="creator",
+            video_file=Path("demo.mp4"),
+            title="视频标题",
+            description="视频简介",
+            tags=["测试"],
+            publish_date=0,
+            collection_name="我的合集",
+        )
+
+        with (
+            patch("sau_cli.tencent_setup", new=AsyncMock(return_value=True)),
+            patch.object(sau_cli.TencentVideo, "tencent_upload_video", new=AsyncMock()) as mock_upload,
+        ):
+            asyncio.run(sau_cli.upload_tencent_video(request))
+
+        mock_upload.assert_awaited_once()
+
     def test_dispatch_xiaohongshu_check_prints_valid(self):
         args = Namespace(platform="xiaohongshu", action="check", account="creator")
         with patch("sau_cli.check_xiaohongshu_account", new=AsyncMock(return_value=True)):

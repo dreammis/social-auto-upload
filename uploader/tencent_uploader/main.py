@@ -498,12 +498,14 @@ class TencentBaseUploader(BaseVideoUploader):
         publish_strategy: str = TENCENT_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
+        collection_name: str | None = None,
     ):
         self.publish_date = publish_date
         self.account_file = _resolve_account_file(account_file)
         self.publish_strategy = publish_strategy
         self.debug = debug
         self.headless = headless
+        self.collection_name = collection_name
         self.local_executable_path = LOCAL_CHROME_PATH
 
     async def validate_base_args(self):
@@ -953,6 +955,7 @@ class TencentVideo(TencentBaseUploader):
         publish_strategy: str = TENCENT_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
+        collection_name: str | None = None,
     ):
         super().__init__(
             publish_date=publish_date,
@@ -960,6 +963,7 @@ class TencentVideo(TencentBaseUploader):
             publish_strategy=publish_strategy,
             debug=debug,
             headless=headless,
+            collection_name=collection_name,
         )
         self.title = title
         self.file_path = file_path
