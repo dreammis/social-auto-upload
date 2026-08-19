@@ -320,6 +320,8 @@ sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title
 4.  Push到您的分支 (`git push origin feature/YourFeature`)。
 5.  创建一个 Pull Request。
 
+提交代码或文档前，请确认您有权提交相关内容，并同意这些贡献按照本项目的 MIT License 发布。提交第三方代码时，请同时说明来源及其适用的许可证。
+
 ## 主要贡献者
 
 <a href="https://github.com/dreammis/social-auto-upload/graphs/contributors">
@@ -334,9 +336,11 @@ sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title
 
 - https://github.com/biliup/biliup
 
+本项目依赖的第三方组件和运行时工具仍受其各自许可证约束。下游发行或集成本项目时，请同时检查并保留相关第三方组件要求的版权、许可证和 NOTICE 声明。
+
 ## 📜许可证
 
-本项目暂时采用 [MIT License](LICENSE) 开源许可证。
+本项目采用 [MIT License](LICENSE) 开源许可证。除第三方组件外，本项目代码可以在遵守该许可证条款的前提下用于商业软件，包括闭源软件。
 
 ## ⭐Star-History
 
