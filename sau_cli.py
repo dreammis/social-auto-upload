@@ -72,6 +72,7 @@ class DouyinVideoUploadRequest:
     debug: bool = True
     headless: bool = True
     declaration: str | None = None
+    collection_name: str | None = None
 
 
 @dataclass(slots=True)
@@ -377,6 +378,7 @@ async def upload_video(request: DouyinVideoUploadRequest) -> Path:
         publish_strategy=request.publish_strategy,
         debug=request.debug,
         headless=request.headless,
+        collection_name=request.collection_name,
     )
     await app.douyin_upload_video()
     return account_file
@@ -659,6 +661,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--declaration",
         help="Exact Douyin self-declaration option text; omitted means do not set one",
     )
+    upload_video_parser.add_argument("--collection", default=None, help="Optional collection name to add the work into (must already exist)")
     add_runtime_flags(upload_video_parser)
 
     upload_note_parser = douyin_actions.add_parser("upload-note", help="Upload one note to Douyin")
@@ -845,6 +848,7 @@ async def dispatch(args: argparse.Namespace) -> int:
                 publish_strategy=publish_strategy,
                 debug=args.debug,
                 headless=args.headless,
+                collection_name=args.collection,
             )
             await upload_video(request)
             print(f"Douyin video upload submitted: {request.video_file}")

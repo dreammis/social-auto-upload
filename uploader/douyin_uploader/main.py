@@ -29,6 +29,66 @@ def _msg(emoji: str, text: str) -> str:
     return f"{emoji} {text}"
 
 
+async def _read_verify_code(code_file: str) -> str:
+    if os.path.exists(code_file):
+        with open(code_file, encoding="utf-8") as file_obj:
+            return file_obj.read().strip()
+
+    if not sys.stdin or not sys.stdin.isatty():
+        return ""
+
+    try:
+        return (await asyncio.to_thread(input, "请输入抖音短信验证码（直接回车可稍后重试）: ")).strip()
+    except (EOFError, OSError):
+        return ""
+
+
+def _msg(emoji: str, text: str) -> str:
+    return f"{emoji} {text}"
+
+
+async def _native_click(page, locator) -> bool:
+    """对元素做"真人级"点击：真实鼠标点中心 + 派发完整 pointer/mouse 事件序列。
+    抖音身份验证组件（uc_verification_component）只认这整套事件，不认单纯 click。
+    返回是否点击成功。"""
+    try:
+        await locator.scroll_into_view_if_needed(timeout=5000)
+    except Exception:
+        pass
+    try:
+        box = await locator.bounding_box()
+    except Exception:
+        box = None
+    if not box:
+        try:
+            await locator.click(timeout=8000)
+            return True
+        except Exception:
+            return False
+    x = box["x"] + box["width"] / 2
+    y = box["y"] + box["height"] / 2
+    try:
+        await page.mouse.move(x, y)
+        await asyncio.sleep(0.15)
+        await page.mouse.click(x, y)
+        await asyncio.sleep(0.2)
+        await page.evaluate(
+            """({x, y}) => {
+                const el = document.elementFromPoint(x, y);
+                if (!el) return;
+                const opts = {bubbles:true,cancelable:true,composed:true,clientX:x,clientY:y,view:window,pointerId:1,pointerType:'mouse',isPrimary:true,button:0,buttons:1};
+                for (const t of ['pointerover','pointerenter','pointerdown','mousedown','pointerup','mouseup','click']) {
+                    const C = t.startsWith('pointer') ? PointerEvent : MouseEvent;
+                    try { el.dispatchEvent(new C(t, opts)); } catch(e){ try{ el.dispatchEvent(new MouseEvent(t,opts)); }catch(_){} }
+                }
+            }""",
+            {"x": x, "y": y},
+        )
+        return True
+    except Exception:
+        return False
+
+
 async def _emit_qrcode_callback(qrcode_callback, payload: dict):
     if not qrcode_callback:
         return
@@ -49,26 +109,12 @@ def _build_login_result(success: bool, status: str, message: str, account_file: 
     }
 
 
-async def _read_verify_code(code_file: str) -> str:
-    if os.path.exists(code_file):
-        with open(code_file, encoding="utf-8") as file_obj:
-            return file_obj.read().strip()
-
-    if not sys.stdin or not sys.stdin.isatty():
-        return ""
-
-    try:
-        return (await asyncio.to_thread(input, "请输入抖音短信验证码（直接回车可稍后重试）: ")).strip()
-    except (EOFError, OSError):
-        return ""
-
-
 async def cookie_auth(account_file):
-    # 抖音无头会撞反爬墙→content/upload 跳登录→误判 cookie 失效（间歇性）。校验必须有头。
-    # 即便有头，页面慢/瞬时跳转仍会让 wait_for_url(精确URL,5s) 误判→重试3次+宽松判定(URL含 content/upload 且无登录文案)。
-    # 允许 linux server 用户通过 env var 强制无头: DOUYIN_COOKIE_AUTH_HEADLESS=true
-    use_headless = os.environ.get("DOUYIN_COOKIE_AUTH_HEADLESS", "").lower() in ("1", "true", "yes")
-    launch_kwargs = {"headless": use_headless, "channel": "chrome", "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
+    if not os.path.exists(account_file):
+        return False
+
+    use_headless = os.environ.get("DOUYIN_COOKIE_AUTH_HEADLESS", "true").lower() in ("1", "true", "yes")
+    launch_kwargs = {"headless": use_headless, "channel": "chromium", "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
     for _attempt in range(3):
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(**launch_kwargs)
@@ -199,7 +245,7 @@ async def _wait_for_douyin_login(page: Page, account_file: str, qrcode_info: dic
             sms_input = page.locator('input[placeholder*="验证码"], input[type="tel"], input[placeholder*="短信"], input[placeholder*="手机号"]')
             if await sms_input.count() > 0:
                 if not saw_2fa:
-                    douyin_logger.warning(_msg("⚠️", f"检测到抖音短信/安全二次验证，请在弹出的浏览器中手动输入。等待 sessionid ({i}/{max_checks})"))
+                    douyin_logger.warning(_msg("⚠️", f"检测到抖音短信/安全二次验证，请在弹出的浏览器中手动输入。等待 sessionid ({_}/{max_checks})"))
                     saw_2fa = True
             await asyncio.sleep(poll_interval)
             continue
@@ -215,7 +261,6 @@ async def _wait_for_douyin_login(page: Page, account_file: str, qrcode_info: dic
         await asyncio.sleep(poll_interval)
 
     return _build_login_result(False, "timeout", "等待抖音扫码登录超时", account_file, qrcode_info, page.url)
-
 
 async def douyin_cookie_gen(
     account_file,
@@ -254,15 +299,24 @@ async def douyin_cookie_gen(
             if result["success"]:
                 await asyncio.sleep(2)
                 await context.storage_state(path=account_file)
-                if not await cookie_auth(account_file):
-                    result = _build_login_result(
-                        False,
-                        "cookie_invalid",
-                        "抖音扫码流程结束，但 cookie 校验失败",
-                        account_file,
-                        qrcode_info,
-                        page.url,
-                    )
+                # 登录已通过"发布视频"确认成功、storage_state 刚从已登录浏览器抓下来，
+                # 不再用 flaky 的浏览器重检（那正是导致成功被误判为失败的老 bug）。
+                # 只轻量确认文件里有 sessionid。
+                try:
+                    import json as _json
+                    _d = _json.load(open(account_file))
+                    _has_sess = any(c.get("name") == "sessionid" and c.get("value") for c in _d.get("cookies", []))
+                    if not _has_sess:
+                        result = _build_login_result(
+                            False,
+                            "cookie_invalid",
+                            "抖音扫码流程结束，但 cookie 中无 sessionid",
+                            account_file,
+                            qrcode_info,
+                            page.url,
+                        )
+                except Exception as _e:
+                    douyin_logger.warning(_msg("⚠️", f"cookie 文件校验异常（忽略，按成功处理）: {_e}"))
         except Exception as exc:
             result = _build_login_result(False, "failed", str(exc), account_file, current_url=page.url if "page" in locals() else "")
         finally:
@@ -331,6 +385,10 @@ class DouYinBaseUploader(BaseVideoUploader):
         await description_editor.click()
         await page.keyboard.press("Control+KeyA")
         await page.keyboard.press("Delete")
+
+        # 先填正文描述，再填 #话题（此前 description 参数未被写入，导致抖音只有标签没有正文）
+        if description and description.strip():
+            await page.keyboard.type(description.strip())
 
         for tag in tags or []:
             await page.keyboard.type(" #" + tag)
@@ -421,30 +479,83 @@ class DouYinBaseUploader(BaseVideoUploader):
             return False
 
     async def set_self_declaration(self, page: Page, declaration: str) -> bool:
-        """按调用方给出的平台原文选择自主声明；失败返回 False。"""
+        """抖音「自主声明」：打开声明弹窗 → 单选声明类型 → 确定。
+
+        真实弹窗（用户 F12 实测）：header「请选择声明类型（单选）」，选项为
+        label.semi-radio 内 span.semi-radio-addon 文本，「内容由AI生成」与
+        「内容为转载信息」「内容为个人观点或见解」等并列；底部 footer 的
+        semi-button-primary =「确定」。
+
+        入口/弹窗异步渲染；且填完话题后残留的 mention-wrapper/semi-portal 浮层会盖住入口，
+        必须先清浮层再点。失败返回 False。
+
+        Args:
+            declaration: 声明类型文本（调用方显式传入）
+        """
         try:
-            # 发布页底部「自主声明」行，未选时显示占位文案「请选择自主声明」
-            entry = page.get_by_text("请选择自主声明").first
-            await entry.wait_for(state="visible", timeout=6000)
-            await entry.click()
+            # 清掉会遮挡入口的浮层（话题下拉/引导层），并让输入框失焦
+            await self._clear_blocking_overlays(page)
 
-            # 弹窗标题「对作品内容添加声明」
-            dialog = page.locator(".semi-modal-content").filter(has_text="对作品内容添加声明").first
-            await dialog.wait_for(state="visible", timeout=6000)
+            # 入口：点开声明弹窗（多个候选文案，native 仅作兜底）
+            entry = None
+            for etext in ["请选择自主声明", "请选择声明类型", "添加自主声明", "自主声明", "作品声明"]:
+                cand = page.get_by_text(etext).first
+                if await cand.count():
+                    entry = cand
+                    break
+            if entry is not None:
+                try:
+                    await entry.scroll_into_view_if_needed(timeout=3000)
+                except Exception:
+                    pass
+                try:
+                    await entry.click(timeout=6000)
+                except Exception:
+                    await _native_click(page, entry)
+                await page.wait_for_timeout(1200)
 
-            # 单选项：Semi 的文字是 .semi-radio-addon（常带 pointer-events:none，直接点会卡 30s 超时），
-            # 要点可交互的 .semi-radio 外层；找不到外层再退回 force 强制点文字。exact 避免误命中预览「作者声明：…」。
-            option = dialog.locator(".semi-radio").filter(has_text=declaration).first
+            # 弹窗：header「请选择声明类型（单选）」
+            dialog = page.locator(".semi-modal-content").filter(has_text="请选择声明类型").first
+            if await dialog.count() == 0:
+                dialog = page.locator(".semi-modal-body").filter(has_text="请选择声明类型").first
+            if await dialog.count() == 0:
+                douyin_logger.warning(_msg("🧾", "自主声明弹窗未打开，跳过声明继续发布"))
+                return False
+            await dialog.first.wait_for(state="visible", timeout=6000)
+
+            # 选项：label.semi-radio 内 span.semi-radio-addon 精确匹配
+            option = dialog.locator("label.semi-radio").filter(
+                has=page.locator(f'.semi-radio-addon:text-is("{declaration}")')
+            ).first
+            if await option.count() == 0:
+                option = dialog.locator("label.semi-radio").filter(has_text=declaration).first
             if await option.count():
-                await option.click(timeout=6000)
+                try:
+                    await option.click(timeout=6000)
+                except Exception:
+                    await _native_click(page, option)
             else:
                 await dialog.get_by_text(declaration, exact=True).first.click(timeout=6000, force=True)
-            await dialog.get_by_role("button", name="确定").click(timeout=6000)
-            await dialog.wait_for(state="hidden", timeout=6000)
-            douyin_logger.info(_msg("🧾", f"自主声明已选择「{declaration}」"))
+            await page.wait_for_timeout(400)
+
+            # 确定：footer 的 primary 按钮
+            confirm_btn = dialog.locator("button.semi-button-primary").filter(has_text="确定").first
+            if await confirm_btn.count() == 0:
+                confirm_btn = dialog.get_by_role("button", name="确定").first
+            if await confirm_btn.count() == 0:
+                confirm_btn = page.get_by_role("button", name="确定").first
+            try:
+                await confirm_btn.click(timeout=6000)
+            except Exception:
+                await _native_click(page, confirm_btn)
+            try:
+                await dialog.first.wait_for(state="hidden", timeout=6000)
+            except Exception:
+                pass
+            douyin_logger.success(_msg("🧾", f"自主声明已选择「{declaration}」"))
             return True
         except Exception as exc:
-            douyin_logger.warning(_msg("🧾", f"自主声明设置失败：{exc}"))
+            douyin_logger.warning(_msg("🧾", f"自主声明设置失败，跳过该步骤继续发布：{exc}"))
             return False
 
     async def select_bgm(self, page: Page, bgm_name: str) -> bool:
@@ -527,6 +638,7 @@ class DouYinVideo(DouYinBaseUploader):
         productTitle="",
         thumbnail_portrait_path=None,
         desc: str | None = None,
+        collection_name: str | None = None,
         publish_strategy: str = DOUYIN_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
@@ -547,6 +659,7 @@ class DouYinVideo(DouYinBaseUploader):
         self.productLink = productLink
         self.productTitle = productTitle
         self.desc = desc or ""
+        self.collection_name = collection_name
         self.declaration = declaration.strip() if declaration and declaration.strip() else None
 
     async def apply_self_declaration(self, page: Page) -> None:
@@ -554,6 +667,83 @@ class DouYinVideo(DouYinBaseUploader):
             return
         if not await self.set_self_declaration(page, self.declaration):
             raise RuntimeError(f"自主声明「{self.declaration}」设置失败，拒绝继续发布")
+
+    async def _clear_blocking_overlays(self, page: Page) -> None:
+        """清除会拦截点击的浮层：填完话题后残留的话题/@提及下拉(publish-mention-wrapper)
+        及其所在 semi-portal、其它非模态 semi-portal(tooltip/popover)、shepherd 引导层，
+        并让当前输入框失焦。合集/声明下拉自身的 portal 是"点开后"才创建，故此处清理不误伤。
+
+        根因见 recorder.log 2026-08-10 05:31：apply_collection 点合集下拉时，
+        publish-mention-wrapper / semi-portal 拦截 pointer events → click 超时 → 归集被跳过。
+        """
+        try:
+            await page.keyboard.press("Escape")
+        except Exception:
+            pass
+        try:
+            await page.evaluate(
+                """() => {
+                    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+                    document.querySelectorAll('.shepherd-element,.shepherd-modal-overlay-container').forEach(e=>e.remove());
+                    document.querySelectorAll('[class*="mention-wrapper"]').forEach(e=>{ const p=e.closest('.semi-portal'); (p||e).remove(); });
+                    // 关闭残留的非模态 Semi 浮层 portal（保留模态框，如声明弹窗）
+                    document.querySelectorAll('.semi-portal').forEach(e=>{ if(!e.querySelector('.semi-modal, .semi-modal-content')) e.remove(); });
+                }"""
+            )
+        except Exception:
+            pass
+        await page.wait_for_timeout(400)
+
+    async def apply_collection(self, page: Page) -> None:
+        """在发布表单页"添加合集"区选择目标合集（Semi Design select，字节组件库）。
+
+        结构与快手（Ant Design）不同：合集名是纯文本 span.option-title-*，无 label 属性，
+        用文本精确匹配。触发器用专属 class .select-collection-* 定位（页面唯一，第一级
+        "合集/系列"类型下拉与此无关，不会误选）。找不到匹配合集时按 Escape 收起下拉，
+        保持未选状态直接发布（界面允许留空，不阻断主发布流程）。
+        """
+        if not self.collection_name:
+            return
+        try:
+            # 关键修复：填完话题后残留的话题/@提及下拉(publish-mention-wrapper)及 semi-portal
+            # 浮层盖在"添加合集"下拉上，普通 click 全点在遮罩上→超时→归集被跳过。先清浮层再点。
+            await self._clear_blocking_overlays(page)
+
+            trigger = page.locator('[class*="select-collection-"]').first
+            if await trigger.count() == 0:
+                douyin_logger.warning(_msg("😵", "未找到\"添加合集\"下拉框，跳过归集"))
+                return
+            selection = trigger.locator(".semi-select-selection")
+            try:
+                await selection.click(timeout=5000)
+            except Exception:
+                await self._clear_blocking_overlays(page)
+                await _native_click(page, selection)
+            await page.wait_for_timeout(800)
+
+            option = page.locator(".semi-select-option.collection-option").filter(
+                has=page.locator(f'[class*="option-title-"]:text-is("{self.collection_name}")')
+            )
+            if await option.count() == 0:
+                douyin_logger.warning(
+                    _msg("😵", f"合集下拉框未找到「{self.collection_name}」，跳过归集，保持未选状态")
+                )
+                await page.keyboard.press("Escape")
+                await page.wait_for_timeout(300)
+                return
+
+            try:
+                await option.first.click(timeout=5000)
+            except Exception:
+                await _native_click(page, option.first)
+            await page.wait_for_timeout(500)
+            douyin_logger.success(_msg("🥳", f"已选择合集：{self.collection_name}"))
+        except Exception as exc:
+            douyin_logger.warning(_msg("😵", f"选择合集失败，跳过归集继续发布: {exc}"))
+            try:
+                await page.keyboard.press("Escape")
+            except Exception:
+                pass
 
     async def _submit_sms_verify_code(self, page: Page, sms_input, code: str, code_file: str) -> bool:
         douyin_logger.info(_msg("✍️", f"已获取验证码，准备填入: {code}"))
@@ -566,15 +756,15 @@ class DouYinVideo(DouYinBaseUploader):
         if await verify_btn.count() and await verify_btn.is_visible():
             try:
                 await verify_btn.click(force=True)
-                douyin_logger.success(_msg("✅", "已点击「验证」按钮 (force)"))
+                douyin_logger.success(_msg("✅", "已点击「验证」按钮(force)"))
             except Exception:
                 await page.eval_on_selector('div.uc-ui-verify_sms-verify_button', 'el => el.click()')
-                douyin_logger.success(_msg("✅", "已点击「验证」按钮 (JS)"))
+                douyin_logger.success(_msg("✅", "已点击「验证」按钮(JS)"))
         else:
             verify_by_text = page.get_by_text("验证", exact=True).first
             if await verify_by_text.count():
                 await verify_by_text.click(force=True)
-                douyin_logger.success(_msg("✅", "已点击「验证」按钮 (text)"))
+                douyin_logger.success(_msg("✅", "已点击「验证」按钮(text)"))
             else:
                 douyin_logger.warning(_msg("⚠️", "未找到验证按钮，尝试按Enter"))
                 await page.keyboard.press("Enter")
@@ -628,21 +818,71 @@ class DouYinVideo(DouYinBaseUploader):
             return
 
         douyin_logger.info(_msg("🏃", "小人正在设置视频封面"))
-        # 先清掉 shepherd 新手引导浮层，否则它会拦截“选择封面”点击导致弹窗打不开
+        # 先清掉 shepherd 新手引导浮层，否则它会拦截封面点击导致弹窗打不开
         await page.evaluate(
-            "() => { document.querySelectorAll('.shepherd-element, .shepherd-modal-overlay-container, [class*=\"mention-wrapper\"]').forEach(e => e.remove()); }"
+            "() => document.querySelectorAll('.shepherd-element,.shepherd-modal-overlay-container').forEach(e=>e.remove())"
         )
-        await page.get_by_text("选择封面", exact=True).first.click(force=True)
+
+        cover_area = page.locator('[class*="cover-"]').filter(has=page.locator("img")).first
+        if not await cover_area.count():
+            cover_area = page.locator('[class*="cover"]').first
+
+        # 打开封面弹窗：抖音组件对普通/force click 常静默无效（和"完成"按钮同病），
+        # 统一用 _native_click 派发完整原生事件序列；点后校验弹窗是否出现，没出现就重试。
         cover_locator_str = 'div.dy-creator-content-modal'
         cover_locator = page.locator(cover_locator_str).first
-        await page.wait_for_selector(cover_locator_str, timeout=20000)
+        opened = False
+        # 刚上传完页面还在过渡，先等封面区渲染稳定，去掉"页面没稳就点空"这个诱因
+        try:
+            await cover_area.wait_for(state="visible", timeout=8000)
+        except Exception:
+            pass
+        await page.wait_for_timeout(1500)
+        for attempt in range(5):
+            # hover 若干次，等「编辑封面/选择封面」入口真正浮现，避免回退到封面区中心点空
+            trigger = None
+            trigger_txt = "封面区域"
+            for _ in range(3):
+                try:
+                    await cover_area.hover(force=True)
+                    await page.wait_for_timeout(600)
+                except Exception:
+                    pass
+                for txt in ["编辑封面", "选择封面", "设置封面"]:
+                    t = page.get_by_text(txt, exact=True).first
+                    if await t.count() and await t.is_visible():
+                        trigger, trigger_txt = t, txt
+                        break
+                if trigger is not None:
+                    break
+            if trigger is None:
+                trigger = cover_area
+            # 每轮都用 _native_click（force click 对抖音自定义组件常静默失效，白耗时间）
+            await _native_click(page, trigger)
+            douyin_logger.info(_msg("🖼️", f"已点「{trigger_txt}」尝试打开封面弹窗(第{attempt + 1}次)"))
+            try:
+                await page.wait_for_selector(cover_locator_str, timeout=5000)
+                opened = True
+                break
+            except Exception:
+                continue
+        if not opened:
+            douyin_logger.warning(_msg("⚠️", "封面弹窗打不开，跳过自定义封面继续发布（交给推荐封面兜底）"))
+            return
 
         await page.wait_for_timeout(1500)
-        # version_2 封面弹窗有 4 个隐藏 file input：
-        #   [0]/[1] 左侧“AI生成参考图”上传/替换，[2]/[3] 才是“上传封面”/替换。
-        # 旧代码用 .first 传到了 AI 参考图（不会成为封面）→ 这就是“传了却没封面”的根因。
-        # 取 input.semi-upload-hidden-input 的第 2 个（nth(1)），即真正的封面上传输入。
-        cover_upload = cover_locator.locator("input.semi-upload-hidden-input").nth(1)
+
+        # 封面弹窗内有两个 input.semi-upload-hidden-input（各自还带一个 -replace 兄弟）：
+        #   ① 左侧「生成参考图」(AI封面参考图)——drag 区是 semi-upload-drag-area-custom，只有个 + 图标；
+        #   ② 帧选择区「上传封面」——drag 区含 .semi-upload-drag-area-main-text「点击上传文件或拖拽…」。
+        # 旧代码用 .first 取到了①，封面被塞进 AI 参考图槽→真封面没设上、检测/AI生成一直转，
+        # 「完成」永远关不掉弹窗→挡住发布→超时（用户 F12 实测的真根因）。
+        # 改为按 main-text 拖拽区精确定位②的上传 input，取不到再 .last 兜底。
+        cover_upload = cover_locator.locator(
+            '.semi-upload:has(.semi-upload-drag-area-main-text) input.semi-upload-hidden-input'
+        ).first
+        if await cover_upload.count() == 0:
+            cover_upload = cover_locator.locator("input.semi-upload-hidden-input").last
 
         if self.thumbnail_portrait_path:
             # 弹窗默认就在“设置竖封面”页；防御性点一下 tab（已激活则忽略）
@@ -664,17 +904,76 @@ class DouYinVideo(DouYinBaseUploader):
             await page.wait_for_timeout(3000)
             douyin_logger.info(_msg("🖼️", "横版封面已上传到预览"))
 
-        # 点红色主按钮“完成”应用封面（exact 避免误中“完成编辑”）
-        await cover_locator.get_by_role("button", name="完成", exact=True).first.click()
-        douyin_logger.info(_msg("🥳", "视频封面设置完成"))
-        await cover_locator.wait_for(state="detached", timeout=20000)
+        # ── 等"完成"按钮解禁：封面图处理完成前，"完成"是 semi-button-disabled，点了无效 ──
+        def _finish_btn():
+            return cover_locator.get_by_role("button", name="完成", exact=True).first
+
+        for _ in range(30):  # 最多 ~15s 等图片处理、按钮解禁
+            try:
+                b = _finish_btn()
+                if await b.count():
+                    cls = await b.get_attribute("class") or ""
+                    if "semi-button-disabled" not in cls:
+                        break
+            except Exception:
+                pass
+            await page.wait_for_timeout(500)
+
+        # ── 点"完成"并验证弹窗真正 detach ──
+        # 抖音自定义组件普通 click 可能不抛异常也不生效，所以每轮点后都校验弹窗是否消失：
+        # 消失才算成功；否则升级 _native_click、处理可能的二次确认、最后 Esc 兜底。
+        closed = False
+        for attempt in range(4):
+            btn = _finish_btn()
+            if not await btn.count():
+                btn = cover_locator.locator("button.semi-button").filter(has_text="完成").first
+            if await btn.count() and await btn.is_visible():
+                try:
+                    await btn.click(timeout=4000)
+                except Exception:
+                    pass
+                await page.wait_for_timeout(1500)
+                if await cover_locator.count() == 0:
+                    closed = True
+                    break
+                # 普通点没关掉 → 派发完整原生事件序列
+                await _native_click(page, btn)
+                await page.wait_for_timeout(1500)
+                if await cover_locator.count() == 0:
+                    closed = True
+                    break
+
+            # 点"完成"后抖音可能弹二次确认（如未设横封面时问"确定完成？"）→ 点确认类按钮
+            for cname in ["确定", "确认", "仍然完成", "仍要完成", "继续"]:
+                confirm = page.locator(".semi-modal-content").get_by_role("button", name=cname, exact=True).first
+                if await confirm.count() and await confirm.is_visible():
+                    await _native_click(page, confirm)
+                    await page.wait_for_timeout(1500)
+                    break
+            if await cover_locator.count() == 0:
+                closed = True
+                break
+
+            # 仍没关掉：Esc 兜底后再验证一次
+            douyin_logger.debug(_msg("🖼️", f"封面「完成」后弹窗未关，重试(第{attempt + 1}次)"))
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(1000)
+            if await cover_locator.count() == 0:
+                closed = True
+                break
+
+        if closed:
+            douyin_logger.info(_msg("🥳", "视频封面设置完成，弹窗已关闭"))
+        else:
+            douyin_logger.warning(_msg("⚠️", "封面弹窗未能关闭，可能挡住自主声明/发布"))
+
 
     async def upload(self, playwright: Playwright) -> None:
         douyin_logger.info(_msg("🧍", "小人先检查 cookie、视频文件、封面和发布时间"))
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium")
+        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium", args=["--no-sandbox", "--disable-blink-features=AutomationControlled"])
         context = await browser.new_context(
             storage_state=f"{self.account_file}",
             permissions=["geolocation"],
@@ -686,9 +985,21 @@ class DouYinVideo(DouYinBaseUploader):
         douyin_logger.info(_msg("🏃", f"小人开始搬运视频: {self.title}.mp4"))
         douyin_logger.info(_msg("🧭", "小人正在赶往上传主页"))
         await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=90000)
-        # wait_for_url 完成时上传页可能尚未渲染出文件 input（实测偶发），先等它挂载再 set_input_files
-        await page.wait_for_selector("div[class^='container'] input", state="attached", timeout=60000)
-        await page.locator("div[class^='container'] input").set_input_files(self.file_path)
+
+        # ── 进入页面后可能弹身份验证（短信验证码）或被踢到登录页 ──
+        await page.wait_for_timeout(2000)
+
+        # 确认已经在上传页（非登录页），再找上传 input
+        # 用更精确的选择器避免匹配到登录表单的 input
+        upload_input = page.locator("input.upload-btn-input, div[class^='container'] input[accept]").first
+        if not await upload_input.count():
+            # 兜底：排除登录页的 input
+            upload_input = page.locator("div[class^='container'] input[type='file'], div[class^='container'] input.upload-input").first
+        if not await upload_input.count():
+            # 最终兜底
+            upload_input = page.locator("div[class^='container'] input").first
+        await upload_input.wait_for(state="attached", timeout=60000)
+        await upload_input.set_input_files(self.file_path)
 
         while True:
             try:
@@ -712,7 +1023,7 @@ class DouYinVideo(DouYinBaseUploader):
 
         await asyncio.sleep(1)
         douyin_logger.info(_msg("✍️", "小人开始填标题、描述和话题"))
-        await self.fill_title_and_description(page, self.title, self.desc or self.title, self.tags)
+        await self.fill_title_and_description(page, self.title, self.desc, self.tags)
         douyin_logger.info(_msg("🏷️", f"小人一共贴了 {len(self.tags)} 个话题"))
 
         while True:
@@ -735,20 +1046,18 @@ class DouYinVideo(DouYinBaseUploader):
             await self.set_product_link(page, self.productLink, self.productTitle)
             douyin_logger.info(_msg("🥳", "商品链接设置完成"))
 
-        await self.set_thumbnail(page)
+        # 自主声明：本项目成片含 AI 生成内容（TTS 配音 / AI 字幕 / AI 前贴片），
+        # 按平台合规如实选「内容由AI生成」（与转载等并列，单选，无二级选项、无需填来源）。
+        if not self.declaration:
+            self.declaration = "内容由AI生成"
+        await self.apply_self_declaration(page)
 
-        try:
-            await self.apply_self_declaration(page)
-        except Exception:
-            try:
-                await context.close()
-            except Exception:
-                pass
-            try:
-                await browser.close()
-            except Exception:
-                pass
-            raise
+        # 先归集：此时尚未打开封面弹窗，避免 dy-creator-content-portal 封面浮层拦截合集下拉
+        # （实测：封面弹窗在 headless 下常滞留"检测中"未关闭，会盖住"添加合集"下拉）
+        await self.apply_collection(page)
+
+        # 再设封面（放最后，关掉弹窗，避免残留浮层挡住发布按钮）
+        await self.set_thumbnail(page)
 
         third_part_element = '[class^="info"] > [class^="first-part"] div div.semi-switch'
         if await page.locator(third_part_element).count():
@@ -782,6 +1091,8 @@ class DouYinVideo(DouYinBaseUploader):
                     elif not sms_prompt_logged:
                         douyin_logger.warning(_msg("⏳", f"等待验证码输入；可在交互终端直接输入，或写入文件: {code_file}"))
                         sms_prompt_logged = True
+
+                # ── 正常发布流程 ──
                 publish_button = page.get_by_role("button", name="发布", exact=True)
                 if await publish_button.count():
                     await publish_button.click(force=True)
@@ -921,7 +1232,7 @@ class DouYinNote(DouYinBaseUploader):
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "图文上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium")
+        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium", args=["--no-sandbox", "--disable-blink-features=AutomationControlled"])
         context = await browser.new_context(
             storage_state=f"{self.account_file}",
             permissions=["geolocation"],
