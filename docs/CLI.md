@@ -6,6 +6,10 @@
 - `kuaishou`
 - `xiaohongshu`
 - `bilibili`
+- `tencent`
+- `baijiahao`
+- `alipay`
+- `youtube`
 
 实现说明：
 
@@ -16,6 +20,8 @@
   - `skills/kuaishou-upload/`
   - `skills/xiaohongshu-upload/`
   - `skills/bilibili-upload/`
+
+视频号、百家号和支付宝生活号目前只有 CLI 入口，暂未提供对应的 skill。
 
 ## 安装 CLI 入口
 
@@ -32,6 +38,10 @@ sau douyin --help
 sau kuaishou --help
 sau xiaohongshu --help
 sau bilibili --help
+sau tencent --help
+sau baijiahao --help
+sau alipay --help
+sau youtube --help
 ```
 
 ## 安装 patchright 浏览器
@@ -103,17 +113,64 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 - 如果上游 GitHub Release 有更新，运行时会先自动更新
 - `sau bilibili login --account <name>` 建议由用户自己在本地真实终端里执行；如果终端里的二维码显示不完整，可直接打开当前目录下的 `qrcode.png` 扫码
 
+## 视频号 CLI 子命令
+
+```bash
+sau tencent login --account <account_name>
+sau tencent check --account <account_name>
+sau tencent upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags 视频号,测试
+```
+
+视频号支持定时发布、草稿、合集和双比例封面：
+
+```bash
+sau tencent upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --schedule "2026-03-24 21:30" --thumbnail-landscape covers/landscape.png --thumbnail-portrait covers/portrait.png --collection "我的合集"
+sau tencent upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --draft
+```
+
+视频号登录和上传依赖浏览器中的登录态。无头模式下如果需要扫码，CLI 会生成临时二维码；需要人工查看页面时可以加 `--headed`。
+
+## 百家号 CLI 子命令
+
+```bash
+sau baijiahao login --account <account_name>
+sau baijiahao check --account <account_name>
+sau baijiahao upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags 百家号,测试
+```
+
+百家号当前支持登录、账号检查和视频上传；支持 `--thumbnail` 与 `--collection`，暂不支持 `--schedule`。上传前需要先完成百度账号登录并保存账号文件。
+
+## 支付宝生活号 CLI 子命令
+
+```bash
+sau alipay login --account <account_name>
+sau alipay check --account <account_name>
+sau alipay upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags 生活号,测试
+```
+
+支付宝生活号当前支持登录、账号检查和视频上传；支持 `--thumbnail` 与 `--collection`，暂不支持图文上传和 `--schedule`。首次使用前需要在支付宝内容创作后台完成登录，并确认账号已开通生活号内容创作权限。
+
+## YouTube CLI 子命令
+
+```bash
+sau youtube login --account <account_name>
+sau youtube check --account <account_name>
+sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2 --playlist "我的系列" --visibility public
+```
+
+YouTube 登录需要在浏览器中完成 Google 账号登录，不使用二维码。`--visibility` 可选 `public`、`unlisted` 或 `private`，`--playlist` 可选。
+
 ## 登录二维码说明
 
-- 抖音、快手、小红书登录过程中，CLI / uploader 可能会生成临时二维码图片
+- 抖音、快手、小红书、视频号、百家号和支付宝生活号登录过程中，CLI / uploader 可能会生成临时二维码图片
 - 对普通用户来说，可以直接打开该图片扫码
 - 对可操作本地文件的 agent 来说，不要只把图片路径告诉用户
 - 这类二维码图片本身就是给用户扫码的，agent 应优先直接展示/发送本地图片给用户
-- Bilibili 当前不走这套本地二维码图片托管链路，登录按上面的 Bilibili CLI 说明处理即可
+- Bilibili 和 YouTube 当前不走这套本地二维码图片托管链路，登录按上面的平台说明处理即可
 
 ## 定时发布
 
-抖音、快手、小红书的图文和视频上传，以及 Bilibili 的视频上传都支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到对应平台的定时发布策略；不传则默认立即发布。
+抖音、快手、小红书、视频号的图文或视频上传，以及 Bilibili 的视频上传支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到对应平台的定时发布策略；不传则默认立即发布。百家号和支付宝生活号当前不支持 `--schedule`。
 
 ```bash
 sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --schedule "2026-03-24 21:30"
@@ -123,6 +180,7 @@ sau kuaishou upload-note --account <account_name> --images videos/1.png videos/2
 sau xiaohongshu upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --schedule "2026-03-24 21:30"
 sau xiaohongshu upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文示例" --schedule "2026-03-24 21:30"
 sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tid 249 --schedule "2026-03-24 21:30"
+sau tencent upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --schedule "2026-03-24 21:30"
 ```
 
 ## 运行时参数
@@ -163,6 +221,8 @@ CLI 将 `debug` 和 `headless` 拆成了两个独立维度：
 - `--thumbnail-landscape`: 4:3 横版封面
 - `--thumbnail-portrait`: 3:4 竖版封面
 - `--thumbnail`: 兼容旧参数，等同于 3:4 竖版封面
+
+视频号、百家号和支付宝生活号支持使用 `--collection` 指定已有合集；百家号和支付宝生活号还支持 `--thumbnail` 指定封面图。
 
 抖音额外支持：
 
