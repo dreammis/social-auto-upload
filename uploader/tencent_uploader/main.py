@@ -5,6 +5,7 @@ import asyncio
 import base64
 import inspect
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
@@ -556,6 +557,14 @@ class TencentBaseUploader(BaseVideoUploader):
         ):
             raise RuntimeError("视频号 cookie 已失效（被跳转到登录页），请重新扫码登录后再发布")
 
+        # 上传表单在 micro/content/post/create 这个 iframe 里，domcontentloaded 时它还是空的。
+        # 不等网络静默就去找 input[type=file]，会误报「未找到视频号文件上传框」——
+        # 失败截图上左栏渲染正常、主内容区一片空白，看起来完全不像加载没完成。
+        try:
+            await page.wait_for_load_state("networkidle", timeout=30000)
+        except Exception:
+            pass  # 静默不了就算了，下面还有重试兜底
+
     async def upload_video_file(self, page: Page, file_path: str) -> None:
         async def find_file_input():
             for fr in page.frames:  # 主 frame + 所有 iframe（视频号编辑器可能在 iframe 内）
@@ -574,12 +583,25 @@ class TencentBaseUploader(BaseVideoUploader):
             if await publish_btn.count():
                 await publish_btn.click()
                 await asyncio.sleep(3)
-            for _ in range(20):
+            # 60 秒：实测这个 iframe 挂上 input 要几十秒，20 秒会误报「找不到上传框」
+            for _ in range(60):
                 fi = await find_file_input()
                 if fi is not None:
                     break
                 await asyncio.sleep(1)
         if fi is None:
+            # 留现场：这个错误的可能原因太多（没登录 / 落到首页 / iframe 没加载完 /
+            # 平台改版），只看错误字符串没法区分，截图能一眼看出是哪种。
+            try:
+                shot = Path(BASE_DIR) / "debug_tencent_no_file_input.png"
+                await page.screenshot(path=str(shot), full_page=True)
+                tencent_logger.info(_msg(
+                    "📸",
+                    f"失败现场已截图 {shot}; url={page.url}; "
+                    f"frames={[fr.url[:80] for fr in page.frames]}",
+                ))
+            except Exception:
+                pass
             raise RuntimeError("未找到视频号文件上传框")
         await fi.set_input_files(file_path)
 
@@ -716,8 +738,36 @@ class TencentBaseUploader(BaseVideoUploader):
             # 视频号「声明原创」为可选项：页面无对应入口时跳过并继续发布，而非中止。
             tencent_logger.warning(_msg("📭", "本视频未声明原创（页面无入口或为可选项），跳过并继续发布"))
 
-    async def wait_for_upload_complete(self, page: Page) -> None:
+    async def wait_for_upload_complete(
+        self, page: Page, timeout_seconds: int = 3600, max_retries: int = 3
+    ) -> None:
+        """等上传完成。
+
+        **必须有个头，而且重试必须有上限。** 原来是没有出口的 while True：上传出错就
+        删掉重传，失败再删再传，永远循环；中间每 2 秒打一行「正在上传视频中...」——
+        这条日志和真的在传一模一样，从外面完全分不出。
+
+        实测（2026-08-11，172MB / 上行 ~0.5Mbps）：每次传到 4 分钟左右报错，然后重来，
+        整整循环了近 2 小时也不会停，进程也不会退。用户看到的只有「正在上传视频中」，
+        真相是同一段视频被反复上传了 20 多次。
+
+        默认 1 小时 / 3 次重试：慢网络上大文件确实会传很久，上限要给够；
+        但到点、或者重试用完，就带现场截图明确报错，不要静默地转下去。
+        """
+        deadline = time.monotonic() + timeout_seconds
+        last_report = 0.0
+        retries = 0
         while True:
+            if time.monotonic() > deadline:
+                try:
+                    shot = Path(BASE_DIR) / "debug_tencent_upload_timeout.png"
+                    await page.screenshot(path=str(shot), full_page=True)
+                    tencent_logger.error(_msg("📸", f"上传超时现场已截图 {shot}"))
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    f"视频号上传超过 {timeout_seconds} 秒仍未完成（「发表」按钮一直不可用）"
+                )
             try:
                 publish_button = page.get_by_role("button", name="发表")
                 button_class = await publish_button.get_attribute("class")
@@ -725,16 +775,35 @@ class TencentBaseUploader(BaseVideoUploader):
                     tencent_logger.info(_msg("🥳", "视频上传完毕"))
                     break
 
-                tencent_logger.info(_msg("🏃", "正在上传视频中..."))
+                # 每 2 秒刷一行同样的话没有信息量，只是把日志冲爆（实测 50 分钟刷了 1600 行）。
+                # 30 秒一行，并且带上已等多久——「还要多久」是这里唯一有用的信息。
+                now = time.monotonic()
+                if now - last_report >= 30:
+                    waited = int(timeout_seconds - (deadline - now))
+                    tencent_logger.info(_msg("🏃", f"正在上传视频中...（已等 {waited} 秒）"))
+                    last_report = now
                 await asyncio.sleep(2)
 
                 upload_failed = await page.locator("div.status-msg.error").count()
                 delete_button = await page.locator('div.media-status-content div.tag-inner:has-text("删除")').count()
                 if upload_failed and delete_button:
-                    tencent_logger.error(_msg("😵", "发现上传出错了，准备重试"))
+                    retries += 1
+                    if retries > max_retries:
+                        try:
+                            shot = Path(BASE_DIR) / "debug_tencent_upload_failed.png"
+                            await page.screenshot(path=str(shot), full_page=True)
+                            tencent_logger.error(_msg("📸", f"上传反复失败，现场已截图 {shot}"))
+                        except Exception:
+                            pass
+                        raise RuntimeError(
+                            f"视频号上传连续失败 {max_retries} 次，已停止重试"
+                            "（常见原因：文件过大、上行带宽太慢导致平台侧超时，或走了代理/VPN）"
+                        )
+                    tencent_logger.error(_msg("😵", f"发现上传出错了，准备重试（第 {retries}/{max_retries} 次）"))
                     await self.handle_upload_error(page)
+            except RuntimeError:
+                raise
             except Exception:
-                tencent_logger.info(_msg("🏃", "正在上传视频中..."))
                 await asyncio.sleep(2)
 
     async def submit_publish(self, page: Page) -> None:
