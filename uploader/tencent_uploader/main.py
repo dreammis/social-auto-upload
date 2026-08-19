@@ -519,6 +519,33 @@ class TencentBaseUploader(BaseVideoUploader):
         else:
             self.publish_date = 0
 
+    async def wait_for_realtime_verification(
+        self,
+        page: Page,
+        qr_path: str | Path | None = None,
+        timeout_seconds: float = 10 * 60,
+        poll_interval_seconds: float = 2,
+    ) -> Path | None:
+        dialog = page.locator("div.weui-desktop-dialog__wrp:visible").filter(has_text="实名验证").first
+        if not await dialog.count() or not await dialog.is_visible():
+            return None
+
+        output_path = Path(qr_path) if qr_path else Path(self.account_file).with_name(
+            f"{Path(self.account_file).stem}_verification_qr.png"
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        await dialog.screenshot(path=str(output_path))
+        tencent_logger.warning(_msg("📱", f"需要管理员微信扫码完成实名验证: {output_path}"))
+
+        deadline = asyncio.get_running_loop().time() + timeout_seconds
+        while await dialog.count() and await dialog.is_visible():
+            if asyncio.get_running_loop().time() >= deadline:
+                raise TimeoutError("等待视频号管理员实名验证超时")
+            await asyncio.sleep(poll_interval_seconds)
+
+        tencent_logger.success(_msg("🥳", "管理员实名验证已完成，继续发表"))
+        return output_path
+
     async def set_schedule_time_tencent(self, page: Page, publish_date: datetime):
         label_element = page.locator("label").filter(has_text="定时").nth(1)
         await label_element.click()
@@ -604,21 +631,29 @@ class TencentBaseUploader(BaseVideoUploader):
             return None
 
         fi = await find_file_input()
-        if fi is None:
-            # 助手落在首页：点可见的「发表视频」按钮（button.weui-desktop-btn）唤出发布表单。
-            # 不能用 get_by_text("发表视频")——它会命中隐藏的说明 <p>，点了无效。
-            publish_btn = page.locator("button.weui-desktop-btn", has_text="发表视频").first
-            try:
-                if await publish_btn.count() and await publish_btn.is_visible():
-                    await publish_btn.click()
-                    await asyncio.sleep(3)
-            except Exception:
-                pass
-            # 60 秒：实测这个 iframe 挂上 input 要几十秒，20 秒会误报「找不到上传框」。
-            for _ in range(60):
-                fi = await find_file_input()
-                if fi is not None:
-                    break
+        clicked_publish = False
+        for _ in range(60):
+            if fi is not None:
+                break
+            if not clicked_publish:
+                # 新版视频号助手可能先落在首页，且「发表视频」按钮异步出现。
+                # 持续轮询所有可访问 button；Patchright 在当前页面上按名称精确匹配不稳定。
+                try:
+                    publish_buttons = await page.get_by_role("button").all()
+                except Exception:
+                    publish_buttons = []
+                for candidate in publish_buttons:
+                    try:
+                        button_text = (await candidate.inner_text()).strip()
+                        is_visible = await candidate.is_visible()
+                    except Exception:
+                        continue
+                    if "发表视频" in button_text and is_visible:
+                        await candidate.click(force=True)
+                        clicked_publish = True
+                        break
+            fi = await find_file_input()
+            if fi is None:
                 await asyncio.sleep(1)
         if fi is None:
             # 留现场：这个错误的可能原因太多（没登录 / 落到首页 / iframe 没加载完 /
@@ -801,11 +836,15 @@ class TencentBaseUploader(BaseVideoUploader):
                     f"视频号上传超过 {timeout_seconds} 秒仍未完成（「发表」按钮一直不可用）"
                 )
             try:
-                publish_button = page.get_by_role("button", name="发表")
-                button_class = await publish_button.get_attribute("class")
-                if button_class and "weui-desktop-btn_disabled" not in button_class:
-                    tencent_logger.info(_msg("🥳", "视频上传完毕"))
-                    break
+                publish_button = page.locator('div.form-btns button:has-text("发表"):visible').first
+                if await publish_button.count():
+                    button_class = await publish_button.get_attribute("class")
+                    if (
+                        not await publish_button.is_disabled()
+                        and (not button_class or "weui-desktop-btn_disabled" not in button_class)
+                    ):
+                        tencent_logger.info(_msg("🥳", "视频上传完毕"))
+                        break
 
                 # 每 2 秒刷一行同样的话没有信息量，只是把日志冲爆（实测 50 分钟刷了 1600 行）。
                 # 30 秒一行，并且带上已等多久——「还要多久」是这里唯一有用的信息。
@@ -1053,6 +1092,7 @@ class TencentVideo(TencentBaseUploader):
             )
 
     async def prepare_video_for_publish(self, page: Page) -> None:
+        await self.wait_for_realtime_verification(page)
         await self.fill_title_and_tags(page)
         await self.fill_description(page)
         # 合集不在这里选：此时视频还在上传，上传完成后表单会刷新，
