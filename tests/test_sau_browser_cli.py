@@ -211,14 +211,57 @@ class BrowserCliDispatchTests(unittest.TestCase):
             publish_date=0,
             collection_name="我的合集",
         )
+        mock_setup = AsyncMock(return_value=True)
 
         with (
-            patch("sau_cli.tencent_setup", new=AsyncMock(return_value=True)),
+            patch("sau_cli.tencent_setup", new=mock_setup),
             patch.object(sau_cli.TencentVideo, "tencent_upload_video", new=AsyncMock()) as mock_upload,
         ):
             asyncio.run(sau_cli.upload_tencent_video(request))
 
+        self.assertEqual(mock_setup.await_args.kwargs, {"handle": False, "headless": True})
         mock_upload.assert_awaited_once()
+
+    def test_upload_tencent_video_headed_recovers_login_before_upload(self):
+        request = sau_cli.TencentVideoUploadRequest(
+            account_name="creator",
+            video_file=Path("demo.mp4"),
+            title="视频标题",
+            description="视频简介",
+            tags=["测试"],
+            publish_date=0,
+            headless=False,
+        )
+        mock_setup = AsyncMock(return_value=True)
+
+        with (
+            patch("sau_cli.tencent_setup", new=mock_setup),
+            patch.object(sau_cli.TencentVideo, "tencent_upload_video", new=AsyncMock()) as mock_upload,
+        ):
+            asyncio.run(sau_cli.upload_tencent_video(request))
+
+        self.assertEqual(mock_setup.await_args.kwargs, {"handle": True, "headless": False})
+        mock_upload.assert_awaited_once()
+
+    def test_upload_tencent_video_stops_when_headed_login_fails(self):
+        request = sau_cli.TencentVideoUploadRequest(
+            account_name="creator",
+            video_file=Path("demo.mp4"),
+            title="视频标题",
+            description="视频简介",
+            tags=["测试"],
+            publish_date=0,
+            headless=False,
+        )
+
+        with (
+            patch("sau_cli.tencent_setup", new=AsyncMock(return_value=False)),
+            patch.object(sau_cli.TencentVideo, "tencent_upload_video", new=AsyncMock()) as mock_upload,
+            self.assertRaisesRegex(RuntimeError, "cookie is missing or expired"),
+        ):
+            asyncio.run(sau_cli.upload_tencent_video(request))
+
+        mock_upload.assert_not_awaited()
 
     def test_dispatch_xiaohongshu_check_prints_valid(self):
         args = Namespace(platform="xiaohongshu", action="check", account="creator")
