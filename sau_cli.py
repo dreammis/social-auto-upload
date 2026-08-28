@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -65,6 +65,11 @@ from uploader.youtube_uploader.main import (
     YouTubeVideo,
     cookie_auth as youtube_cookie_auth,
     youtube_setup,
+)
+from uploader.uploadpost_uploader.main import (
+    SUPPORTED_PLATFORMS as UPLOADPOST_PLATFORMS,
+    UploadPostVideo,
+    check_credentials as uploadpost_check_credentials,
 )
 
 SCHEDULE_FORMAT = "%Y-%m-%d %H:%M"
@@ -243,6 +248,17 @@ class HupuVideoUploadRequest:
 
 
 @dataclass(slots=True)
+class UploadPostVideoUploadRequest:
+    video_file: Path
+    title: str
+    platforms: list[str]
+    description: str = ""
+    tags: list[str] = field(default_factory=list)
+    publish_date: datetime | int = 0
+    timezone: str | None = None
+
+
+@dataclass(slots=True)
 class YouTubeVideoUploadRequest:
     account_name: str
     video_file: Path
@@ -380,6 +396,23 @@ async def check_youtube_account(account_name: str) -> bool:
     if not account_file.exists():
         return False
     return await youtube_cookie_auth(str(account_file))
+
+
+async def check_uploadpost_credentials() -> bool:
+    return await uploadpost_check_credentials()
+
+
+async def upload_uploadpost_video(request: UploadPostVideoUploadRequest) -> dict:
+    app = UploadPostVideo(
+        request.title,
+        str(request.video_file),
+        request.tags,
+        request.platforms,
+        publish_date=request.publish_date,
+        description=request.description,
+        timezone=request.timezone,
+    )
+    return await app.main()
 
 
 async def upload_youtube_video(request: YouTubeVideoUploadRequest) -> Path:
@@ -1014,6 +1047,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--visibility", default="public", choices=["public", "unlisted", "private"], help="Video visibility")
     add_runtime_flags(youtube_upload_video_parser)
 
+    uploadpost_parser = platform_parsers.add_parser(
+        "uploadpost",
+        help="Upload-Post operations (API publishing to TikTok/Instagram/YouTube/X/... , no browser)",
+    )
+    uploadpost_actions = uploadpost_parser.add_subparsers(dest="action", required=True)
+
+    uploadpost_actions.add_parser("check", help="Check the Upload-Post API key and profile in conf.py")
+
+    uploadpost_actions.add_parser("platforms", help="List the platforms Upload-Post can publish to")
+
+    uploadpost_upload_video_parser = uploadpost_actions.add_parser(
+        "upload-video", help="Publish one video to several platforms in a single request")
+    uploadpost_upload_video_parser.add_argument("--file", required=True, type=existing_file_path, help="Video file path")
+    uploadpost_upload_video_parser.add_argument("--title", default="", help="Video title (required for youtube and reddit)")
+    uploadpost_upload_video_parser.add_argument(
+        "--platforms", required=True,
+        help=f"Comma-separated platforms. Supported: {', '.join(UPLOADPOST_PLATFORMS)}")
+    uploadpost_upload_video_parser.add_argument("--desc", default="", help="Optional description (YouTube/LinkedIn/Facebook/Pinterest)")
+    uploadpost_upload_video_parser.add_argument("--tags", default="", help="Comma-separated tags, appended to the title as hashtags")
+    uploadpost_upload_video_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
+    uploadpost_upload_video_parser.add_argument("--timezone", default=None, help="IANA timezone for --schedule, e.g. Asia/Shanghai (default UTC)")
+
     baijiahao_parser = platform_parsers.add_parser("baijiahao", help="Baidu Baijiahao operations")
     baijiahao_actions = baijiahao_parser.add_subparsers(dest="action", required=True)
 
@@ -1407,6 +1462,32 @@ async def dispatch(args: argparse.Namespace) -> int:
             return 0
 
         raise RuntimeError(f"Unsupported YouTube action: {args.action}")
+
+    if args.platform == "uploadpost":
+        if args.action == "platforms":
+            print("\n".join(UPLOADPOST_PLATFORMS))
+            return 0
+
+        if args.action == "check":
+            is_valid = await check_uploadpost_credentials()
+            print("valid" if is_valid else "invalid")
+            return 0 if is_valid else 1
+
+        if args.action == "upload-video":
+            request = UploadPostVideoUploadRequest(
+                video_file=args.file,
+                title=args.title,
+                platforms=parse_tags(args.platforms),
+                description=args.desc,
+                tags=parse_tags(args.tags),
+                publish_date=args.schedule or 0,
+                timezone=args.timezone,
+            )
+            result = await upload_uploadpost_video(request)
+            print(f"Upload-Post submitted: {request.video_file} (request_id={result.get('request_id')})")
+            return 0
+
+        raise RuntimeError(f"Unsupported Upload-Post action: {args.action}")
 
     if args.platform == "baijiahao":
         if args.action == "login":
