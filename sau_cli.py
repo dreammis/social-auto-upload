@@ -593,7 +593,11 @@ async def upload_bilibili_video(request: BilibiliVideoUploadRequest) -> Path:
 
 async def upload_tencent_video(request: TencentVideoUploadRequest) -> Path:
     account_file = resolve_account_file("tencent", request.account_name)
-    is_ready = await tencent_setup(str(account_file), handle=False)
+    is_ready = await tencent_setup(
+        str(account_file),
+        handle=not request.headless,
+        headless=request.headless,
+    )
     if not is_ready:
         raise RuntimeError(
             f"Tencent/WeChat Channels cookie is missing or expired: {account_file}. "
