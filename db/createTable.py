@@ -1,42 +1,45 @@
 import sqlite3
-import json
-import os
+from pathlib import Path
 
-# 数据库文件路径（如果不存在会自动创建）
-db_file = './database.db'
-
-# 如果数据库已存在，则删除旧的表（可选）
-# if os.path.exists(db_file):
-#     os.remove(db_file)
-
-# 连接到SQLite数据库（如果文件不存在则会自动创建）
-conn = sqlite3.connect(db_file)
-cursor = conn.cursor()
-
-# 创建账号记录表
-cursor.execute('''
-CREATE TABLE IF NOT EXISTS user_info (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    type INTEGER NOT NULL,
-    filePath TEXT NOT NULL,  -- 存储文件路径
-    userName TEXT NOT NULL,
-    status INTEGER DEFAULT 0
-)
-''')
-
-# 创建文件记录表
-cursor.execute('''CREATE TABLE IF NOT EXISTS file_records (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, -- 唯一标识每条记录
-    filename TEXT NOT NULL,               -- 文件名
-    filesize REAL,                     -- 文件大小（单位：MB）
-    upload_time DATETIME DEFAULT CURRENT_TIMESTAMP, -- 上传时间，默认当前时间
-    file_path TEXT                        -- 文件路径
-)
-''')
+DEFAULT_DATABASE_PATH = Path(__file__).resolve().parent / "database.db"
 
 
-# 提交更改
-conn.commit()
-print("✅ 表创建成功")
-# 关闭连接
-conn.close()
+def initialize_database(database_path=DEFAULT_DATABASE_PATH):
+    """Create the legacy Web tables without modifying existing rows."""
+    database_path = Path(database_path)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_info (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type INTEGER NOT NULL,
+                filePath TEXT NOT NULL,
+                userName TEXT NOT NULL,
+                status INTEGER DEFAULT 0
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS file_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT NOT NULL,
+                filesize REAL,
+                upload_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                file_path TEXT
+            )
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    return database_path
+
+
+if __name__ == "__main__":
+    initialized_path = initialize_database()
+    print(f"Database tables are ready: {initialized_path}")

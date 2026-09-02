@@ -1,27 +1,39 @@
 @echo off
-TITLE One-Click Starter for social-auto-upload
+setlocal
+title One-Click Starter for social-auto-upload
+cd /d "%~dp0"
 
-ECHO ==================================================
-ECHO  Starting social-auto-upload Servers...
-ECHO ==================================================
-ECHO.
+if not defined SAU_WEB_HOST set "SAU_WEB_HOST=127.0.0.1"
+if not defined SAU_WEB_PORT set "SAU_WEB_PORT=5409"
 
-ECHO [1/2] Starting Python Backend Server in a new window...
-REM The START command launches a new process.
-REM The first quoted string "SAU Backend" is the title of the new window.
-REM cmd /k runs the command and keeps the window open to show logs.
-START "SAU Backend" cmd /k "python sau_backend.py"
+if /I not "%SAU_WEB_HOST%"=="127.0.0.1" if /I not "%SAU_WEB_HOST%"=="localhost" (
+  echo ERROR: SAU_WEB_HOST must be 127.0.0.1 or localhost.
+  exit /b 1
+)
 
-ECHO [2/2] Starting Vue.js Frontend Server in another new window...
-START "SAU Frontend" cmd /k "cd sau_frontend && npm run dev -- --host 0.0.0.0"
+where uv >nul 2>&1
+if errorlevel 1 (
+  if exist "%~dp0..\.tools\uv\uv.exe" (
+    set "PATH=%~dp0..\.tools\uv;%PATH%"
+  ) else (
+    echo ERROR: uv was not found. Install uv or provide ..\.tools\uv\uv.exe.
+    exit /b 1
+  )
+)
 
-ECHO.
-ECHO ==================================================
-ECHO  Done.
-ECHO  Two new windows have been opened for the backend
-ECHO  and frontend servers. You can monitor logs there.
-ECHO ==================================================
-ECHO.
+where npm >nul 2>&1
+if errorlevel 1 (
+  echo ERROR: npm was not found.
+  exit /b 1
+)
 
-ECHO This window will close in 10 seconds...
-timeout /t 10 /nobreak > nul
+set "VITE_API_PROXY_TARGET=http://%SAU_WEB_HOST%:%SAU_WEB_PORT%"
+
+echo [1/2] Starting the locked Python Web backend on %SAU_WEB_HOST%:%SAU_WEB_PORT%...
+start "SAU Backend" cmd /k "cd /d ""%~dp0"" && uv run --extra web --frozen python sau_backend.py"
+
+echo [2/2] Starting the Vue frontend on 127.0.0.1...
+start "SAU Frontend" cmd /k "cd /d ""%~dp0sau_frontend"" && npm run dev -- --host 127.0.0.1"
+
+echo Both local service windows have been opened.
+endlocal

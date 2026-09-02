@@ -24,6 +24,8 @@ sau = "sau_cli:main"
 web = [
   "Flask[async]==3.1.1",
   "flask-cors==6.0.0",
+  "playwright==1.52.0",
+  "xhs==0.2.13",
 ]
 
 [tool.uv]
