@@ -12,6 +12,7 @@
 - `weibo`
 - `hupu`
 - `youtube`
+- `uploadpost`（API 版海外平台发布）
 
 实现说明：
 
@@ -184,6 +185,39 @@ sau hupu upload-video --account <account_name> --file videos/demo.mp4 --title "�
 
 虎扑当前支持登录、账号检查和视频上传；标题长度要求为 4–40 个字，暂不支持图文上传和 `--schedule`。虎扑登录可能需要在浏览器中完成 QQ 或手机号登录，需要人工查看页面时可以加 `--headed`。
 
+## Upload-Post CLI 子命令（API 版，无需浏览器）
+
+其余平台都是浏览器自动化 + cookie；海外平台还有另一条路：走
+[Upload-Post](https://upload-post.com) 的官方 API，不用开浏览器、不用存 cookie、
+不会因为对方改版而失效。账号只需在 Upload-Post 后台绑定一次。
+
+支持平台：TikTok、Instagram、YouTube、Facebook、LinkedIn、X (Twitter)、Threads、
+Pinterest、Bluesky、Reddit、Telegram、Discord、Google Business Profile。
+
+先在 `conf.py` 里填上凭证（免费额度：每月 10 次上传）：
+
+```python
+UPLOAD_POST_API_KEY = "你的 API Key"
+UPLOAD_POST_USER = "你的 profile 名称"
+```
+
+```bash
+sau uploadpost check                 # 检查 API Key 和 profile 是否可用
+sau uploadpost platforms             # 列出支持的平台
+sau uploadpost upload-video --file videos/demo.mp4 --title "示例标题" --platforms tiktok,instagram,youtube
+sau uploadpost upload-video --file videos/demo.mp4 --title "示例标题" --platforms tiktok --schedule "2026-03-24 21:30" --timezone Asia/Shanghai
+```
+
+说明：
+
+- 一次请求即可发布到多个平台，`--platforms` 用逗号分隔
+- `--title` 对 YouTube 和 Reddit 是必填，其他平台可省略
+- `--tags` 会以 `#标签` 形式追加到标题末尾
+- 支持 `--schedule` 定时发布，可配合 `--timezone` 指定时区（默认 UTC）
+- 与 `youtube` 子命令的区别：`youtube` 走 Studio 浏览器自动化（因为未过审的 YouTube
+  Data API 项目上传的视频会被强制锁成私有）；Upload-Post 是已过审的服务方，
+  走 API 也能直接公开发布，用户不需要自己去过 Google 的合规审核
+
 ## 登录二维码说明
 
 - 抖音、快手、小红书、视频号、百家号、支付宝生活号、微博和虎扑登录过程中，CLI / uploader 可能会生成临时二维码图片
@@ -194,7 +228,7 @@ sau hupu upload-video --account <account_name> --file videos/demo.mp4 --title "�
 
 ## 定时发布
 
-抖音、快手、小红书、视频号的图文或视频上传，以及 Bilibili 的视频上传支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到对应平台的定时发布策略；不传则默认立即发布。百家号、支付宝生活号、微博和虎扑当前不支持 `--schedule`。
+抖音、快手、小红书、视频号的图文或视频上传，以及 Bilibili 的视频上传支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到对应平台的定时发布策略；不传则默认立即发布。百家号、支付宝生活号、微博和虎扑当前不支持 `--schedule`。`uploadpost` 的定时由 Upload-Post 服务端排期，同样用 `--schedule`。
 
 ```bash
 sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --schedule "2026-03-24 21:30"
