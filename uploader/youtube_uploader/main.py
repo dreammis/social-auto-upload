@@ -12,6 +12,7 @@ Login is interactive (Google account, no QR code): the browser opens, the user s
 the storage_state is saved. Reuse it afterwards for fully unattended uploads.
 """
 import asyncio
+import os
 from pathlib import Path
 
 from patchright.async_api import Page, Playwright, async_playwright
@@ -32,6 +33,10 @@ STUDIO_URL = "https://studio.youtube.com"
 UPLOAD_URL = "https://www.youtube.com/upload"
 VISIBILITY = {"public": "PUBLIC", "unlisted": "UNLISTED", "private": "PRIVATE"}
 
+# channel: 默认 chromium (patchright bundled),SAU_BROWSER_CHANNEL 可覆盖回 "chrome"
+# 原来默认 chrome 要求系统装 Google Chrome,WSL2 / Linux server fail
+YT_CHANNEL = os.environ.get("SAU_BROWSER_CHANNEL", "chromium").strip() or "chromium"
+
 
 def _msg(emoji: str, text: str) -> str:
     return f"{emoji} {text}"
@@ -50,7 +55,7 @@ def _build_login_result(success, status, message, account_file, current_url=""):
 async def cookie_auth(account_file) -> bool:
     """登录态是否仍有效：带 cookie 打开 Studio，没被踢到 Google 登录页且进入了频道页即有效。"""
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True, channel="chrome")
+        browser = await playwright.chromium.launch(headless=True, channel=YT_CHANNEL)
         try:
             context = await browser.new_context(storage_state=account_file)
             context = await set_init_script(context)
@@ -67,12 +72,19 @@ async def cookie_auth(account_file) -> bool:
             await browser.close()
 
 
-async def youtube_cookie_gen(account_file, headless: bool = False):
+async def youtube_cookie_gen(account_file, headless: bool = False, cdp_url: str | None = None):
     """交互式登录：开浏览器让用户登录 Google/YouTube，进入频道页后保存 storage_state。"""
     async with async_playwright() as playwright:
-        # 登录必须显形，让用户输账号密码/二步验证
-        browser = await playwright.chromium.launch(headless=False, channel="chrome")
-        context = await browser.new_context()
+        if cdp_url:
+            # CDP 模式 (WSL2 + Windows Chrome via Python TCP proxy) — 不关 browser
+            browser = await playwright.chromium.connect_over_cdp(cdp_url)
+            context = browser.contexts[0] if browser.contexts else await browser.new_context()
+            should_close_browser = False
+        else:
+            # 登录必须显形，让用户输账号密码/二步验证
+            browser = await playwright.chromium.launch(headless=False, channel=YT_CHANNEL)
+            context = await browser.new_context()
+            should_close_browser = True
         context = await set_init_script(context)
         page = await context.new_page()
         await page.goto(STUDIO_URL, wait_until="domcontentloaded")
@@ -89,19 +101,20 @@ async def youtube_cookie_gen(account_file, headless: bool = False):
             youtube_logger.success(_msg("✅", f"YouTube 登录态已保存: {account_file}"))
         else:
             youtube_logger.error(_msg("😵", "等待登录超时，未保存登录态"))
-        await browser.close()
+        if should_close_browser:
+            await browser.close()
         return _build_login_result(ok, "logged_in" if ok else "timeout",
                                    "登录成功" if ok else "登录超时", account_file, page.url)
 
 
-async def youtube_setup(account_file, handle: bool = False, return_detail: bool = False, headless: bool = False):
+async def youtube_setup(account_file, handle: bool = False, return_detail: bool = False, headless: bool = False, cdp_url: str | None = None):
     """校验登录态，失效且 handle=True 时拉起交互式登录。"""
     if not Path(account_file).exists() or not await cookie_auth(account_file):
         if not handle:
             result = _build_login_result(False, "cookie_invalid", "登录态不存在或已失效", account_file)
             return result if return_detail else False
         youtube_logger.info(_msg("🥹", "YouTube 登录态不存在或失效，准备打开浏览器登录"))
-        result = await youtube_cookie_gen(account_file, headless=headless)
+        result = await youtube_cookie_gen(account_file, headless=headless, cdp_url=cdp_url)
         return result if return_detail else result["success"]
     result = _build_login_result(True, "cookie_valid", "登录态有效", account_file)
     return result if return_detail else True
@@ -199,7 +212,7 @@ class YouTubeVideo(BaseVideoUploader):
 
     async def upload(self, playwright: Playwright) -> None:
         browser = await playwright.chromium.launch(
-            headless=self.headless, channel="chrome",
+            headless=self.headless, channel=YT_CHANNEL,
             proxy={"server": YT_PROXY} if YT_PROXY else None,
         )
         context = await browser.new_context(storage_state=self.account_file)
