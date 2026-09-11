@@ -151,9 +151,12 @@ class XiaohongshuVideoUploadRequest:
 @dataclass(slots=True)
 class XiaohongshuVideoUpdateRequest:
     account_name: str
-    visibility: str
+    visibility: str | None = None
     title: str | None = None
     note_id: str | None = None
+    description: str | None = None
+    tags: list[str] | None = None
+    new_title: str | None = None
     debug: bool = True
     headless: bool = True
 
@@ -561,6 +564,9 @@ async def update_xiaohongshu_video(request: XiaohongshuVideoUpdateRequest) -> Pa
         visibility=request.visibility,
         title=request.title,
         note_id=request.note_id,
+        desc=request.description,
+        tags=request.tags,
+        new_title=request.new_title,
         debug=request.debug,
         headless=request.headless,
     )
@@ -919,16 +925,19 @@ def build_parser() -> argparse.ArgumentParser:
     add_runtime_flags(xiaohongshu_upload_video_parser)
 
     xiaohongshu_update_video_parser = xiaohongshu_actions.add_parser(
-        "update-video", help="Update visibility of an existing Xiaohongshu video note"
+        "update-video", help="Update an existing Xiaohongshu video note without re-uploading the file"
     )
     xiaohongshu_update_video_parser.add_argument("--account", required=True, help="Xiaohongshu user-defined account_name")
     xiaohongshu_update_video_parser.add_argument("--title", default=None, help="Existing note title as shown in note manager")
     xiaohongshu_update_video_parser.add_argument("--id", dest="note_id", default=None, help="Existing note id from /publish/update?id=")
+    xiaohongshu_update_video_parser.add_argument("--new-title", default=None, help="Replace the note title (max 20 characters)")
+    xiaohongshu_update_video_parser.add_argument("--desc", default=None, help="Replace the note description; existing topics are kept unless --tags is also passed")
+    xiaohongshu_update_video_parser.add_argument("--tags", default=None, help="Replace topics, comma-separated. Omit to keep the current topics when changing --desc")
     xiaohongshu_update_video_parser.add_argument(
         "--visibility",
-        required=True,
+        default=None,
         choices=["private", "public"],
-        help="Target visibility. This edits the existing note; it does not upload a new video.",
+        help="Target visibility. Optional when --desc, --tags, or --new-title is supplied.",
     )
     add_runtime_flags(xiaohongshu_update_video_parser)
 
@@ -1244,18 +1253,29 @@ async def dispatch(args: argparse.Namespace) -> int:
             if not (args.title or args.note_id):
                 print("错误：update-video 需要 --title 或 --id", file=sys.stderr)
                 return 1
+            parsed_tags = None if args.tags is None else parse_tags(args.tags)
+            if parsed_tags is not None and len(parsed_tags) > 10:
+                print(f"错误：小红书标签最多 10 个，当前提供了 {len(parsed_tags)} 个: {parsed_tags}", file=sys.stderr)
+                return 1
+            if not (args.visibility or args.desc or parsed_tags is not None or args.new_title):
+                print("错误：update-video 需要 --visibility、--desc、--tags 或 --new-title", file=sys.stderr)
+                return 1
             request = XiaohongshuVideoUpdateRequest(
                 account_name=args.account,
                 visibility=args.visibility,
                 title=args.title,
                 note_id=args.note_id,
+                description=args.desc,
+                tags=parsed_tags,
+                new_title=args.new_title,
                 debug=args.debug,
                 headless=args.headless,
             )
             await update_xiaohongshu_video(request)
             print(
                 "Xiaohongshu video update submitted: "
-                f"title={request.title or '-'} id={request.note_id or '-'} visibility={request.visibility}"
+                f"title={request.title or '-'} id={request.note_id or '-'} "
+                f"visibility={request.visibility or '-'} desc={'yes' if request.description is not None else 'no'}"
             )
             return 0
 

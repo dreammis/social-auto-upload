@@ -18,7 +18,7 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成小红书登录�
 | 小红书登录 | `sau xiaohongshu login --account <name>` | 生成或刷新指定账号的 cookie |
 | cookie 校验 | `sau xiaohongshu check --account <name>` | 检查指定账号 cookie 是否有效 |
 | 视频上传 | `sau xiaohongshu upload-video ...` | 上传并发布小红书视频 |
-| 改已有视频 | `sau xiaohongshu update-video ...` | 改已有视频笔记的可见性，不重新上传文件 |
+| 改已有视频 | `sau xiaohongshu update-video ...` | 改已有视频笔记的可见性、简介、话题或标题，不重新上传文件 |
 | 图文上传 | `sau xiaohongshu upload-note ...` | 上传并发布小红书图文 |
 
 元数据约定：
@@ -38,7 +38,7 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成小红书登录�
 - 使用 `sau xiaohongshu login --account <name>` 登录小红书
 - 使用 `sau xiaohongshu check --account <name>` 校验 cookie 是否有效
 - 使用 `sau xiaohongshu upload-video ...` 上传小红书视频
-- 使用 `sau xiaohongshu update-video ...` 改已有视频笔记的可见性
+- 使用 `sau xiaohongshu update-video ...` 改已有视频笔记的可见性、简介、话题或标题
 - 使用 `sau xiaohongshu upload-note ...` 上传小红书图文
 
 ## 命令选择建议
@@ -46,7 +46,7 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成小红书登录�
 - 当用户需要新的 cookie，或现有 cookie 已失效时，使用 `login`
 - 当用户只需要确认 cookie 状态时，使用 `check`
 - 当用户要发布视频时，使用 `upload-video`
-- 当用户要改已有视频笔记（例如仅自己可见改公开）时，使用 `update-video`，不要再跑一次 `upload-video`
+- 当用户要改已有视频笔记（可见性、简介、话题、标题）时，使用 `update-video`，不要再跑一次 `upload-video`
 - 当用户要发布图文时，使用 `upload-note`
 
 ## 执行前检查

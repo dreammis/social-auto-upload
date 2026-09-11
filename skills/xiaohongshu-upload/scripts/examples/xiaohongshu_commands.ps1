@@ -25,6 +25,12 @@ sau xiaohongshu update-video `
   --visibility public `
   --headless
 
+sau xiaohongshu update-video `
+  --account $account `
+  --title "Xiaohongshu video from PowerShell" `
+  --desc "Updated description from PowerShell" `
+  --headless
+
 sau xiaohongshu upload-note `
   --account $account `
   --images $noteImages `

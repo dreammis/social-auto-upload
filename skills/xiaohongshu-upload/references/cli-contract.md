@@ -65,22 +65,27 @@ sau xiaohongshu upload-video \
 ```bash
 sau xiaohongshu update-video \
   --account <account> \
-  --visibility public|private \
   [--title "<existing-title>"] \
   [--id <note-id>] \
+  [--visibility public|private] \
+  [--desc "<description>"] \
+  [--tags tag1,tag2] \
+  [--new-title "<new-title>"] \
   [--debug] \
   [--headless | --headed]
 ```
 
 - 必填参数:
   - `--account`
-  - `--visibility`
   - `--title` 或 `--id` 至少一个
+  - `--visibility`、`--desc`、`--tags`、`--new-title` 至少一个
 - 作用:
-  - 打开创作者后台编辑页，改已有视频笔记的可见性
+  - 打开创作者后台编辑页，改已有视频笔记的可见性、简介、话题或标题
   - 不重新上传视频文件，也不会再发一条
 - `--id` 来自编辑页 URL：`/publish/update?id=<note-id>&noteType=video`
 - `--title` 按笔记管理页卡片标题精确匹配；匹配到多条则失败
+- `--desc` 会重写正文。不传 `--tags` 时会先收集当前话题再写回去，避免简介把原标签清掉
+- `--new-title` 改笔记标题，最多 20 个字；查找用的仍是原来的 `--title` 或 `--id`
 
 ### 上传图文
 

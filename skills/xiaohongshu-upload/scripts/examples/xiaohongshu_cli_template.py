@@ -50,6 +50,18 @@ def main() -> None:
         [
             "sau",
             "xiaohongshu",
+            "update-video",
+            "--account",
+            account,
+            "--title",
+            "Xiaohongshu video from Python",
+            "--desc",
+            "Updated description from Python",
+            "--headless",
+        ],
+        [
+            "sau",
+            "xiaohongshu",
             "upload-note",
             "--account",
             account,

@@ -104,6 +104,40 @@ class XiaohongshuUploaderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "title or --id"):
             xhs_main.XiaoHongShuVideoUpdate("account.json", "public")
 
+    def test_update_video_requires_a_mutation(self):
+        with self.assertRaisesRegex(ValueError, "visibility, --desc, --tags, or --new-title"):
+            xhs_main.XiaoHongShuVideoUpdate("account.json", title="世界高速铁路营业里程排名")
+
+    def test_update_video_accepts_desc_without_visibility(self):
+        app = xhs_main.XiaoHongShuVideoUpdate(
+            "account.json",
+            title="世界高速铁路营业里程排名",
+            desc="24个国家，按UIC里程从短到长画出来。",
+        )
+        self.assertIsNone(app.visibility)
+        self.assertEqual(app.desc, "24个国家，按UIC里程从短到长画出来。")
+
+    def test_fill_desc_replaces_editor_text(self):
+        async def check():
+            app = xhs_main.XiaoHongShuVideoUpdate(
+                "account.json",
+                title="世界高速铁路营业里程排名",
+                desc="新的简介内容",
+            )
+            async with xhs_main.async_playwright() as playwright:
+                browser = await playwright.chromium.launch(headless=True, channel="chromium")
+                page = await browser.new_page()
+                await page.set_content(
+                    '<p data-placeholder="输入正文描述" contenteditable="true">旧简介 #高铁</p>'
+                )
+                await app.fill_desc(page)
+                await app.verify_desc(page)
+                text = await page.locator('p[data-placeholder="输入正文描述"]').inner_text()
+                self.assertIn("新的简介内容", text)
+                self.assertNotIn("旧简介", text)
+                await browser.close()
+        asyncio.run(check())
+
     def test_update_url_uses_account_route(self):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(
             os.environ, {"SAU_XHS_CREATOR_BASE_URL": ""}

@@ -541,17 +541,54 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
         title_container = page.locator('input[placeholder*="填写标题"]')
         await title_container.fill(self.title[:20])
 
+    def _desc_editor(self, page: Page):
+        return page.locator('p[data-placeholder*="输入正文描述"]').first
+
+    async def _editor_text(self, page: Page) -> str:
+        editor = self._desc_editor(page)
+        if await editor.count():
+            return ((await editor.inner_text()) or "").strip()
+        return ""
+
+    async def collect_editor_tags(self, page: Page) -> list[str]:
+        tags = await page.evaluate(
+            """() => {
+              const names = [];
+              const root = document.querySelector('#publish-container') || document.body;
+              for (const el of root.querySelectorAll('[class*="topic"], [data-topic]')) {
+                const text = (el.innerText || '').replace(/^#/, '').replace(/\\[话题\\]/g, '').trim();
+                if (text) names.push(text);
+              }
+              const editor = root.querySelector('p[data-placeholder*="输入正文描述"]');
+              const blob = editor ? (editor.innerText || '') : '';
+              for (const match of blob.matchAll(/#([^\\s#\\[\\]]+)/g)) {
+                names.push(match[1].replace(/\\[话题\\]$/, ''));
+              }
+              return [...new Set(names.filter(Boolean))];
+            }"""
+        )
+        return list(tags or [])
+
     async def fill_desc(self, page: Page) -> None:
         if not getattr(self, "desc", ""):
             return
 
-        desc = page.locator('p[data-placeholder*="输入正文描述"]')
+        desc = self._desc_editor(page)
         await desc.click()
         await page.keyboard.press("Backspace")
         await page.keyboard.press("Control+KeyA")
         await page.keyboard.press("Delete")
         await page.keyboard.type(self.desc)
         await page.keyboard.press("Enter")
+
+    async def verify_desc(self, page: Page) -> None:
+        wanted = "".join((getattr(self, "desc", "") or "").split())
+        if not wanted:
+            return
+        compact = "".join((await self._editor_text(page)).split())
+        if wanted not in compact:
+            raise RuntimeError("Description was not applied; refusing to publish")
+        xiaohongshu_logger.info(_msg("✍️", "简介已写进编辑器"))
 
     async def fill_tags(self, page: Page) -> None:
         if not getattr(self, "tags", None):
@@ -833,9 +870,12 @@ class XiaoHongShuVideoUpdate(XiaoHongShuBaseUploader):
     def __init__(
         self,
         account_file,
-        visibility: str,
+        visibility: str | None = None,
         title: str | None = None,
         note_id: str | None = None,
+        desc: str | None = None,
+        tags: list[str] | None = None,
+        new_title: str | None = None,
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
     ):
@@ -848,13 +888,20 @@ class XiaoHongShuVideoUpdate(XiaoHongShuBaseUploader):
         )
         title = (title or "").strip() or None
         note_id = (note_id or "").strip() or None
+        desc = desc if desc is None else str(desc)
+        new_title = (new_title or "").strip() or None
         if not title and not note_id:
             raise ValueError("update-video requires --title or --id")
-        if visibility not in XHS_VISIBILITY_LABELS:
+        if visibility is not None and visibility not in XHS_VISIBILITY_LABELS:
             raise ValueError("Unsupported visibility")
+        if visibility is None and desc is None and tags is None and new_title is None:
+            raise ValueError("update-video requires --visibility, --desc, --tags, or --new-title")
         self.title = title
         self.note_id = note_id
         self.visibility = visibility
+        self.desc = desc
+        self.tags = tags
+        self.new_title = new_title
 
     async def _find_note_card(self, page: Page):
         cards = page.locator(".note-card")
@@ -917,21 +964,62 @@ class XiaoHongShuVideoUpdate(XiaoHongShuBaseUploader):
             if await title_input.count():
                 self.title = ((await title_input.input_value()) or "").strip() or self.title
 
+    async def apply_new_title(self, page: Page) -> None:
+        if not self.new_title:
+            return
+        title_input = page.locator('input[placeholder*="填写标题"]')
+        await title_input.fill(self.new_title[:20])
+        actual = ((await title_input.input_value()) or "").strip()
+        if actual != self.new_title[:20]:
+            raise RuntimeError("Title was not applied; refusing to publish")
+        self.title = actual
+        xiaohongshu_logger.info(_msg("✍️", f"标题已改成 {actual}"))
+
+    async def apply_desc_and_tags(self, page: Page) -> None:
+        if self.desc is None and self.tags is None:
+            return
+        tags = self.tags
+        if tags is None:
+            tags = await self.collect_editor_tags(page)
+        if self.desc is None:
+            current = await self._editor_text(page)
+            self.desc = "\n".join(
+                line for line in current.splitlines() if not line.strip().startswith("#")
+            ).strip()
+        await self.fill_desc(page)
+        self.tags = list(tags or [])
+        if self.tags:
+            await self.fill_tags(page)
+        await self.verify_desc(page)
+
     async def submit_update(self, page: Page) -> None:
-        await self.set_visibility(page)
-        await self.verify_visibility(page)
-        xiaohongshu_logger.info(_msg("✍️", f"小人准备把可见性改成 {XHS_VISIBILITY_LABELS[self.visibility]}"))
+        await self.apply_new_title(page)
+        await self.apply_desc_and_tags(page)
+        if self.visibility is not None:
+            await self.set_visibility(page)
+            await self.verify_visibility(page)
+            xiaohongshu_logger.info(
+                _msg("✍️", f"小人准备把可见性改成 {XHS_VISIBILITY_LABELS[self.visibility]}")
+            )
+        changed = []
+        if self.new_title:
+            changed.append(f"title={self.new_title[:20]}")
+        if self.desc is not None:
+            changed.append("desc")
+        if self.tags is not None:
+            changed.append("tags")
+        if self.visibility is not None:
+            changed.append(f"visibility={self.visibility}")
+        xiaohongshu_logger.info(_msg("✍️", f"小人准备提交修改: {', '.join(changed) or 'none'}"))
         await page.get_by_role("button", name="发布", exact=True).click()
         try:
             await page.wait_for_url(XHS_PUBLISH_SUCCESS_URL_PATTERN, timeout=10000)
         except Exception:
             await page.wait_for_url(XHS_NOTE_MANAGER_URL_PATTERN, timeout=20000)
-        xiaohongshu_logger.success(
-            f"Video updated with visibility={self.visibility}; URL: {page.url}"
-        )
+        xiaohongshu_logger.success(f"Video updated ({', '.join(changed)}); URL: {page.url}")
 
     async def verify_manager(self, page: Page) -> None:
-        if not self.title:
+        if not self.title or self.visibility is None:
             return
         await page.goto(_build_xhs_creator_url("/new/note-manager", self.account_file))
         card = await self._find_note_card(page)
