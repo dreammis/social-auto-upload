@@ -185,6 +185,7 @@ sau kuaishou upload-note --account <account_name> --images videos/1.png videos/2
 sau xiaohongshu login --account <account_name>
 sau xiaohongshu check --account <account_name>
 sau xiaohongshu upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介"
+sau xiaohongshu update-video --account <account_name> --title "示例标题" --visibility public
 sau xiaohongshu upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文正文"
 
 sau bilibili login --account <account_name>

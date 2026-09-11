@@ -58,6 +58,7 @@ from uploader.xiaohongshu_uploader.main import (
     XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED,
     XiaoHongShuNote,
     XiaoHongShuVideo,
+    XiaoHongShuVideoUpdate,
     cookie_auth as xiaohongshu_cookie_auth,
     xiaohongshu_setup,
 )
@@ -142,6 +143,17 @@ class XiaohongshuVideoUploadRequest:
     publish_date: datetime | int
     thumbnail_file: Path | None = None
     publish_strategy: str = XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE
+    debug: bool = True
+    headless: bool = True
+    visibility: str = "private"
+
+
+@dataclass(slots=True)
+class XiaohongshuVideoUpdateRequest:
+    account_name: str
+    visibility: str
+    title: str | None = None
+    note_id: str | None = None
     debug: bool = True
     headless: bool = True
 
@@ -530,6 +542,27 @@ async def upload_xiaohongshu_video(request: XiaohongshuVideoUploadRequest) -> Pa
         publish_strategy=request.publish_strategy,
         debug=request.debug,
         headless=request.headless,
+        visibility=request.visibility,
+    )
+    await app.main()
+    return account_file
+
+
+async def update_xiaohongshu_video(request: XiaohongshuVideoUpdateRequest) -> Path:
+    account_file = resolve_account_file("xiaohongshu", request.account_name)
+    is_ready = await xiaohongshu_setup(str(account_file), handle=False)
+    if not is_ready:
+        raise RuntimeError(
+            f"Xiaohongshu cookie is missing or expired: {account_file}. Run `sau xiaohongshu login --account {request.account_name}` first."
+        )
+
+    app = XiaoHongShuVideoUpdate(
+        account_file=str(account_file),
+        visibility=request.visibility,
+        title=request.title,
+        note_id=request.note_id,
+        debug=request.debug,
+        headless=request.headless,
     )
     await app.main()
     return account_file
@@ -882,7 +915,22 @@ def build_parser() -> argparse.ArgumentParser:
     xiaohongshu_upload_video_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
     xiaohongshu_upload_video_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
     xiaohongshu_upload_video_parser.add_argument("--thumbnail", type=existing_file_path, help="Optional thumbnail path")
+    xiaohongshu_upload_video_parser.add_argument("--visibility", choices=["private", "public"], default="private", help="Visibility; defaults to private. Public requires explicit review approval.")
     add_runtime_flags(xiaohongshu_upload_video_parser)
+
+    xiaohongshu_update_video_parser = xiaohongshu_actions.add_parser(
+        "update-video", help="Update visibility of an existing Xiaohongshu video note"
+    )
+    xiaohongshu_update_video_parser.add_argument("--account", required=True, help="Xiaohongshu user-defined account_name")
+    xiaohongshu_update_video_parser.add_argument("--title", default=None, help="Existing note title as shown in note manager")
+    xiaohongshu_update_video_parser.add_argument("--id", dest="note_id", default=None, help="Existing note id from /publish/update?id=")
+    xiaohongshu_update_video_parser.add_argument(
+        "--visibility",
+        required=True,
+        choices=["private", "public"],
+        help="Target visibility. This edits the existing note; it does not upload a new video.",
+    )
+    add_runtime_flags(xiaohongshu_update_video_parser)
 
     xiaohongshu_upload_note_parser = xiaohongshu_actions.add_parser("upload-note", help="Upload one note to Xiaohongshu")
     xiaohongshu_upload_note_parser.add_argument("--account", required=True, help="Xiaohongshu user-defined account_name")
@@ -1167,15 +1215,14 @@ async def dispatch(args: argparse.Namespace) -> int:
             print("valid" if is_valid else "invalid")
             return 0 if is_valid else 1
 
-        publish_strategy = (
-            XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED if args.schedule else XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE
-        )
-
         if args.action == "upload-video":
             parsed_tags = parse_tags(args.tags)
             if len(parsed_tags) > 10:
                 print(f"错误：小红书标签最多 10 个，当前提供了 {len(parsed_tags)} 个: {parsed_tags}", file=sys.stderr)
                 return 1
+            publish_strategy = (
+                XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED if args.schedule else XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE
+            )
             request = XiaohongshuVideoUploadRequest(
                 account_name=args.account,
                 video_file=args.file,
@@ -1187,9 +1234,29 @@ async def dispatch(args: argparse.Namespace) -> int:
                 publish_strategy=publish_strategy,
                 debug=args.debug,
                 headless=args.headless,
+                visibility=args.visibility,
             )
             await upload_xiaohongshu_video(request)
             print(f"Xiaohongshu video upload submitted: {request.video_file}")
+            return 0
+
+        if args.action == "update-video":
+            if not (args.title or args.note_id):
+                print("错误：update-video 需要 --title 或 --id", file=sys.stderr)
+                return 1
+            request = XiaohongshuVideoUpdateRequest(
+                account_name=args.account,
+                visibility=args.visibility,
+                title=args.title,
+                note_id=args.note_id,
+                debug=args.debug,
+                headless=args.headless,
+            )
+            await update_xiaohongshu_video(request)
+            print(
+                "Xiaohongshu video update submitted: "
+                f"title={request.title or '-'} id={request.note_id or '-'} visibility={request.visibility}"
+            )
             return 0
 
         if args.action == "upload-note":
@@ -1197,6 +1264,9 @@ async def dispatch(args: argparse.Namespace) -> int:
             if len(parsed_tags) > 10:
                 print(f"错误：小红书标签最多 10 个，当前提供了 {len(parsed_tags)} 个: {parsed_tags}", file=sys.stderr)
                 return 1
+            publish_strategy = (
+                XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED if args.schedule else XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE
+            )
             request = XiaohongshuNoteUploadRequest(
                 account_name=args.account,
                 image_files=parse_image_files(args.images),

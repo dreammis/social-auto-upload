@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import uploader.xiaohongshu_uploader.main as xhs_main
 
@@ -90,6 +90,145 @@ class RecordingPage:
 
 
 class XiaohongshuUploaderTests(unittest.TestCase):
+    def test_requested_cover_failure_stops_submission(self):
+        app = xhs_main.XiaoHongShuVideo("test", "test.mp4", [], 0, "account.json")
+        page = MagicMock()
+        page.locator.side_effect = RuntimeError("cover editor unavailable")
+        with self.assertRaisesRegex(RuntimeError, "submission stopped"):
+            asyncio.run(app.set_thumbnail(page, "cover.png"))
+        page.reset_mock()
+        asyncio.run(app.set_thumbnail(page, ""))
+        page.locator.assert_not_called()
+
+    def test_update_video_requires_title_or_id(self):
+        with self.assertRaisesRegex(ValueError, "title or --id"):
+            xhs_main.XiaoHongShuVideoUpdate("account.json", "public")
+
+    def test_update_url_uses_account_route(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            os.environ, {"SAU_XHS_CREATOR_BASE_URL": ""}
+        ):
+            account = str(Path(tmp) / "sam.json")
+            xhs_main._remember_creator_origin(account, "https://creator.rednote.com/login")
+            self.assertEqual(
+                xhs_main._build_xhs_update_url("6aa41f350000000019032e8c", account),
+                "https://creator.rednote.com/publish/update?id=6aa41f350000000019032e8c&noteType=video",
+            )
+
+    def test_public_guard_reads_permission_card_not_hidden_option_text(self):
+        async def check():
+            app = xhs_main.XiaoHongShuVideoUpdate(
+                "account.json", "public", title="世界高速铁路营业里程排名"
+            )
+            async with xhs_main.async_playwright() as playwright:
+                browser = await playwright.chromium.launch(headless=True, channel="chromium")
+                page = await browser.new_page()
+                await page.set_content(
+                    '<div class="permission-card-select">'
+                    '<div class="d-select-description">仅自己可见</div></div>'
+                    '<div class="name">公开可见</div>'
+                )
+                with self.assertRaisesRegex(RuntimeError, "refusing to publish"):
+                    await app.verify_visibility(page)
+                await page.set_content(
+                    '<div class="permission-card-select">'
+                    '<div class="d-select-description">公开可见</div></div>'
+                    '<div class="name">仅自己可见</div>'
+                )
+                await app.verify_visibility(page)
+                await browser.close()
+        asyncio.run(check())
+
+    def test_set_visibility_switches_permission_card_from_private_to_public(self):
+        async def check():
+            app = xhs_main.XiaoHongShuVideoUpdate(
+                "account.json", "public", note_id="6aa41f350000000019032e8c"
+            )
+            async with xhs_main.async_playwright() as playwright:
+                browser = await playwright.chromium.launch(headless=True, channel="chromium")
+                page = await browser.new_page()
+                await page.set_content(
+                    """
+                    <div class="permission-card-select" id="perm">
+                      <div class="d-select-description" id="cur">仅自己可见</div>
+                    </div>
+                    <div class="group-info" id="menu" style="display:none">
+                      <div class="name" id="pub">公开可见</div>
+                      <div class="name">仅自己可见</div>
+                    </div>
+                    <script>
+                      document.getElementById('perm').addEventListener('click', () => {
+                        document.getElementById('menu').style.display = 'block';
+                      });
+                      document.getElementById('pub').addEventListener('click', () => {
+                        document.getElementById('cur').textContent = '公开可见';
+                        document.getElementById('menu').style.display = 'none';
+                      });
+                    </script>
+                    """
+                )
+                await app.set_visibility(page)
+                self.assertEqual(
+                    await page.locator(".permission-card-select .d-select-description").inner_text(),
+                    "公开可见",
+                )
+                await browser.close()
+        asyncio.run(check())
+
+    def test_private_guard_checks_selected_control_not_preview_or_hidden_options(self):
+        async def check():
+            app = xhs_main.XiaoHongShuVideo("test", "test.mp4", [], 0, "account.json")
+            self.assertEqual(app.visibility, "private")
+            async with xhs_main.async_playwright() as playwright:
+                browser = await playwright.chromium.launch(headless=True, channel="chromium")
+                page = await browser.new_page()
+                await page.set_content('<div class="d-select-description">公开可见</div><span>仅自己可见</span>')
+                with self.assertRaisesRegex(RuntimeError, "refusing to publish"):
+                    await app.verify_visibility(page)
+                await page.set_content('<div class="d-select-description">仅自己可见</div><span>公开可见</span>')
+                await app.verify_visibility(page)
+                await page.set_content('<div class="d-select-description" style="display:none">仅自己可见</div>')
+                with self.assertRaisesRegex(RuntimeError, "refusing to publish"):
+                    await app.verify_visibility(page)
+                await browser.close()
+        asyncio.run(check())
+
+    def test_account_route_survives_later_check_and_upload(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            os.environ, {"SAU_XHS_CREATOR_BASE_URL": ""}
+        ):
+            account = str(Path(tmp) / "sam.json")
+            xhs_main._remember_creator_origin(account, "https://creator.rednote.com/login")
+            self.assertEqual(
+                xhs_main._build_xhs_creator_url("/publish/publish?target=video", account),
+                "https://creator.rednote.com/publish/publish?target=video",
+            )
+            xhs_main._remember_creator_origin(account, "https://creator.rednote.com.evil.test/login")
+            self.assertEqual(
+                xhs_main._build_xhs_creator_url("/login", account),
+                "https://creator.rednote.com/login",
+            )
+
+    def test_both_login_domains_and_untrusted_pages_are_not_authenticated(self):
+        for url in (
+            "https://creator.rednote.com/login?redirect=home",
+            "https://creator.xiaohongshu.com/login/",
+            "https://example.com/", "about:blank",
+        ):
+            page = MagicMock(url=url)
+            self.assertFalse(asyncio.run(xhs_main._is_xhs_login_completed(page)))
+
+    def test_rednote_authenticated_page_and_visible_login_box(self):
+        page = MagicMock(url="https://creator.rednote.com/home")
+        box = page.locator.return_value.first
+        box.count = AsyncMock(return_value=1)
+        box.is_visible = AsyncMock(return_value=True)
+        self.assertFalse(asyncio.run(xhs_main._is_xhs_login_completed(page)))
+        box.is_visible = AsyncMock(return_value=False)
+        self.assertTrue(asyncio.run(xhs_main._is_xhs_login_completed(page)))
+        box.is_visible = AsyncMock(side_effect=RuntimeError("navigating"))
+        self.assertFalse(asyncio.run(xhs_main._is_xhs_login_completed(page)))
+
     def test_creator_urls_keep_xiaohongshu_domain_by_default(self):
         with patch.dict(os.environ, {"SAU_XHS_CREATOR_BASE_URL": ""}):
             self.assertEqual(
