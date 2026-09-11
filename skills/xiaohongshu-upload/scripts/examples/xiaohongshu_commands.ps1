@@ -19,6 +19,18 @@ sau xiaohongshu upload-video `
   --thumbnail $thumbnail `
   --headless
 
+sau xiaohongshu update-video `
+  --account $account `
+  --title "Xiaohongshu video from PowerShell" `
+  --visibility public `
+  --headless
+
+sau xiaohongshu update-video `
+  --account $account `
+  --title "Xiaohongshu video from PowerShell" `
+  --desc "Updated description from PowerShell" `
+  --headless
+
 sau xiaohongshu upload-note `
   --account $account `
   --images $noteImages `

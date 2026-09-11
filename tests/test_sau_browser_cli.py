@@ -15,6 +15,42 @@ class BrowserCliParserTests(unittest.TestCase):
         self.assertEqual(args.platform, "xiaohongshu")
         self.assertEqual(args.action, "login")
 
+    def test_build_parser_accepts_xiaohongshu_update_video(self):
+        parser = sau_cli.build_parser()
+        args = parser.parse_args([
+            "xiaohongshu", "update-video",
+            "--account", "sam",
+            "--title", "世界高速铁路营业里程排名",
+            "--visibility", "public",
+        ])
+        self.assertEqual(args.action, "update-video")
+        self.assertEqual(args.title, "世界高速铁路营业里程排名")
+        self.assertIsNone(args.note_id)
+        self.assertEqual(args.visibility, "public")
+        self.assertTrue(args.headless)
+
+        args = parser.parse_args([
+            "xiaohongshu", "update-video",
+            "--account", "sam",
+            "--id", "6aa41f350000000019032e8c",
+            "--visibility", "private",
+            "--headed",
+        ])
+        self.assertEqual(args.note_id, "6aa41f350000000019032e8c")
+        self.assertEqual(args.visibility, "private")
+        self.assertFalse(args.headless)
+
+        args = parser.parse_args([
+            "xiaohongshu", "update-video",
+            "--account", "sam",
+            "--title", "世界高速铁路营业里程排名",
+            "--desc", "24个国家，按UIC里程从短到长画出来。",
+        ])
+        self.assertEqual(args.desc, "24个国家，按UIC里程从短到长画出来。")
+        self.assertIsNone(args.visibility)
+        self.assertIsNone(args.tags)
+        self.assertIsNone(args.new_title)
+
     def test_douyin_upload_video_accepts_desc(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             video_path = Path(tmp_dir) / "demo.mp4"
@@ -226,6 +262,84 @@ class BrowserCliDispatchTests(unittest.TestCase):
             code = asyncio.run(sau_cli.dispatch(args))
         self.assertEqual(code, 0)
 
+    def test_dispatch_xiaohongshu_update_video_forwards_visibility(self):
+        args = Namespace(
+            platform="xiaohongshu",
+            action="update-video",
+            account="sam",
+            title="世界高速铁路营业里程排名",
+            note_id=None,
+            visibility="public",
+            desc=None,
+            tags=None,
+            new_title=None,
+            debug=False,
+            headless=True,
+        )
+        with patch("sau_cli.update_xiaohongshu_video", new=AsyncMock()) as mock_update:
+            code = asyncio.run(sau_cli.dispatch(args))
+        self.assertEqual(code, 0)
+        request = mock_update.await_args.args[0]
+        self.assertEqual(request.account_name, "sam")
+        self.assertEqual(request.title, "世界高速铁路营业里程排名")
+        self.assertEqual(request.visibility, "public")
+
+    def test_dispatch_xiaohongshu_update_video_forwards_desc(self):
+        args = Namespace(
+            platform="xiaohongshu",
+            action="update-video",
+            account="sam",
+            title="世界高速铁路营业里程排名",
+            note_id=None,
+            visibility=None,
+            desc="24个国家，按UIC里程从短到长画出来。",
+            tags=None,
+            new_title=None,
+            debug=False,
+            headless=True,
+        )
+        with patch("sau_cli.update_xiaohongshu_video", new=AsyncMock()) as mock_update:
+            code = asyncio.run(sau_cli.dispatch(args))
+        self.assertEqual(code, 0)
+        request = mock_update.await_args.args[0]
+        self.assertEqual(request.description, "24个国家，按UIC里程从短到长画出来。")
+        self.assertIsNone(request.visibility)
+        self.assertIsNone(request.tags)
+
+    def test_dispatch_xiaohongshu_update_video_requires_title_or_id(self):
+        args = Namespace(
+            platform="xiaohongshu",
+            action="update-video",
+            account="sam",
+            title=None,
+            note_id=None,
+            visibility="public",
+            desc=None,
+            tags=None,
+            new_title=None,
+            debug=False,
+            headless=True,
+        )
+        code = asyncio.run(sau_cli.dispatch(args))
+        self.assertEqual(code, 1)
+
+    def test_dispatch_xiaohongshu_update_video_requires_a_mutation(self):
+        args = Namespace(
+            platform="xiaohongshu",
+            action="update-video",
+            account="sam",
+            title="世界高速铁路营业里程排名",
+            note_id=None,
+            visibility=None,
+            desc=None,
+            tags=None,
+            new_title=None,
+            debug=False,
+            headless=True,
+        )
+        code = asyncio.run(sau_cli.dispatch(args))
+        self.assertEqual(code, 1)
+
     def test_dispatch_douyin_upload_note_uses_new_request_fields(self):
         args = Namespace(
             platform="douyin",
@@ -310,6 +424,7 @@ class BrowserCliDispatchTests(unittest.TestCase):
             tags="测试,视频",
             schedule=0,
             thumbnail=None,
+            visibility="private",
             debug=False,
             headless=False,
         )

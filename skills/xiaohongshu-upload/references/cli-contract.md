@@ -42,6 +42,7 @@ sau xiaohongshu upload-video \
   [--tags tag1,tag2] \
   [--schedule "YYYY-MM-DD HH:MM"] \
   [--thumbnail <image-path>] \
+  [--visibility private|public] \
   [--debug] \
   [--headless | --headed]
 ```
@@ -58,6 +59,33 @@ sau xiaohongshu upload-video \
   - `--debug`
   - `--headless`
   - `--headed`
+
+### 改已有视频
+
+```bash
+sau xiaohongshu update-video \
+  --account <account> \
+  [--title "<existing-title>"] \
+  [--id <note-id>] \
+  [--visibility public|private] \
+  [--desc "<description>"] \
+  [--tags tag1,tag2] \
+  [--new-title "<new-title>"] \
+  [--debug] \
+  [--headless | --headed]
+```
+
+- 必填参数:
+  - `--account`
+  - `--title` 或 `--id` 至少一个
+  - `--visibility`、`--desc`、`--tags`、`--new-title` 至少一个
+- 作用:
+  - 打开创作者后台编辑页，改已有视频笔记的可见性、简介、话题或标题
+  - 不重新上传视频文件，也不会再发一条
+- `--id` 来自编辑页 URL：`/publish/update?id=<note-id>&noteType=video`
+- `--title` 按笔记管理页卡片标题精确匹配；匹配到多条则失败
+- `--desc` 会重写正文。不传 `--tags` 时会先收集当前话题再写回去，避免简介把原标签清掉
+- `--new-title` 改笔记标题，最多 20 个字；查找用的仍是原来的 `--title` 或 `--id`
 
 ### 上传图文
 
@@ -87,6 +115,9 @@ sau xiaohongshu upload-note \
 
 ## 发布策略
 
+- Video uploads default to `--visibility private` (only-self). Use public only after the user has reviewed and explicitly approved release. Private selection is checked before the final submission; failure aborts without clicking Publish.
+- Changing an already submitted note uses `update-video`, not a second `upload-video`.
+- A video submission is attempted once. An uncertain success response must be checked in note management before retrying, to avoid duplicate posts.
 - 如果不传 `--schedule`，CLI 使用立即发布
 - 如果传了 `--schedule`，CLI 自动切换为定时发布
 - 时间格式为:

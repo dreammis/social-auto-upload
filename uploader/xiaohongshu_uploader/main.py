@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import os
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import parse_qs
+from urllib.parse import urlsplit
 
 from patchright.async_api import Page
 from patchright.async_api import Playwright
@@ -24,20 +27,59 @@ from utils.log import xiaohongshu_logger
 XHS_DEFAULT_CREATOR_BASE_URL = "https://creator.xiaohongshu.com"
 XHS_CREATOR_BASE_URL_ENV = "SAU_XHS_CREATOR_BASE_URL"
 XHS_PUBLISH_SUCCESS_URL_PATTERN = "**/publish/success?**"
+XHS_NOTE_MANAGER_URL_PATTERN = "**/new/note-manager**"
 XHS_LOGIN_BOX_SELECTOR = "div[class*='login-box']"
 XHS_LOGIN_SWITCH_SELECTOR = "img.css-wemwzq"
 XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE = "immediate"
 XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED = "scheduled"
+XHS_VISIBILITY_LABELS = {
+    "private": "仅自己可见",
+    "public": "公开可见",
+}
 
 
-def _build_xhs_creator_url(path: str) -> str:
+def _creator_origin(url: str) -> str | None:
+    parsed = urlsplit(url)
+    if parsed.scheme == "https" and parsed.netloc in {
+        "creator.xiaohongshu.com", "creator.rednote.com"
+    }:
+        return f"https://{parsed.netloc}"
+    return None
+
+
+def _route_path(account_file: str) -> Path:
+    return Path(account_file).with_suffix(".route.json")
+
+
+def _remember_creator_origin(account_file: str, url: str) -> None:
+    origin = _creator_origin(url)
+    if origin:
+        path = _route_path(account_file)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"creator_origin": origin}), encoding="utf-8")
+
+
+def _build_xhs_creator_url(path: str, account_file: str | None = None) -> str:
     base_url = os.getenv(
         XHS_CREATOR_BASE_URL_ENV,
-        XHS_DEFAULT_CREATOR_BASE_URL,
+        "",
     ).strip().rstrip("/")
+    if not base_url and account_file:
+        try:
+            saved = json.loads(_route_path(account_file).read_text(encoding="utf-8"))
+            base_url = _creator_origin(saved.get("creator_origin", "")) or ""
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass
     if not base_url:
         base_url = XHS_DEFAULT_CREATOR_BASE_URL
     return f"{base_url}/{path.lstrip('/')}"
+
+
+def _build_xhs_update_url(note_id: str, account_file: str | None = None) -> str:
+    return _build_xhs_creator_url(
+        f"/publish/update?id={note_id}&noteType=video",
+        account_file,
+    )
 
 
 def _msg(emoji: str, text: str) -> str:
@@ -161,7 +203,8 @@ async def _save_xhs_qrcode(
 
 
 async def _is_xhs_login_completed(page: Page) -> bool:
-    if page.url.startswith(_build_xhs_creator_url("/login")):
+    parsed = urlsplit(page.url)
+    if not _creator_origin(page.url) or parsed.path.rstrip("/") == "/login":
         return False
 
     login_box = page.locator(XHS_LOGIN_BOX_SELECTOR).first
@@ -171,7 +214,7 @@ async def _is_xhs_login_completed(page: Page) -> bool:
     try:
         return not await login_box.is_visible()
     except Exception:
-        return True
+        return False
 
 
 async def cookie_auth(account_file):
@@ -189,12 +232,12 @@ async def cookie_auth(account_file):
             page = await context.new_page()
             await page.goto(
                 _build_xhs_creator_url(
-                    "/publish/publish?from=homepage&target=video"
+                    "/publish/publish?from=homepage&target=video", account_file
                 )
             )
             await page.wait_for_timeout(3000)
 
-            if page.url.startswith(_build_xhs_creator_url("/login")):
+            if not await _is_xhs_login_completed(page):
                 xiaohongshu_logger.info(_msg("🥹", "cookie 已失效，得重新登录一下"))
                 return False
 
@@ -207,6 +250,7 @@ async def cookie_auth(account_file):
                 except Exception:
                     return False
 
+            _remember_creator_origin(account_file, page.url)
             xiaohongshu_logger.success(_msg("🥳", "cookie 有效"))
             return True
         except Exception as exc:
@@ -261,14 +305,30 @@ async def xiaohongshu_cookie_gen(
         result = _build_login_result(False, "failed", "小红书登录失败", account_file)
         try:
             page = await context.new_page()
-            await page.goto(_build_xhs_creator_url("/login"))
+            await page.goto(_build_xhs_creator_url("/login", account_file))
+            _remember_creator_origin(account_file, page.url)
             qrcode_info = await _save_xhs_qrcode(page, account_file, qrcode_callback=qrcode_callback)
             qrcode_path = Path(qrcode_info["image_path"])
             xiaohongshu_logger.info(_msg("🧍", "请扫码，小人正在耐心等待登录完成"))
 
+            qrcode_origin = _creator_origin(page.url)
+            seen_origins = {qrcode_origin}
             for _ in range(max_checks):
+                current_origin = _creator_origin(page.url)
+                if current_origin and current_origin not in seen_origins:
+                    seen_origins.add(current_origin)
+                    _remember_creator_origin(account_file, page.url)
+                    xiaohongshu_logger.info(f"Creator site changed to {current_origin}")
+                    if urlsplit(page.url).path.rstrip("/") == "/login":
+                        qrcode_info = await _save_xhs_qrcode(
+                            page, account_file, previous_qrcode_path=qrcode_path,
+                            qrcode_callback=qrcode_callback,
+                        )
+                        qrcode_path = Path(qrcode_info["image_path"])
+                        xiaohongshu_logger.info("Scan the updated QR code for the redirected creator site.")
                 if await _is_xhs_login_completed(page):
                     await asyncio.sleep(2)
+                    _remember_creator_origin(account_file, page.url)
                     await context.storage_state(path=account_file)
                     if await cookie_auth(account_file):
                         xiaohongshu_logger.success(_msg("🥳", "小红书扫码登录成功，小人开心收工"))
@@ -289,7 +349,7 @@ async def xiaohongshu_cookie_gen(
             result = _build_login_result(
                 False,
                 "timeout",
-                "等待小红书扫码登录超时",
+                f"Creator login timed out at {urlsplit(page.url).netloc}{urlsplit(page.url).path}",
                 account_file,
                 qrcode_info,
                 page.url,
@@ -408,21 +468,127 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
                 xiaohongshu_logger.debug(_msg("😵", f"读取位置候选列表失败: {inner_e}"))
             return False
 
+    async def _read_visibility_label(self, page: Page) -> str:
+        perm = page.locator(".permission-card-select .d-select-description")
+        if await perm.count() and await perm.first.is_visible():
+            return (await perm.first.inner_text()).strip()
+        for label in XHS_VISIBILITY_LABELS.values():
+            loc = page.locator(".d-select-description").filter(has_text=label)
+            if await loc.count() and await loc.first.is_visible():
+                return label
+        return ""
+
+    async def _click_visibility_option(self, page: Page, label: str) -> None:
+        grouped = page.locator(".group-info .name").filter(has_text=label)
+        if await grouped.count():
+            for i in range(await grouped.count()):
+                option = grouped.nth(i)
+                if await option.is_visible():
+                    await option.click(timeout=10000)
+                    return
+        names = page.locator(".name").filter(has_text=label)
+        for i in range(await names.count()):
+            option = names.nth(i)
+            if await option.is_visible():
+                await option.click(timeout=10000)
+                return
+        raise RuntimeError(f"Visibility option not found: {label}")
+
+    async def set_visibility(self, page: Page) -> None:
+        visibility = getattr(self, "visibility", "public")
+        if visibility not in XHS_VISIBILITY_LABELS:
+            raise ValueError("Unsupported visibility")
+        label = XHS_VISIBILITY_LABELS[visibility]
+        current = await self._read_visibility_label(page)
+        if current == label:
+            await self.verify_visibility(page)
+            return
+        if not current and visibility == "public":
+            return
+        if not current:
+            raise RuntimeError("Visibility control not found; refusing to publish")
+
+        perm = page.locator(".permission-card-select")
+        if await perm.count() and await perm.first.is_visible():
+            await perm.first.scroll_into_view_if_needed()
+            await perm.first.click(timeout=10000)
+        else:
+            current_loc = page.locator(".d-select-description").filter(has_text=current)
+            await current_loc.first.click(timeout=10000)
+        await self._click_visibility_option(page, label)
+        await page.keyboard.press("Escape")
+        await self.verify_visibility(page)
+
+    async def verify_visibility(self, page: Page) -> None:
+        visibility = getattr(self, "visibility", "public")
+        if visibility not in XHS_VISIBILITY_LABELS:
+            raise ValueError("Unsupported visibility")
+        label = XHS_VISIBILITY_LABELS[visibility]
+        perm = page.locator(".permission-card-select .d-select-description")
+        if await perm.count():
+            if not await perm.first.is_visible() or (await perm.first.inner_text()).strip() != label:
+                raise RuntimeError(f"{label} visibility is not verified; refusing to publish")
+            xiaohongshu_logger.info(f"Verified visibility: {visibility} ({label})")
+            return
+        if visibility != "private":
+            return
+        selected = page.locator(".d-select-description").filter(has_text=label)
+        if await selected.count() != 1 or not await selected.is_visible():
+            raise RuntimeError("Private visibility is not verified; refusing to publish")
+        xiaohongshu_logger.info("Verified visibility: private (仅自己可见)")
+
     async def fill_title(self, page: Page) -> None:
         title_container = page.locator('input[placeholder*="填写标题"]')
         await title_container.fill(self.title[:20])
+
+    def _desc_editor(self, page: Page):
+        return page.locator('p[data-placeholder*="输入正文描述"]').first
+
+    async def _editor_text(self, page: Page) -> str:
+        editor = self._desc_editor(page)
+        if await editor.count():
+            return ((await editor.inner_text()) or "").strip()
+        return ""
+
+    async def collect_editor_tags(self, page: Page) -> list[str]:
+        tags = await page.evaluate(
+            """() => {
+              const names = [];
+              const root = document.querySelector('#publish-container') || document.body;
+              for (const el of root.querySelectorAll('[class*="topic"], [data-topic]')) {
+                const text = (el.innerText || '').replace(/^#/, '').replace(/\\[话题\\]/g, '').trim();
+                if (text) names.push(text);
+              }
+              const editor = root.querySelector('p[data-placeholder*="输入正文描述"]');
+              const blob = editor ? (editor.innerText || '') : '';
+              for (const match of blob.matchAll(/#([^\\s#\\[\\]]+)/g)) {
+                names.push(match[1].replace(/\\[话题\\]$/, ''));
+              }
+              return [...new Set(names.filter(Boolean))];
+            }"""
+        )
+        return list(tags or [])
 
     async def fill_desc(self, page: Page) -> None:
         if not getattr(self, "desc", ""):
             return
 
-        desc = page.locator('p[data-placeholder*="输入正文描述"]')
+        desc = self._desc_editor(page)
         await desc.click()
         await page.keyboard.press("Backspace")
         await page.keyboard.press("Control+KeyA")
         await page.keyboard.press("Delete")
         await page.keyboard.type(self.desc)
         await page.keyboard.press("Enter")
+
+    async def verify_desc(self, page: Page) -> None:
+        wanted = "".join((getattr(self, "desc", "") or "").split())
+        if not wanted:
+            return
+        compact = "".join((await self._editor_text(page)).split())
+        if wanted not in compact:
+            raise RuntimeError("Description was not applied; refusing to publish")
+        xiaohongshu_logger.info(_msg("✍️", "简介已写进编辑器"))
 
     async def fill_tags(self, page: Page) -> None:
         if not getattr(self, "tags", None):
@@ -534,6 +700,7 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         publish_strategy: str = XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE,
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
+        visibility: str = "private",
     ):
         super().__init__(
             publish_date=publish_date,
@@ -547,6 +714,10 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         self.tags = tags or []
         self.thumbnail_path = thumbnail_path
         self.desc = desc or ""
+        self.repost_source = next((line.split("：", 1)[1].strip() for line in self.desc.splitlines() if line.startswith("原作者：")), "")
+        if visibility not in {"private", "public"}:
+            raise ValueError("Unsupported visibility")
+        self.visibility = visibility
 
     async def validate_upload_args(self):
         await self.validate_base_args()
@@ -565,72 +736,50 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         if not thumbnail_path:
             return
 
-        xiaohongshu_logger.info(_msg("🖼️", "小人准备设置封面"))
-
-        # 封面设置为增强步骤：失败时记 warning 跳过、继续发布（用视频首帧兜底）。
+        # A requested cover is required: never silently publish the first frame.
         try:
-            # 发布页封面区域内嵌，点击 div.upload-cover 打开封面弹窗（d-modal）。
-            cover_section = page.locator("text=设置封面").first
-            try:
-                await cover_section.scroll_into_view_if_needed(timeout=5000)
-            except Exception:
-                pass
-            await page.wait_for_timeout(2000)
+            preview = page.locator(".cover-plugin-preview .cover > .default").first
+            previous = await preview.get_attribute("style") if await preview.count() else None
+            modern = page.locator(".cover-edit-entry").first
+            if await modern.count():
+                # RedNote first reveals the edit overlay when the preview is clicked.
+                await preview.click()
+                await modern.click(timeout=10000)
+            else:
+                await page.locator("div.upload-cover").first.click(timeout=10000)
 
-            # 1. 点击 div.upload-cover 打开封面弹窗
-            upload_cover = page.locator("div.upload-cover").first
-            if not await upload_cover.count():
-                upload_cover = page.locator("div.cover-plugin-preview div.default.pointer").first
-            await upload_cover.click(force=True)
-            await page.wait_for_timeout(3000)
-
-            # 2. 切换到「上传封面」tab（默认在「截取封面」）
-            upload_tab = page.get_by_text("上传封面", exact=True).first
-            await upload_tab.wait_for(state="visible", timeout=10000)
-            await upload_tab.click()
-            await page.wait_for_timeout(2000)
-
-            # 3. 找到图片 file input（parent class: upload-wrapper）并上传
-            file_input = page.locator('div.upload-wrapper input[type="file"][accept*="image"]').first
-            if not await file_input.count():
-                file_input = page.locator('input[type="file"][accept*="image"]').last
-            await file_input.set_input_files(thumbnail_path)
-            await page.wait_for_timeout(4000)  # 等图片加载+裁剪渲染
-
-            # 4. 点「确定」按钮
-            modal_footer = page.locator("div.d-modal-footer")
-            confirm = modal_footer.get_by_text("确定", exact=True).first
-            if not await confirm.count():
-                confirm = page.get_by_role("button", name="确定").first
-            await confirm.wait_for(state="visible", timeout=10000)
-            await confirm.click()
-
-            # 5. 等弹窗关闭
-            modal = page.locator("div.d-modal")
-            try:
-                await modal.first.wait_for(state="hidden", timeout=15000)
-            except Exception:
-                pass
-            xiaohongshu_logger.success(_msg("🥳", "封面已经设置完成"))
+            modal = page.locator("div.d-modal:visible").filter(has_text="设置封面")
+            await modal.wait_for(state="visible", timeout=10000)
+            await modal.get_by_text("上传封面", exact=True).click()
+            await modal.locator('input[type="file"][accept*="image"]').set_input_files(thumbnail_path)
+            await modal.locator(".center-box:visible").wait_for(timeout=15000)
+            await modal.get_by_role("button", name="确定", exact=True).click(timeout=30000)
+            await modal.wait_for(state="hidden", timeout=30000)
+            if previous is not None:
+                await page.wait_for_function(
+                    "previous => { const e = document.querySelector('.cover-plugin-preview .cover > .default'); "
+                    "return e && e.style.backgroundImage && e.getAttribute('style') !== previous; }",
+                    arg=previous, timeout=15000,
+                )
+            xiaohongshu_logger.success("Custom cover applied")
         except Exception as exc:
-            xiaohongshu_logger.warning(_msg("🖼️", f"封面设置失败，跳过该步骤继续发布（用视频首帧）：{exc}"))
-            try:
-                await page.keyboard.press("Escape")
-                await page.wait_for_timeout(500)
-            except Exception:
-                pass
+            raise RuntimeError("Custom cover could not be verified; submission stopped") from exc
 
     async def upload_video_content(self, page: Page) -> None:
         xiaohongshu_logger.info(_msg("🏃", f"小人开始搬运视频: {self.title}.mp4"))
         xiaohongshu_logger.info(_msg("🧭", "小人正在赶往视频发布页"))
         publish_url = _build_xhs_creator_url(
-            "/publish/publish?from=homepage&target=video"
+            "/publish/publish?from=homepage&target=video", self.account_file
         )
         await page.goto(publish_url)
         await page.wait_for_url(publish_url)
         await page.locator("div[class^='upload-content'] input[class='upload-input']").set_input_files(self.file_path)
 
         while True:
+            page_text = await page.locator("body").inner_text()
+            if "重新上传" in page_text and "取消上传" not in page_text:
+                xiaohongshu_logger.info("Video transfer completed")
+                break
             try:
                 upload_input = await page.wait_for_selector('input.upload-input', timeout=3000)
                 preview_new = await upload_input.query_selector(
@@ -660,7 +809,7 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
                 else:
                     # 尝试检查标题输入框是否已经出现，如果是，说明已经进入编辑状态
                     title_container = page.locator('input[placeholder*="填写标题"]')
-                    if await title_container.count() > 0 and await title_container.is_visible():
+                    if await title_container.count() > 0 and await title_container.is_visible() and await page.get_by_text("重新上传", exact=True).count() > 0 and await page.get_by_text("取消上传", exact=True).count() == 0:
                         xiaohongshu_logger.success(_msg("🥳", "虽然没看到预览区，但标题框出来了，小人继续"))
                         break
                     xiaohongshu_logger.debug(_msg("🧍", "还没拿到预览区域，小人继续等一会"))
@@ -680,23 +829,12 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
         if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
             await self.set_schedule_time_xiaohongshu(page, self.publish_date)
 
-        while True:
-            try:
-                if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED:
-                    await page.locator('button:has-text("定时发布")').click()
-                else:
-                    await page.locator('button:has-text("发布")').click()
-                await page.wait_for_url(
-                    XHS_PUBLISH_SUCCESS_URL_PATTERN,
-                    timeout=3000
-                )
-                xiaohongshu_logger.success(_msg("🥳", "视频发布成功，小人开心收工"))
-                break
-            except Exception:
-                xiaohongshu_logger.info(_msg("🏃", "小人正在冲刺发布视频"))
-                if self.debug:
-                    await page.screenshot(full_page=True)
-                await asyncio.sleep(0.5)
+        await self.set_visibility(page)
+        await self.verify_visibility(page)
+        button_name = "定时发布" if self.publish_strategy == XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED else "发布"
+        await page.get_by_role("button", name=button_name, exact=True).click()
+        await page.wait_for_url(XHS_PUBLISH_SUCCESS_URL_PATTERN, timeout=30000)
+        xiaohongshu_logger.success(f"Video submitted with visibility={self.visibility}; URL: {page.url}")
 
     async def upload(self, playwright: Playwright) -> None:
         xiaohongshu_logger.info(_msg("🧍", "小人先检查 cookie、视频文件、封面和发布时间"))
@@ -724,6 +862,197 @@ class XiaoHongShuVideo(XiaoHongShuBaseUploader):
 
     async def main(self):
         await self.xiaohongshu_upload_video()
+
+
+class XiaoHongShuVideoUpdate(XiaoHongShuBaseUploader):
+    """Edit an existing video note. Does not upload a new file."""
+
+    def __init__(
+        self,
+        account_file,
+        visibility: str | None = None,
+        title: str | None = None,
+        note_id: str | None = None,
+        desc: str | None = None,
+        tags: list[str] | None = None,
+        new_title: str | None = None,
+        debug: bool = DEBUG_MODE,
+        headless: bool = LOCAL_CHROME_HEADLESS,
+    ):
+        super().__init__(
+            publish_date=0,
+            account_file=account_file,
+            publish_strategy=XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE,
+            debug=debug,
+            headless=headless,
+        )
+        title = (title or "").strip() or None
+        note_id = (note_id or "").strip() or None
+        desc = desc if desc is None else str(desc)
+        new_title = (new_title or "").strip() or None
+        if not title and not note_id:
+            raise ValueError("update-video requires --title or --id")
+        if visibility is not None and visibility not in XHS_VISIBILITY_LABELS:
+            raise ValueError("Unsupported visibility")
+        if visibility is None and desc is None and tags is None and new_title is None:
+            raise ValueError("update-video requires --visibility, --desc, --tags, or --new-title")
+        self.title = title
+        self.note_id = note_id
+        self.visibility = visibility
+        self.desc = desc
+        self.tags = tags
+        self.new_title = new_title
+
+    async def _find_note_card(self, page: Page):
+        cards = page.locator(".note-card")
+        await cards.first.wait_for(state="visible", timeout=20000)
+        matches = []
+        for i in range(await cards.count()):
+            card = cards.nth(i)
+            title_el = card.locator(".note-card__title")
+            if await title_el.count():
+                text = (await title_el.inner_text()).strip()
+            else:
+                text = (await card.inner_text()).split("\n")[0].strip()
+            if self.title and text == self.title:
+                matches.append(card)
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise RuntimeError(f"Multiple notes titled {self.title!r}")
+        if self.title:
+            filtered = page.locator(".note-card").filter(has_text=self.title)
+            if await filtered.count() == 1:
+                return filtered.first
+        raise RuntimeError(f"Note not found in manager: {self.title or self.note_id}")
+
+    async def _open_editor_from_manager(self, page: Page) -> None:
+        manager_url = _build_xhs_creator_url("/new/note-manager", self.account_file)
+        xiaohongshu_logger.info(_msg("🧭", "小人正在赶往笔记管理页"))
+        await page.goto(manager_url)
+        card = await self._find_note_card(page)
+        await card.hover()
+        await page.wait_for_timeout(400)
+        buttons = card.locator(".note-card__action-btn")
+        edit_btn = None
+        for i in range(await buttons.count()):
+            btn = buttons.nth(i)
+            cls = await btn.get_attribute("class") or ""
+            if "note-card__action-btn--del" in cls or "note-card__action-btn--disabled" in cls:
+                continue
+            edit_btn = btn
+        if edit_btn is None:
+            raise RuntimeError("Edit button not found on note card")
+        await edit_btn.click()
+        await page.wait_for_url("**/publish/update?**", timeout=20000)
+
+    async def open_editor(self, page: Page) -> None:
+        if self.note_id:
+            update_url = _build_xhs_update_url(self.note_id, self.account_file)
+            xiaohongshu_logger.info(_msg("🧭", f"小人正在打开已有笔记: {self.note_id}"))
+            await page.goto(update_url)
+            await page.wait_for_url("**/publish/update?**", timeout=20000)
+        else:
+            await self._open_editor_from_manager(page)
+
+        parsed = urlsplit(page.url)
+        found_id = parse_qs(parsed.query).get("id", [None])[0]
+        if found_id:
+            self.note_id = found_id
+        if not self.title:
+            title_input = page.locator('input[placeholder*="填写标题"]')
+            if await title_input.count():
+                self.title = ((await title_input.input_value()) or "").strip() or self.title
+
+    async def apply_new_title(self, page: Page) -> None:
+        if not self.new_title:
+            return
+        title_input = page.locator('input[placeholder*="填写标题"]')
+        await title_input.fill(self.new_title[:20])
+        actual = ((await title_input.input_value()) or "").strip()
+        if actual != self.new_title[:20]:
+            raise RuntimeError("Title was not applied; refusing to publish")
+        self.title = actual
+        xiaohongshu_logger.info(_msg("✍️", f"标题已改成 {actual}"))
+
+    async def apply_desc_and_tags(self, page: Page) -> None:
+        if self.desc is None and self.tags is None:
+            return
+        tags = self.tags
+        if tags is None:
+            tags = await self.collect_editor_tags(page)
+        if self.desc is None:
+            current = await self._editor_text(page)
+            self.desc = "\n".join(
+                line for line in current.splitlines() if not line.strip().startswith("#")
+            ).strip()
+        await self.fill_desc(page)
+        self.tags = list(tags or [])
+        if self.tags:
+            await self.fill_tags(page)
+        await self.verify_desc(page)
+
+    async def submit_update(self, page: Page) -> None:
+        await self.apply_new_title(page)
+        await self.apply_desc_and_tags(page)
+        if self.visibility is not None:
+            await self.set_visibility(page)
+            await self.verify_visibility(page)
+            xiaohongshu_logger.info(
+                _msg("✍️", f"小人准备把可见性改成 {XHS_VISIBILITY_LABELS[self.visibility]}")
+            )
+        changed = []
+        if self.new_title:
+            changed.append(f"title={self.new_title[:20]}")
+        if self.desc is not None:
+            changed.append("desc")
+        if self.tags is not None:
+            changed.append("tags")
+        if self.visibility is not None:
+            changed.append(f"visibility={self.visibility}")
+        xiaohongshu_logger.info(_msg("✍️", f"小人准备提交修改: {', '.join(changed) or 'none'}"))
+        await page.get_by_role("button", name="发布", exact=True).click()
+        try:
+            await page.wait_for_url(XHS_PUBLISH_SUCCESS_URL_PATTERN, timeout=10000)
+        except Exception:
+            await page.wait_for_url(XHS_NOTE_MANAGER_URL_PATTERN, timeout=20000)
+        xiaohongshu_logger.success(f"Video updated ({', '.join(changed)}); URL: {page.url}")
+
+    async def verify_manager(self, page: Page) -> None:
+        if not self.title or self.visibility is None:
+            return
+        await page.goto(_build_xhs_creator_url("/new/note-manager", self.account_file))
+        card = await self._find_note_card(page)
+        text = await card.inner_text()
+        private_badge = "仅自己可见" in text
+        if self.visibility == "public" and private_badge:
+            raise RuntimeError("Management card still shows 仅自己可见")
+        if self.visibility == "private" and not private_badge:
+            raise RuntimeError("Management card does not show 仅自己可见")
+        xiaohongshu_logger.info(_msg("🥳", "笔记管理页可见性已核对"))
+
+    async def update(self, playwright: Playwright) -> None:
+        await self.validate_base_args()
+        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium")
+        context = await browser.new_context(
+            permissions=["geolocation"],
+            storage_state=self.account_file,
+        )
+        context = await set_init_script(context)
+        try:
+            page = await context.new_page()
+            await self.open_editor(page)
+            await self.submit_update(page)
+            await self.verify_manager(page)
+            await context.storage_state(path=self.account_file)
+            xiaohongshu_logger.success(_msg("🥳", "cookie 更新完毕"))
+        finally:
+            await context.close()
+            await browser.close()
+
+    async def main(self):
+        async with async_playwright() as playwright:
+            await self.update(playwright)
 
 
 class XiaoHongShuNote(XiaoHongShuBaseUploader):
@@ -772,7 +1101,7 @@ class XiaoHongShuNote(XiaoHongShuBaseUploader):
         xiaohongshu_logger.info(_msg("🏃", f"小人开始搬运图文，共 {len(self.image_paths)} 张图片"))
         xiaohongshu_logger.info(_msg("🧭", "小人正在赶往图文发布页"))
         publish_url = _build_xhs_creator_url(
-            "/publish/publish?from=homepage&target=image"
+            "/publish/publish?from=homepage&target=image", self.account_file
         )
         await page.goto(publish_url)
         await page.wait_for_url(publish_url)

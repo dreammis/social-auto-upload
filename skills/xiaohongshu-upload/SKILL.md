@@ -18,6 +18,7 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成小红书登录�
 | 小红书登录 | `sau xiaohongshu login --account <name>` | 生成或刷新指定账号的 cookie |
 | cookie 校验 | `sau xiaohongshu check --account <name>` | 检查指定账号 cookie 是否有效 |
 | 视频上传 | `sau xiaohongshu upload-video ...` | 上传并发布小红书视频 |
+| 改已有视频 | `sau xiaohongshu update-video ...` | 改已有视频笔记的可见性、简介、话题或标题，不重新上传文件 |
 | 图文上传 | `sau xiaohongshu upload-note ...` | 上传并发布小红书图文 |
 
 元数据约定：
@@ -37,6 +38,7 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成小红书登录�
 - 使用 `sau xiaohongshu login --account <name>` 登录小红书
 - 使用 `sau xiaohongshu check --account <name>` 校验 cookie 是否有效
 - 使用 `sau xiaohongshu upload-video ...` 上传小红书视频
+- 使用 `sau xiaohongshu update-video ...` 改已有视频笔记的可见性、简介、话题或标题
 - 使用 `sau xiaohongshu upload-note ...` 上传小红书图文
 
 ## 命令选择建议
@@ -44,10 +46,12 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成小红书登录�
 - 当用户需要新的 cookie，或现有 cookie 已失效时，使用 `login`
 - 当用户只需要确认 cookie 状态时，使用 `check`
 - 当用户要发布视频时，使用 `upload-video`
+- 当用户要改已有视频笔记（可见性、简介、话题、标题）时，使用 `update-video`，不要再跑一次 `upload-video`
 - 当用户要发布图文时，使用 `upload-note`
 
 ## 执行前检查
 
+- For this user's cover and playback preflight, follow the single rule source in [RedNote platform routing](C:/Users/sam/.codex/skills/publish-social-video/references/platform-routing.md#verified-rednote-cover-workflow), including separate thumbnail crop and playback UI checks.
 - 先确认当前 shell 里是否可以调用 `sau`
 - 如果 `sau` 不可用，按 `references/runtime-requirements.md` 里的回退方式处理
 - 当用户明确指定无头或有头模式时，显式传 `--headless` 或 `--headed`

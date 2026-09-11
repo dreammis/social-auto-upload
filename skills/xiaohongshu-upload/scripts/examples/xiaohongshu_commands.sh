@@ -20,6 +20,18 @@ sau xiaohongshu upload-video \
   --thumbnail "$thumbnail" \
   --headless
 
+sau xiaohongshu update-video \
+  --account "$account" \
+  --title "Xiaohongshu video from bash" \
+  --visibility public \
+  --headless
+
+sau xiaohongshu update-video \
+  --account "$account" \
+  --title "Xiaohongshu video from bash" \
+  --desc "Updated description from bash" \
+  --headless
+
 sau xiaohongshu upload-note \
   --account "$account" \
   --images "videos/1.png" "videos/2.png" \
