@@ -4,6 +4,8 @@ import { resolve } from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // 使用相对路径引用构建产物，使资源可在根路径或子路径下正确加载
+  base: './',
   plugins: [vue()],
   resolve: {
     alias: {
