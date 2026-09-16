@@ -13,6 +13,7 @@ from patchright.async_api import async_playwright
 
 from conf import DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
+from uploader.ks_uploader.note_evidence import NoteEvidence, NoteSubmissionError
 from utils.base_social_media import set_init_script
 from utils.files_times import get_absolute_path
 from utils.login_qrcode import build_login_qrcode_path
@@ -791,7 +792,7 @@ class KSNote(KSBaseUploader):
             normalized_image_paths.append(str(self.validate_image_file(image_path)))
         self.image_paths = normalized_image_paths
 
-    async def upload_note_content(self, page: Page) -> None:
+    async def _prepare_note_content(self, page: Page) -> None:
         kuaishou_logger.info(_msg("🏃", f"小人开始搬运图文，共 {len(self.image_paths)} 张图片"))
         kuaishou_logger.info(_msg("🔀", "小人正在切换到图文发布"))
         await page.locator('div[role="tablist"] div[role="tab"]:has-text("图文")').click()
@@ -828,89 +829,105 @@ class KSNote(KSBaseUploader):
             await page.keyboard.type(f"#{tag} ")
             await asyncio.sleep(2)
 
-        max_retries = 60
-        retry_count = 0
-        while retry_count < max_retries:
-            try:
-                number = await page.locator("text=上传中").count()
-                if number == 0:
-                    kuaishou_logger.success(_msg("🥳", "图文素材已经传完啦"))
-                    break
-
-                if retry_count % 5 == 0:
-                    kuaishou_logger.info(_msg("🏃", "小人正在努力上传图文素材"))
-
-                if await page.locator("text=上传失败").count():
-                    kuaishou_logger.warning(_msg("😵", "图文素材上传摔了一跤，小人马上重新上传"))
-                    await page.locator('div.progress-div [class^="upload-btn-input"]').set_input_files(self.image_paths)
-
-                await asyncio.sleep(2)
-            except Exception as exc:
-                kuaishou_logger.warning(_msg("😵", f"检查图文上传状态时出错，小人继续重试: {exc}"))
-                await asyncio.sleep(2)
-            retry_count += 1
-
-        if retry_count == max_retries:
-            kuaishou_logger.warning(_msg("😵", "超过最大重试次数，图文上传可能未完成"))
-
-        if self.publish_strategy == KUAISHOU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
-            await self.set_schedule_time(page, self.publish_date)
-
-        while True:
-            try:
-                publish_button = page.get_by_text("发布", exact=True)
-                if await publish_button.count() > 0:
-                    await publish_button.click()
-
-                await asyncio.sleep(1)
-                confirm_button = page.get_by_text("确认发布")
-                if await confirm_button.count() > 0:
-                    await confirm_button.click()
-
-                await page.wait_for_url(KUAISHOU_MANAGE_URL_PATTERN, timeout=5000)
-                kuaishou_logger.success(_msg("🥳", "图文发布成功，小人开心收工"))
-                break
-            except Exception as exc:
-                kuaishou_logger.info(_msg("🏃", f"小人正在冲刺发布图文: {exc}"))
-                if self.debug:
-                    await page.screenshot(full_page=True)
-                await asyncio.sleep(1)
-
-    async def upload(self, playwright: Playwright) -> None:
-        kuaishou_logger.info(_msg("🧍", "小人先检查 cookie、图片和发布时间"))
-        await self.validate_upload_args()
-        kuaishou_logger.info(_msg("🥳", "图文上传前检查通过"))
-
-        if self.local_executable_path:
-            browser = await playwright.chromium.launch(
-                headless=self.headless,
-                executable_path=self.local_executable_path,
-            )
-        else:
-            browser = await playwright.chromium.launch(
-                headless=self.headless,
-                channel="chromium",
-            )
-        context = await browser.new_context(storage_state=self.account_file)
-        context = await set_init_script(context)
-
-        upload_success = False
+    async def upload_note_content(self, page: Page) -> dict:
+        evidence = NoteEvidence(page, len(self.image_paths))
         try:
+            # Observe before set_files so fast upload receipts cannot be missed.
+            await evidence.start()
+            await self._prepare_note_content(page)
+            await evidence.wait_uploaded()
+            if self.publish_strategy == KUAISHOU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
+                await self.set_schedule_time(page, self.publish_date)
+            return await self._submit_note_once(page, evidence)
+        except NoteSubmissionError:
+            raise
+        except Exception as exc:
+            if evidence.click_started:
+                if evidence.result == "accepted":
+                    return evidence.outcome()
+                raise NoteSubmissionError("submission_unknown", "Atlas submission interrupted; do not retry automatically") from exc
+            raise
+        finally:
+            try:
+                await evidence.stop()
+            except Exception as exc:
+                kuaishou_logger.warning(f"Atlas observer cleanup failed ({type(exc).__name__})")
+
+    async def _submit_note_once(self, page, evidence, timeout=20):
+        publish = page.get_by_text("发布", exact=True)
+        await publish.wait_for(state="visible", timeout=8000)
+        evidence.started = True
+        evidence.click_started = True
+        deadline = asyncio.get_running_loop().time() + timeout
+        can_confirm = True
+        try:
+            await publish.click(timeout=8000)
+        except Exception:
+            # A timed-out click may have been delivered. Observe, never replay.
+            can_confirm = False
+        while asyncio.get_running_loop().time() < deadline:
+            if evidence.result or evidence.error:
+                break
+            if can_confirm:
+                modal = page.locator("div.ant-modal-confirm-centered:visible").first
+                try:
+                    if await modal.count():
+                        # Mark before clicking so a timeout cannot replay confirmation.
+                        can_confirm = False
+                        await _click_visible_publish_confirm(page)
+                except Exception:
+                    can_confirm = False
+            await asyncio.sleep(0.1)
+        return evidence.outcome()
+
+    async def upload(self, playwright: Playwright) -> dict:
+        await self.validate_upload_args()
+        browser = None
+        context = None
+        result = None
+        try:
+            launch = {"headless": self.headless}
+            if self.local_executable_path:
+                launch["executable_path"] = self.local_executable_path
+            else:
+                launch["channel"] = "chromium"
+            browser = await playwright.chromium.launch(**launch)
+            context = await browser.new_context(storage_state=self.account_file, service_workers="block")
+            context = await set_init_script(context)
             page = await context.new_page()
             await page.goto(KUAISHOU_UPLOAD_URL)
-            kuaishou_logger.info(_msg("🧭", "小人正在赶往快手图文发布页"))
             await page.wait_for_url(KUAISHOU_UPLOAD_URL_PATTERN)
-
-            await self.upload_note_content(page)
-            upload_success = True
+            result = await self.upload_note_content(page)
+            return result
         finally:
-            if upload_success:
-                await context.storage_state(path=self.account_file)
-                kuaishou_logger.success(_msg("🥳", "cookie 更新完毕"))
-                await asyncio.sleep(2)
-            await context.close()
-            await browser.close()
+            # Cleanup must not change a known submission result or skip later closes.
+            if context and result and result["status"] == "accepted":
+                try:
+                    await asyncio.wait_for(context.storage_state(path=self.account_file), timeout=5)
+                except Exception as exc:
+                    kuaishou_logger.warning(f"Atlas accepted; cookie save failed ({type(exc).__name__})")
+            for resource in (context, browser):
+                if resource:
+                    try:
+                        await asyncio.wait_for(resource.close(), timeout=5)
+                    except Exception as exc:
+                        kuaishou_logger.warning(f"Atlas cleanup failed ({type(exc).__name__})")
 
     async def main(self):
-        async with async_playwright() as playwright:
-            await self.upload(playwright)
+        result = None
+        upload_error = None
+        try:
+            async with async_playwright() as playwright:
+                try:
+                    result = await self.upload(playwright)
+                except Exception as exc:
+                    upload_error = exc
+                    raise
+        except Exception:
+            if upload_error is not None:
+                # Driver __aexit__ must not replace an unknown/refused outcome.
+                raise upload_error
+            if not result or result["status"] != "accepted":
+                raise
+            kuaishou_logger.warning("Atlas accepted; browser driver cleanup failed")
+        return result

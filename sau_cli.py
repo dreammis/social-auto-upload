@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -32,6 +33,7 @@ from uploader.ks_uploader.main import (
     KUAISHOU_PUBLISH_STRATEGY_IMMEDIATE,
     KUAISHOU_PUBLISH_STRATEGY_SCHEDULED,
     KSNote,
+    NoteSubmissionError,
     KSVideo,
     cookie_auth as kuaishou_cookie_auth,
     ks_setup,
@@ -488,7 +490,7 @@ async def upload_kuaishou_video(request: KuaishouVideoUploadRequest) -> Path:
     return account_file
 
 
-async def upload_kuaishou_note(request: KuaishouNoteUploadRequest) -> Path:
+async def upload_kuaishou_note(request: KuaishouNoteUploadRequest) -> dict:
     account_file = resolve_account_file("kuaishou", request.account_name)
     is_ready = await ks_setup(str(account_file), handle=False)
     if not is_ready:
@@ -507,8 +509,7 @@ async def upload_kuaishou_note(request: KuaishouNoteUploadRequest) -> Path:
         debug=request.debug,
         headless=request.headless,
     )
-    await app.main()
-    return account_file
+    return await app.main()
 
 
 async def upload_xiaohongshu_video(request: XiaohongshuVideoUploadRequest) -> Path:
@@ -1137,20 +1138,27 @@ async def dispatch(args: argparse.Namespace) -> int:
             return 0
 
         if args.action == "upload-note":
-            request = KuaishouNoteUploadRequest(
-                account_name=args.account,
-                image_files=parse_image_files(args.images),
-                title=args.title,
-                note=args.note,
-                tags=parse_tags(args.tags),
-                publish_date=args.schedule or 0,
-                publish_strategy=publish_strategy,
-                debug=args.debug,
-                headless=args.headless,
-            )
-            await upload_kuaishou_note(request)
-            print(f"Kuaishou note upload submitted: {len(request.image_files)} images")
-            return 0
+            try:
+                request = KuaishouNoteUploadRequest(
+                    account_name=args.account,
+                    image_files=parse_image_files(args.images),
+                    title=args.title,
+                    note=args.note,
+                    tags=parse_tags(args.tags),
+                    publish_date=args.schedule or 0,
+                    publish_strategy=publish_strategy,
+                    debug=args.debug,
+                    headless=args.headless,
+                )
+                result = await upload_kuaishou_note(request)
+                if not isinstance(result, dict) or result.get("status") != "accepted":
+                    raise NoteSubmissionError("submission_unknown", "Uploader returned no verified result")
+            except NoteSubmissionError as exc:
+                result = {"status": exc.status, "message": str(exc)}
+            except Exception as exc:
+                result = {"status": "not_submitted", "message": str(exc)}
+            print(json.dumps({"schema": "sau.kuaishou.note.v1", **result}, ensure_ascii=False))
+            return {"accepted": 0, "not_submitted": 1, "submission_unknown": 2, "rejected": 3}[result["status"]]
 
         raise RuntimeError(f"Unsupported Kuaishou action: {args.action}")
 
