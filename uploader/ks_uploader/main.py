@@ -30,6 +30,8 @@ KUAISHOU_MANAGE_URL_PATTERN = "**/article/manage/video?status=2&from=publish**"
 KUAISHOU_COOKIE_INVALID_SELECTOR = "div.names div.container div.name:text('机构服务')"
 KUAISHOU_PUBLISH_STRATEGY_IMMEDIATE = "immediate"
 KUAISHOU_PUBLISH_STRATEGY_SCHEDULED = "scheduled"
+KUAISHOU_UPLOAD_TIMEOUT_SECONDS = 480
+KUAISHOU_PUBLISH_ATTEMPTS = 3
 
 
 def _msg(emoji: str, text: str) -> str:
@@ -90,6 +92,19 @@ async def _focus_desc_editor(page) -> None:
         f"未能定位快手『描述』编辑区（疑似发布页改版）。已保存截图/HTML 到 {dbg}，"
         f"请据此更新选择器。最后错误: {last_err}")
 
+
+async def _click_visible_publish_confirm(page: Page) -> bool:
+    """Confirm an already-open Ant Design publish dialog before touching the page behind it."""
+    modal = page.locator("div.ant-modal-confirm-centered:visible").first
+    if not await modal.count():
+        return False
+
+    primary_button = modal.locator("button.ant-btn-primary:visible").first
+    if not await primary_button.count():
+        raise RuntimeError("快手发布确认弹窗已显示，但未找到可点击的主按钮")
+
+    await primary_button.click(timeout=8000)
+    return True
 
 
 def _print_ks_qrcode(qrcode_content: str, qrcode_path: Path) -> None:
@@ -660,9 +675,10 @@ class KSVideo(KSBaseUploader):
                 await page.keyboard.type(f"#{tag} ")
                 await asyncio.sleep(2)
 
-            max_retries = 60
+            loop = asyncio.get_running_loop()
+            upload_deadline = loop.time() + KUAISHOU_UPLOAD_TIMEOUT_SECONDS
             retry_count = 0
-            while retry_count < max_retries:
+            while loop.time() < upload_deadline:
                 try:
                     number = await page.locator("text=上传中").count()
                     if number == 0:
@@ -680,9 +696,10 @@ class KSVideo(KSBaseUploader):
                     kuaishou_logger.warning(_msg("😵", f"检查上传状态时出错，小人继续重试: {exc}"))
                     await asyncio.sleep(2)
                 retry_count += 1
-
-            if retry_count == max_retries:
-                kuaishou_logger.warning(_msg("😵", "超过最大重试次数，视频上传可能未完成"))
+            else:
+                raise TimeoutError(
+                    f"等待快手视频上传完成超时（>{KUAISHOU_UPLOAD_TIMEOUT_SECONDS}秒），已停止发布"
+                )
 
             await self.set_thumbnail(page)
 
@@ -691,25 +708,34 @@ class KSVideo(KSBaseUploader):
             if self.publish_strategy == KUAISHOU_PUBLISH_STRATEGY_SCHEDULED and self.publish_date != 0:
                 await self.set_schedule_time(page, self.publish_date)
 
-            while True:
+            last_publish_error = None
+            for attempt in range(1, KUAISHOU_PUBLISH_ATTEMPTS + 1):
                 try:
-                    publish_button = page.get_by_text("发布", exact=True)
-                    if await publish_button.count() > 0:
+                    confirmed = await _click_visible_publish_confirm(page)
+                    if not confirmed:
+                        publish_button = page.get_by_text("发布", exact=True)
+                        if await publish_button.count() == 0:
+                            raise RuntimeError("未找到快手发布按钮")
                         await publish_button.click()
 
                     await asyncio.sleep(1)
-                    confirm_button = page.get_by_text("确认发布")
-                    if await confirm_button.count() > 0:
-                        await confirm_button.click()
+                    await _click_visible_publish_confirm(page)
 
                     await page.wait_for_url(KUAISHOU_MANAGE_URL_PATTERN, timeout=5000)
                     kuaishou_logger.success(_msg("🥳", "视频发布成功，小人开心收工"))
                     break
                 except Exception as exc:
-                    kuaishou_logger.info(_msg("🏃", f"小人正在冲刺发布视频: {exc}"))
+                    last_publish_error = exc
+                    kuaishou_logger.info(_msg(
+                        "🏃", f"小人正在冲刺发布视频（{attempt}/{KUAISHOU_PUBLISH_ATTEMPTS}）: {exc}"
+                    ))
                     if self.debug:
                         await page.screenshot(full_page=True)
                     await asyncio.sleep(1)
+            else:
+                raise RuntimeError(
+                    f"快手发布连续失败 {KUAISHOU_PUBLISH_ATTEMPTS} 次，已停止重试: {last_publish_error}"
+                )
 
             upload_success = True
         finally:
