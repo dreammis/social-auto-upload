@@ -4,6 +4,8 @@ import sqlite3
 import threading
 import time
 import uuid
+from contextlib import closing
+from ipaddress import ip_address
 from pathlib import Path
 from queue import Queue
 from flask_cors import CORS
@@ -11,10 +13,13 @@ from myUtils.auth import check_cookie
 from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 from werkzeug.utils import secure_filename
 from conf import BASE_DIR
+from db.createTable import DEFAULT_DATABASE_PATH, initialize_database
 from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
 from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs
 
 active_queues = {}
+DATABASE_PATH = Path(os.environ.get("SAU_DATABASE_PATH", DEFAULT_DATABASE_PATH)).resolve()
+initialize_database(DATABASE_PATH)
 app = Flask(__name__)
 
 #允许所有来源跨域访问
@@ -22,6 +27,28 @@ CORS(app)
 
 # 限制上传文件大小为160MB
 app.config['MAX_CONTENT_LENGTH'] = 160 * 1024 * 1024
+
+
+def get_web_server_config(environment=None):
+    environment = os.environ if environment is None else environment
+    host = environment.get("SAU_WEB_HOST", "127.0.0.1").strip()
+    port_value = environment.get("SAU_WEB_PORT", "5409").strip()
+
+    try:
+        is_loopback = host.lower() == "localhost" or ip_address(host).is_loopback
+    except ValueError:
+        is_loopback = False
+    if not is_loopback:
+        raise ValueError("SAU_WEB_HOST must be a loopback address")
+
+    try:
+        port = int(port_value)
+    except ValueError as error:
+        raise ValueError("SAU_WEB_PORT must be an integer port") from error
+    if not 1 <= port <= 65535:
+        raise ValueError("SAU_WEB_PORT must be between 1 and 65535")
+
+    return host, port
 
 # 获取当前目录（假设 index.html 和 assets 在这里）
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -130,7 +157,7 @@ def upload_save():
         # 保存文件
         file.save(filepath)
 
-        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+        with sqlite3.connect(DATABASE_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute('''
                                 INSERT INTO file_records (filename, filesize, file_path)
@@ -160,7 +187,7 @@ def upload_save():
 def get_all_files():
     try:
         # 使用 with 自动管理数据库连接
-        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
             conn.row_factory = sqlite3.Row  # 允许通过列名访问结果
             cursor = conn.cursor()
 
@@ -200,17 +227,13 @@ def get_all_files():
 def getAccounts():
     """快速获取所有账号信息，不进行cookie验证"""
     try:
-        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute('''
             SELECT * FROM user_info''')
             rows = cursor.fetchall()
             rows_list = [list(row) for row in rows]
-
-            print("\n📋 当前数据表内容（快速获取）：")
-            for row in rows:
-                print(row)
 
             return jsonify(
                 {
@@ -229,15 +252,12 @@ def getAccounts():
 
 @app.route("/getValidAccounts",methods=['GET'])
 async def getValidAccounts():
-    with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+    with closing(sqlite3.connect(DATABASE_PATH)) as conn:
         cursor = conn.cursor()
         cursor.execute('''
         SELECT * FROM user_info''')
         rows = cursor.fetchall()
         rows_list = [list(row) for row in rows]
-        print("\n📋 当前数据表内容：")
-        for row in rows:
-            print(row)
         for row in rows_list:
             flag = await check_cookie(row[1],row[2])
             if not flag:
@@ -249,8 +269,6 @@ async def getValidAccounts():
                 ''', (0,row[0]))
                 conn.commit()
                 print("✅ 用户状态已更新")
-        for row in rows:
-            print(row)
         return jsonify(
                         {
                             "code": 200,
@@ -271,7 +289,7 @@ def delete_file():
 
     try:
         # 获取数据库连接
-        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+        with sqlite3.connect(DATABASE_PATH) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
@@ -335,7 +353,7 @@ def delete_account():
 
     try:
         # 获取数据库连接
-        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+        with sqlite3.connect(DATABASE_PATH) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
@@ -490,7 +508,7 @@ def updateUserinfo():
     userName = data.get('userName')
     try:
         # 获取数据库连接
-        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+        with sqlite3.connect(DATABASE_PATH) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
@@ -602,7 +620,7 @@ def upload_cookie():
             }), 400
 
         # 从数据库获取账号的文件路径
-        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+        with sqlite3.connect(DATABASE_PATH) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute('SELECT filePath FROM user_info WHERE id = ?', (account_id,))
@@ -720,4 +738,5 @@ def sse_stream(status_queue):
             time.sleep(0.1)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0' ,port=5409)
+    web_host, web_port = get_web_server_config()
+    app.run(host=web_host, port=web_port)

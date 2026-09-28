@@ -37,6 +37,16 @@
               <span>关于</span>
             </el-menu-item>
           </el-menu>
+          <a
+            v-if="consoleNavigation.state === 'ENABLED'"
+            class="console-return"
+            :href="consoleNavigation.url"
+            target="_self"
+            title="返回 Independent Media 总控台（旧版入口）"
+          >
+            <el-icon><Back /></el-icon>
+            <span v-show="!isCollapse">返回 Independent Media 总控台（旧版入口）</span>
+          </a>
         </div>
       </el-aside>
       <el-container>
@@ -63,10 +73,18 @@ import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   HomeFilled, User, DataAnalysis,
-  Fold, Picture, Upload
+  Back, Fold, Picture, Upload
 } from '@element-plus/icons-vue'
+import { parseConsoleNavigation } from './utils/serviceNavigation.js'
 
 const route = useRoute()
+const consoleNavigation = parseConsoleNavigation(
+  import.meta.env.VITE_INDEPENDENT_MEDIA_CONSOLE_URL
+)
+
+if (consoleNavigation.state === 'IGNORED') {
+  console.warn(consoleNavigation.warningCode)
+}
 
 // 当前激活的菜单项
 const activeMenu = computed(() => {
@@ -140,6 +158,27 @@ const toggleSidebar = () => {
           margin-right: 10px;
           font-size: 18px;
         }
+      }
+    }
+
+    .console-return {
+      min-height: 56px;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #fff;
+      text-decoration: none;
+
+      &:hover,
+      &:focus-visible {
+        background-color: #002140;
+        color: #fff;
+      }
+
+      span {
+        font-size: 14px;
+        line-height: 1.35;
       }
     }
   }
