@@ -8,7 +8,7 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 from patchright.async_api import Page
 from patchright.async_api import Playwright
@@ -111,38 +111,74 @@ def format_str_for_short_title(origin_title: str) -> str:
     return formatted_string
 
 
+async def _probe_tencent_auth(page: Page, timeout: float = 30) -> str:
+    deadline = time.monotonic() + timeout
+    try:
+        while True:
+            if urlsplit(page.url).path.endswith("/login.html") or any(
+                "open.weixin.qq.com/connect/qrconnect" in frame.url for frame in page.frames
+            ):
+                return "invalid"
+            for marker in await page.locator(
+                "div.login-qrcode-wrap, div.qrcode-wrap, img.qrcode, "
+                'span:has-text("微信扫码登录 视频号助手")'
+            ).all():
+                if await marker.is_visible():
+                    return "invalid"
+            for button in await page.locator("button.weui-desktop-btn", has_text="发表视频").all():
+                if await button.is_visible():
+                    return "valid"
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return "unknown"
+            await asyncio.sleep(min(0.3, remaining))
+    except Exception:
+        return "unknown"
+
+
+def _log_tencent_auth_state(page: Page | None, state: str) -> None:
+    def safe_url(value):
+        # Only known UI routes; queries, fragments, credentials and QR paths are omitted.
+        parsed = urlsplit(value)
+        if parsed.hostname not in {"channels.weixin.qq.com", "open.weixin.qq.com"}:
+            return "[other origin]"
+        route = parsed.path if parsed.path in {
+            "/platform", "/platform/post/create", "/platform/post/list", "/login.html", "/connect/qrconnect"
+        } else "/[redacted]"
+        return f"https://{parsed.hostname}{route}"
+
+    current, frames = "[unavailable]", []
+    try:
+        if page is not None:
+            current = safe_url(page.url)
+            frames = [safe_url(frame.url) for frame in page.frames[:5]]
+    except Exception:
+        pass  # Diagnostic failure cannot establish authentication.
+    tencent_logger.warning(f"Tencent auth state={state}; url={current}; frames={frames}")
+
+
 async def cookie_auth(account_file):
-    account_file = _resolve_account_file(account_file)
-    async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=True))
-        try:
-            context = await browser.new_context(storage_state=account_file)
-            context = await set_init_script(context)
-            page = await context.new_page()
-            await page.goto(TENCENT_UPLOAD_URL, wait_until="domcontentloaded")
-
-            # cookie 失效时, 页面先停在 post/create, 随后由前端 JS 跳转到登录页;
-            # 必须等待跳转完成再判断, 否则会误报"cookie 有效"
+    page = None
+    state = "unknown"
+    try:
+        account_file = _resolve_account_file(account_file)
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(**_build_launch_kwargs(headless=True))
             try:
-                await page.wait_for_url("**/login.html**", timeout=8000)
-                tencent_logger.info(_msg("🥹", "cookie 已失效（页面跳转到登录页），得重新登录一下"))
-                return False
-            except Exception:
-                pass  # 8 秒内未跳转, 大概率已登录
-
-            # 双保险: 页面里出现微信扫码登录 iframe 也视为失效
-            for fr in page.frames:
-                if "open.weixin.qq.com/connect/qrconnect" in fr.url:
-                    tencent_logger.info(_msg("🥹", "cookie 已失效（页面出现扫码登录框），得重新登录一下"))
-                    return False
-
-            tencent_logger.success(_msg("🥳", "cookie 有效"))
-            return True
-        except Exception as exc:
-            tencent_logger.warning(_msg("😵", f"cookie 校验时出错，按失效处理: {exc}"))
-            return False
-        finally:
-            await browser.close()
+                context = await browser.new_context(storage_state=account_file)
+                context = await set_init_script(context)
+                page = await context.new_page()
+                await page.goto(TENCENT_HOME_URL, wait_until="domcontentloaded", timeout=30000)
+                state = await _probe_tencent_auth(page)
+            finally:
+                await browser.close()
+    except Exception:
+        state = "unknown"
+    if state == "valid":
+        tencent_logger.success(_msg("🥳", "cookie 有效（后台发表视频入口可见）"))
+    else:
+        _log_tencent_auth_state(page, state)
+    return state == "valid"
 
 
 async def _extract_tencent_qrcode_src(page: Page) -> str:
