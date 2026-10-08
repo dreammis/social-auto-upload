@@ -9,6 +9,7 @@ from pathlib import Path
 
 from patchright.async_api import Page
 from patchright.async_api import Playwright
+from patchright.async_api import TimeoutError as BrowserTimeoutError
 from patchright.async_api import async_playwright
 
 from conf import BASE_DIR, DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
@@ -371,10 +372,14 @@ class DouYinBaseUploader(BaseVideoUploader):
         """Open the upload page and validate auth in the same browser session used to publish."""
         await page.goto(DOUYIN_UPLOAD_URL, wait_until="domcontentloaded", timeout=90000)
         try:
-            await page.wait_for_url(f"{DOUYIN_UPLOAD_URL}**", timeout=15000)
-        except Exception as exc:
+            # The URL can already match while optional resources keep `load` pending.
+            await page.wait_for_url(
+                f"{DOUYIN_UPLOAD_URL}**", wait_until="domcontentloaded", timeout=15000
+            )
+        except BrowserTimeoutError as exc:
             raise RuntimeError(
-                f"抖音登录状态无效或上传页被拦截，当前页面: {page.url}。请重新执行登录。"
+                f"抖音上传页就绪检查超时，当前页面: {page.url}。"
+                "请检查页面加载或跳转情况；此错误不代表 cookie 已失效。"
             ) from exc
 
         login_markers = (
