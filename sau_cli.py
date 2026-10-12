@@ -408,12 +408,6 @@ async def upload_youtube_video(request: YouTubeVideoUploadRequest) -> Path:
 
 async def upload_video(request: DouyinVideoUploadRequest) -> Path:
     account_file = resolve_account_file("douyin", request.account_name)
-    is_ready = await douyin_setup(str(account_file), handle=False)
-    if not is_ready:
-        raise RuntimeError(
-            f"Douyin cookie is missing or expired: {account_file}. Run `sau douyin login --account {request.account_name}` first."
-        )
-
     app = DouYinVideo(
         request.title,
         str(request.video_file),
@@ -441,12 +435,6 @@ async def upload_video(request: DouyinVideoUploadRequest) -> Path:
 
 async def upload_note(request: DouyinNoteUploadRequest) -> Path:
     account_file = resolve_account_file("douyin", request.account_name)
-    is_ready = await douyin_setup(str(account_file), handle=False)
-    if not is_ready:
-        raise RuntimeError(
-            f"Douyin cookie is missing or expired: {account_file}. Run `sau douyin login --account {request.account_name}` first."
-        )
-
     app = DouYinNote(
         image_paths=[str(path) for path in request.image_files],
         title=request.title,
@@ -781,12 +769,12 @@ def schedule_value(value: str):
         ) from exc
 
 
-def add_runtime_flags(parser: argparse.ArgumentParser) -> None:
+def add_runtime_flags(parser: argparse.ArgumentParser, *, default_headless: bool = True) -> None:
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     headless_group = parser.add_mutually_exclusive_group()
     headless_group.add_argument("--headed", dest="headless", action="store_false", help="Run with browser UI")
     headless_group.add_argument("--headless", dest="headless", action="store_true", help="Run in headless mode")
-    parser.set_defaults(headless=True)
+    parser.set_defaults(headless=default_headless)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -804,7 +792,7 @@ def build_parser() -> argparse.ArgumentParser:
         action_parser = douyin_actions.add_parser(action_name, help=f"Douyin {action_name}")
         action_parser.add_argument("--account", required=True, help="Douyin user-defined account_name")
         if action_name == "login":
-            add_runtime_flags(action_parser)
+            add_runtime_flags(action_parser, default_headless=False)
 
     upload_video_parser = douyin_actions.add_parser("upload-video", help="Upload one video to Douyin")
     upload_video_parser.add_argument("--account", required=True, help="Douyin user-defined account_name")
@@ -823,7 +811,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exact Douyin self-declaration option text; omitted means do not set one",
     )
     upload_video_parser.add_argument("--collection", default=None, help="Optional collection name to add the work into (must already exist)")
-    add_runtime_flags(upload_video_parser)
+    add_runtime_flags(upload_video_parser, default_headless=False)
 
     upload_note_parser = douyin_actions.add_parser("upload-note", help="Upload one note to Douyin")
     upload_note_parser.add_argument("--account", required=True, help="Douyin user-defined account_name")
@@ -834,7 +822,7 @@ def build_parser() -> argparse.ArgumentParser:
     upload_note_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
     upload_note_parser.add_argument("--bgm", default="", help="BGM music name to search and select")
     upload_note_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
-    add_runtime_flags(upload_note_parser)
+    add_runtime_flags(upload_note_parser, default_headless=False)
 
     kuaishou_parser = platform_parsers.add_parser("kuaishou", help="Kuaishou operations")
     kuaishou_actions = kuaishou_parser.add_subparsers(dest="action", required=True)

@@ -38,6 +38,25 @@ class BrowserCliParserTests(unittest.TestCase):
 
         self.assertEqual(args.desc, "视频简介")
 
+    def test_douyin_upload_defaults_to_headed_browser(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            image_path = Path(tmp_dir) / "1.png"
+            image_path.write_bytes(b"image")
+            args = sau_cli.build_parser().parse_args(
+                [
+                    "douyin",
+                    "upload-note",
+                    "--account",
+                    "creator",
+                    "--images",
+                    str(image_path),
+                    "--title",
+                    "图文标题",
+                ]
+            )
+
+        self.assertFalse(args.headless)
+
     def test_douyin_upload_video_accepts_dual_thumbnail_aspects(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             video_path = Path(tmp_dir) / "demo.mp4"
@@ -220,6 +239,25 @@ class BrowserCliDispatchTests(unittest.TestCase):
 
         mock_upload.assert_awaited_once()
 
+    def test_douyin_upload_note_does_not_open_a_preflight_browser(self):
+        request = sau_cli.DouyinNoteUploadRequest(
+            account_name="creator",
+            image_files=[Path("1.png")],
+            title="图文标题",
+            note="图文正文",
+            tags=[],
+            publish_date=0,
+        )
+        app = AsyncMock()
+        with (
+            patch("sau_cli.douyin_setup", new=AsyncMock()) as setup,
+            patch("sau_cli.DouYinNote", return_value=app),
+        ):
+            asyncio.run(sau_cli.upload_note(request))
+
+        setup.assert_not_awaited()
+        app.douyin_upload_note.assert_awaited_once()
+
     def test_dispatch_xiaohongshu_check_prints_valid(self):
         args = Namespace(platform="xiaohongshu", action="check", account="creator")
         with patch("sau_cli.check_xiaohongshu_account", new=AsyncMock(return_value=True)):
@@ -234,7 +272,9 @@ class BrowserCliDispatchTests(unittest.TestCase):
             images=[Path("1.png")],
             title="图文标题",
             note="图文正文",
+            notef="",
             tags="测试,图文",
+            bgm="",
             schedule=0,
             debug=False,
             headless=True,
@@ -262,6 +302,7 @@ class BrowserCliDispatchTests(unittest.TestCase):
             product_link="",
             product_title="",
             declaration="已确认声明原文",
+            collection="",
             debug=False,
             headless=True,
         )
@@ -288,6 +329,7 @@ class BrowserCliDispatchTests(unittest.TestCase):
             thumbnail_portrait=Path("portrait.png"),
             short_title=None,
             category=None,
+            collection="",
             draft=False,
             debug=False,
             headless=True,
