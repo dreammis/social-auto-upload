@@ -68,10 +68,8 @@ sau douyin upload-note --account <account_name> --images videos/1.png videos/2.p
 
 抖音短信验证码补充说明：
 
-- 视频发布过程中如果触发短信二次验证，CLI 会优先读取项目根目录下的 `verify_code.txt`
-- 如果未找到 `verify_code.txt`，并且当前命令是在交互式终端中手动运行，CLI 会直接在终端提示输入验证码
-- 对 agent、自动任务、远程桥接这类场景，仍然可以继续用写入 `verify_code.txt` 的方式喂验证码
-- 验证通过后，程序会自动清理 `verify_code.txt`
+- 视频发布触发短信二次验证时，仅在终端提示并结束本次发布，不获取、读取或提交验证码。
+- 手动运行和自动任务行为一致；请人工处理，勿自动重复提交。
 
 ## 快手 CLI 子命令
 

@@ -4,7 +4,6 @@ from datetime import datetime
 import asyncio
 import inspect
 import os
-import sys
 from pathlib import Path
 
 from patchright.async_api import Page
@@ -38,20 +37,6 @@ DOUYIN_RISK_MARKERS = (
 
 def _msg(emoji: str, text: str) -> str:
     return f"{emoji} {text}"
-
-
-async def _read_verify_code(code_file: str) -> str:
-    if os.path.exists(code_file):
-        with open(code_file, encoding="utf-8") as file_obj:
-            return file_obj.read().strip()
-
-    if not sys.stdin or not sys.stdin.isatty():
-        return ""
-
-    try:
-        return (await asyncio.to_thread(input, "请输入抖音短信验证码（直接回车可稍后重试）: ")).strip()
-    except (EOFError, OSError):
-        return ""
 
 
 def _msg(emoji: str, text: str) -> str:
@@ -422,20 +407,7 @@ class DouYinBaseUploader(BaseVideoUploader):
         if not await sms_input.count() or not await sms_input.is_visible():
             return False
 
-        douyin_logger.warning(_msg("📱", "检测到短信验证码弹窗"))
-        get_code_btn = page.get_by_text("获取验证码", exact=True).first
-        if await get_code_btn.count() and await get_code_btn.is_visible():
-            await get_code_btn.click()
-            douyin_logger.info(_msg("📤", "已点击「获取验证码」，请查看手机短信"))
-
-        code_file = os.path.join(BASE_DIR, "verify_code.txt")
-        code = await _read_verify_code(code_file)
-        if not code:
-            raise RuntimeError(
-                f"抖音要求短信验证；请在交互终端输入验证码，或写入文件后重试: {code_file}"
-            )
-        await self._submit_sms_verify_code(page, sms_input, code, code_file)
-        return True
+        raise RuntimeError("抖音要求短信验证，已停止本次发布；请人工处理，勿自动重复提交")
 
     async def set_schedule_time_douyin(self, page, publish_date):
         label_element = page.locator("[class^='radio']:has-text('定时发布')")
@@ -854,38 +826,6 @@ class DouYinVideo(DouYinBaseUploader):
                 await page.keyboard.press("Escape")
             except Exception:
                 pass
-
-    async def _submit_sms_verify_code(self, page: Page, sms_input, code: str, code_file: str) -> bool:
-        douyin_logger.info(_msg("✍️", f"已获取验证码，准备填入: {code}"))
-        await sms_input.click()
-        await sms_input.fill(code)
-        douyin_logger.info(_msg("✅", "验证码已填入输入框"))
-        await page.wait_for_timeout(500)
-
-        verify_btn = page.locator('div.uc-ui-verify_sms-verify_button:has-text("验证")').first
-        if await verify_btn.count() and await verify_btn.is_visible():
-            try:
-                await verify_btn.click(force=True)
-                douyin_logger.success(_msg("✅", "已点击「验证」按钮(force)"))
-            except Exception:
-                await page.eval_on_selector('div.uc-ui-verify_sms-verify_button', 'el => el.click()')
-                douyin_logger.success(_msg("✅", "已点击「验证」按钮(JS)"))
-        else:
-            verify_by_text = page.get_by_text("验证", exact=True).first
-            if await verify_by_text.count():
-                await verify_by_text.click(force=True)
-                douyin_logger.success(_msg("✅", "已点击「验证」按钮(text)"))
-            else:
-                douyin_logger.warning(_msg("⚠️", "未找到验证按钮，尝试按Enter"))
-                await page.keyboard.press("Enter")
-
-        if os.path.exists(code_file):
-            os.remove(code_file)
-            douyin_logger.info(_msg("🧹", "验证码文件已清理"))
-
-        await page.wait_for_timeout(3000)
-        douyin_logger.info(_msg("🔄", "验证码处理完成，继续发布流程"))
-        return True
 
     async def validate_upload_args(self):
         await self.validate_base_args()
