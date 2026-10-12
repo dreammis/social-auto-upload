@@ -1,6 +1,7 @@
 # Language: 中文
 import asyncio
 import unittest
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from uploader.douyin_uploader import main as douyin_main
@@ -81,13 +82,20 @@ class DouyinDeclarationTests(unittest.TestCase):
         context = MagicMock()
         context.new_page = AsyncMock(return_value=page)
         context.close = AsyncMock(side_effect=OSError("close failed"))
-        browser = MagicMock()
-        browser.new_context = AsyncMock(return_value=context)
-        browser.close = AsyncMock()
         playwright = MagicMock()
-        playwright.chromium.launch = AsyncMock(return_value=browser)
+
+        @asynccontextmanager
+        async def session(*args, **kwargs):
+            try:
+                yield context
+            finally:
+                try:
+                    await context.close()
+                except OSError:
+                    pass
 
         with (
+            patch.object(douyin_main, "account_browser", session),
             patch.object(douyin_main, "set_init_script", AsyncMock(return_value=context)),
             patch.object(douyin_main.asyncio, "sleep", AsyncMock()),
             self.assertRaisesRegex(RuntimeError, "自主声明"),
@@ -95,7 +103,6 @@ class DouyinDeclarationTests(unittest.TestCase):
             asyncio.run(video.upload(playwright))
 
         context.close.assert_awaited_once()
-        browser.close.assert_awaited_once()
 
 
 if __name__ == "__main__":

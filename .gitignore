@@ -173,6 +173,7 @@ conf.py
 
 # 账号文件
 cookies
+browser_profiles/
 
 # Frontend
 .vite/

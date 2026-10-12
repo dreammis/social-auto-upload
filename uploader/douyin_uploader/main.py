@@ -15,6 +15,7 @@ from patchright.async_api import async_playwright
 from conf import BASE_DIR, DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
 from utils.base_social_media import set_init_script
+from utils.account_browser import account_browser, account_profile_dir
 from utils.login_qrcode import build_login_qrcode_path
 from utils.login_qrcode import decode_qrcode_from_path
 from utils.login_qrcode import print_terminal_qrcode
@@ -124,23 +125,19 @@ async def cookie_auth(account_file):
         return False
 
     use_headless = os.environ.get("DOUYIN_COOKIE_AUTH_HEADLESS", "true").lower() in ("1", "true", "yes")
-    launch_kwargs = {"headless": use_headless, "channel": "chromium", "args": ["--no-sandbox", "--disable-blink-features=AutomationControlled"]}
     for _attempt in range(3):
         async with async_playwright() as playwright:
-            browser = await playwright.chromium.launch(**launch_kwargs)
-            try:
-                context = await browser.new_context(storage_state=account_file)
-                context = await set_init_script(context)
-                page = await context.new_page()
-                await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
-                await page.wait_for_timeout(2500)  # 等页面稳定，避免瞬时跳转误判
-                has_login = await page.get_by_text("手机号登录").count() or await page.get_by_text("扫码登录").count()
-                if "content/upload" in page.url and not has_login:
-                    return True
-            except Exception:
-                pass
-            finally:
-                await browser.close()
+            async with account_browser(playwright, account_file, 'douyin', headless=use_headless) as context:
+                try:
+                    context = await set_init_script(context)
+                    page = await context.new_page()
+                    await page.goto(DOUYIN_UPLOAD_URL, wait_until="domcontentloaded", timeout=90000)
+                    await page.wait_for_timeout(2500)
+                    has_login = await page.get_by_text("手机号登录").count() or await page.get_by_text("扫码登录").count()
+                    if "content/upload" in page.url and not has_login:
+                        return True
+                except Exception:
+                    pass
     return False
 
 
@@ -286,13 +283,13 @@ async def douyin_cookie_gen(
             context = browser.contexts[0] if browser.contexts else await browser.new_context()
             should_close_context = False
         else:
-            browser = await playwright.chromium.launch(headless=headless, channel="chromium")
-            context = await browser.new_context()
+            session = account_browser(playwright, account_file, 'douyin', headless=headless)
+            context = await session.__aenter__()
             should_close_context = True
-        context = await set_init_script(context)
         qrcode_path = None
         result = _build_login_result(False, "failed", "抖音登录失败", account_file)
         try:
+            context = await set_init_script(context)
             page = await context.new_page()
             await page.goto("https://creator.douyin.com/")
             qrcode_info = await _save_douyin_qrcode(page, account_file, qrcode_callback=qrcode_callback)
@@ -335,8 +332,9 @@ async def douyin_cookie_gen(
             if not result["success"]:
                 douyin_logger.error(_msg("😢", f"登录失败: {result['message']}"))
             if should_close_context:
-                await context.close()
-            await browser.close()
+                await session.__aexit__(None, None, None)
+            else:
+                await browser.close()
         return result
 
 
@@ -1085,13 +1083,13 @@ class DouYinVideo(DouYinBaseUploader):
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium", args=["--no-sandbox", "--disable-blink-features=AutomationControlled"])
-        context = await browser.new_context(
-            storage_state=f"{self.account_file}",
-            permissions=["geolocation"],
-        )
-        context = await set_init_script(context)
+        douyin_logger.info(f"账号浏览器目录: {account_profile_dir(self.account_file, 'douyin')}，headless={self.headless}")
+        async with account_browser(playwright, self.account_file, 'douyin', headless=self.headless,
+                                   permissions=["geolocation"], args=["--no-sandbox", "--disable-blink-features=AutomationControlled"]) as context:
+            await set_init_script(context)
+            await self._upload_in_context(context)
 
+    async def _upload_in_context(self, context):
         page = await context.new_page()
         await self.open_authenticated_upload_page(page)
         douyin_logger.info(_msg("🏃", f"小人开始搬运视频: {self.title}.mp4"))
@@ -1156,18 +1154,7 @@ class DouYinVideo(DouYinBaseUploader):
             await self.set_product_link(page, self.productLink, self.productTitle)
             douyin_logger.info(_msg("🥳", "商品链接设置完成"))
 
-        try:
-            await self.apply_self_declaration(page)
-        except Exception:
-            try:
-                await context.close()
-            except Exception:
-                pass
-            try:
-                await browser.close()
-            except Exception:
-                pass
-            raise
+        await self.apply_self_declaration(page)
 
         # 先归集：此时尚未打开封面弹窗，避免 dy-creator-content-portal 封面浮层拦截合集下拉
         # （实测：封面弹窗在 headless 下常滞留"检测中"未关闭，会盖住"添加合集"下拉）
@@ -1201,8 +1188,6 @@ class DouYinVideo(DouYinBaseUploader):
         await context.storage_state(path=self.account_file)
         douyin_logger.success(_msg("🥳", "cookie 更新完毕"))
         await asyncio.sleep(2)
-        await context.close()
-        await browser.close()
 
     async def douyin_upload_video(self):
         async with async_playwright() as playwright:
@@ -1308,13 +1293,13 @@ class DouYinNote(DouYinBaseUploader):
         await self.validate_upload_args()
         douyin_logger.info(_msg("🥳", "图文上传前检查通过"))
 
-        browser = await playwright.chromium.launch(headless=self.headless, channel="chromium", args=["--no-sandbox", "--disable-blink-features=AutomationControlled"])
-        context = await browser.new_context(
-            storage_state=f"{self.account_file}",
-            permissions=["geolocation"],
-        )
-        context = await set_init_script(context)
+        douyin_logger.info(f"账号浏览器目录: {account_profile_dir(self.account_file, 'douyin')}，headless={self.headless}")
+        async with account_browser(playwright, self.account_file, 'douyin', headless=self.headless,
+                                   permissions=["geolocation"], args=["--no-sandbox", "--disable-blink-features=AutomationControlled"]) as context:
+            await set_init_script(context)
+            await self._upload_in_context(context)
 
+    async def _upload_in_context(self, context):
         upload_success = False
         try:
             page = await context.new_page()
@@ -1328,8 +1313,6 @@ class DouYinNote(DouYinBaseUploader):
                 await context.storage_state(path=self.account_file)
                 douyin_logger.success(_msg("🥳", "cookie 更新完毕"))
                 await asyncio.sleep(2)
-            await context.close()
-            await browser.close()
 
     async def douyin_upload_note(self):
         async with async_playwright() as playwright:
