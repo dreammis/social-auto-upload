@@ -302,6 +302,7 @@ class BrowserCliDispatchTests(unittest.TestCase):
             product_link="",
             product_title="",
             declaration="已确认声明原文",
+            collection="",
             debug=False,
             headless=True,
         )
@@ -328,6 +329,7 @@ class BrowserCliDispatchTests(unittest.TestCase):
             thumbnail_portrait=Path("portrait.png"),
             short_title=None,
             category=None,
+            collection="",
             draft=False,
             debug=False,
             headless=True,
