@@ -16,7 +16,7 @@ import os
 import time
 from pathlib import Path
 
-from playwright.async_api import Page, Playwright, TimeoutError as PWTimeoutError, async_playwright
+from patchright.async_api import Page, Playwright, TimeoutError as PWTimeoutError, async_playwright
 
 from conf import BASE_DIR, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader

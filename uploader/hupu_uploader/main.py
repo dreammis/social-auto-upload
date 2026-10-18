@@ -22,7 +22,7 @@ import re
 import time
 from pathlib import Path
 
-from playwright.async_api import BrowserContext, Page, Playwright, async_playwright
+from patchright.async_api import BrowserContext, Page, Playwright, async_playwright
 
 from conf import BASE_DIR, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader

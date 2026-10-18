@@ -83,6 +83,7 @@
 | 微博 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，标题最多 30 字 |
 | 虎扑 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，标题 4–40 字 |
 | TikTok | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 当前示例走 Chrome 版实现 |
+| 雪球 | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | [长文与图片](./docs/xueqiu.md)：HTML/Markdown/TXT、原位置配图及封面，已实测正式 CLI 发表和后台原作品查询 |
 | YouTube | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化（Studio），支持加入播放列表/可见性 |
 
 文章主题预览及 Markdown 转 HTML：见 [文章文件与主题渲染](./docs/article.md)。内置 `default/grace/simple/modern/plain` 主题；大鱼号可直接接收 Markdown，并将主题转换为保留文字颜色、背景和近似字号的兼容排版，圆角和精确间距等效果可能与本地预览不同。
@@ -131,6 +132,7 @@ AI的发展毋庸置疑，希望你遇到这种安装和使用，不要再怯场
 - agent / skill 请看：[Xiaohongshu Upload Skill](./skills/xiaohongshu-upload/SKILL.md)
 - agent / skill 请看：[Bilibili Upload Skill](./skills/bilibili-upload/SKILL.md)
 - agent / skill 请看：[Dayu Upload Skill](./skills/dayu-upload/SKILL.md)
+- agent / skill 请看：[Xueqiu Upload Skill](./skills/xueqiu-upload/SKILL.md)
 - 历史 Web 说明请看：[历史 Web 版本说明](./docs/legacy-web.md)
 - 其他单平台 skill 与整合型 skill 仍在开发中
 - `requirements.txt` 目前主要用于历史兼容路径，普通用户不需要优先使用它

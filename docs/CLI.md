@@ -13,6 +13,7 @@
 - `hupu`
 - `youtube`
 - `dayu`
+- `xueqiu`：HTML/Markdown/TXT 长文、原位置配图及封面，默认实际发表，支持按原作品 ID 查询结果；见 [雪球使用说明](./xueqiu.md)，已实测正式 CLI 发表及后台核验
 
 文章本地处理命令为 `sau article`，支持主题列表、环境准备和 Markdown/HTML 文件渲染，见 [文章文件与主题渲染](./article.md)。
 
@@ -25,6 +26,7 @@
   - `skills/kuaishou-upload/`
   - `skills/xiaohongshu-upload/`
   - `skills/bilibili-upload/`
+  - `skills/xueqiu-upload/`
 
 视频号、百家号和支付宝生活号目前只有 CLI 入口，暂未提供对应的 skill。
 
@@ -50,6 +52,7 @@ sau weibo --help
 sau hupu --help
 sau youtube --help
 sau dayu --help
+sau xueqiu --help
 ```
 
 ## 安装 patchright 浏览器
