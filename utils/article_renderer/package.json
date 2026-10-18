@@ -1,0 +1,10 @@
+{
+  "name": "sau-article-renderer",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "baoyu-md": "0.1.1",
+    "cheerio": "1.0.0",
+    "marked": "15.0.12"
+  }
+}

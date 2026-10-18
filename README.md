@@ -1,7 +1,7 @@
 # social-auto-upload
 
-`social-auto-upload` 是一个强大的自动化工具，旨在帮助内容创作者和运营者高效地将视频内容一键发布到多个国内外主流社交媒体平台。
-项目实现了对 `抖音`、`Bilibili`、`小红书`、`快手`、`视频号`、`百家号`、`支付宝生活号`、`微博`、`虎扑`、`TikTok` 以及 `YouTube` 等平台的视频上传、定时发布等功能。
+`social-auto-upload` 帮助内容创作者和运营者将视频、图片笔记和文章发布到多个国内外社交媒体平台。
+项目支持 `抖音`、`Bilibili`、`小红书`、`快手`、`视频号`、`百家号`、`大鱼号`、`支付宝生活号`、`微博`、`虎扑`、`TikTok` 以及 `YouTube` 等平台，各平台的上传类型和定时发布能力见下表。
 结合各平台 `uploader` 模块，您可以轻松配置和扩展支持的平台，并通过示例脚本快速上手。
 
 <img src="media/show/tkupload.gif" alt="tiktok show" width="800"/>
@@ -78,11 +78,14 @@
 | 快手 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 浏览器自动化，CLI/Skill 初版已接入 |
 | 视频号 | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | 浏览器自动化，对应 `tencent_uploader` |
 | 百家号 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化 |
+| 大鱼号 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | [视频发布](./docs/dayu.md)、[图文发布](./docs/dayu-article.md)均支持定时；文章支持 HTML/Markdown/TXT、主题兼容排版、本地图片及单/三封面 |
 | 支付宝生活号 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，支持生活号视频 |
 | 微博 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，标题最多 30 字 |
 | 虎扑 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，标题 4–40 字 |
 | TikTok | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 当前示例走 Chrome 版实现 |
 | YouTube | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化（Studio），支持加入播放列表/可见性 |
+
+文章主题预览及 Markdown 转 HTML：见 [文章文件与主题渲染](./docs/article.md)。内置 `default/grace/simple/modern/plain` 主题；大鱼号可直接接收 Markdown，并将主题转换为保留文字颜色、背景和近似字号的兼容排版，圆角和精确间距等效果可能与本地预览不同。
 
 ### AI这么强，为什么还需要这个项目
 在你使用AI的能力，browser agent等等，每次都让 agent 重新解析网页、截图理解, 临场判断
@@ -127,6 +130,7 @@ AI的发展毋庸置疑，希望你遇到这种安装和使用，不要再怯场
 - agent / skill 请看：[Kuaishou Upload Skill](./skills/kuaishou-upload/SKILL.md)
 - agent / skill 请看：[Xiaohongshu Upload Skill](./skills/xiaohongshu-upload/SKILL.md)
 - agent / skill 请看：[Bilibili Upload Skill](./skills/bilibili-upload/SKILL.md)
+- agent / skill 请看：[Dayu Upload Skill](./skills/dayu-upload/SKILL.md)
 - 历史 Web 说明请看：[历史 Web 版本说明](./docs/legacy-web.md)
 - 其他单平台 skill 与整合型 skill 仍在开发中
 - `requirements.txt` 目前主要用于历史兼容路径，普通用户不需要优先使用它
@@ -169,7 +173,7 @@ Web 端相关代码仍然保留，但已经不是当前主线，不保证可直�
 
 ### 方式 1：使用 CLI
 
-当前抖音、快手、小红书、Bilibili、视频号、百家号、支付宝生活号、微博和虎扑已经接入 CLI：
+当前抖音、快手、小红书、Bilibili、视频号、百家号、大鱼号、支付宝生活号、微博、虎扑和 YouTube 已经接入 CLI：
 
 ```bash
 sau douyin login --account <account_name>
@@ -199,6 +203,10 @@ sau baijiahao login --account <account_name>
 sau baijiahao check --account <account_name>
 sau baijiahao upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2
 
+sau dayu login --account <account_name> --expected-name "你的大鱼号名称"
+sau dayu check --account <account_name>
+sau dayu upload-article --account <account_name> --title "如何阅读作品数据面板" --content-file examples/dayu_article.html --source "无需标注" --cover-indices 1
+
 sau alipay login --account <account_name>
 sau alipay check --account <account_name>
 sau alipay upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2
@@ -223,6 +231,16 @@ sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title
 > 上传会**等进度到 100% 再点发布**（浏览器上传靠窗口开着传，传一半就发布会被掐断卡在中途）。
 > youtube.com 被墙的地区：在 `conf.py` 设 `YT_PROXY = "http://127.0.0.1:7890"`（chromium 不吃系统代理，需显式指定）。
 
+Markdown 主题文章首次使用需要 Node.js 22+，先准备渲染依赖，再发布：
+
+```bash
+sau article setup
+sau article render --content-file examples/article.md --theme modern --output output/article.html
+sau dayu upload-article --account <account_name> --title "如何阅读作品数据面板" --content-file examples/article.md --theme modern --source "无需标注" --cover-indices 1
+```
+
+`sau article render` 只生成本地 HTML；`sau dayu upload-article` 会实际发表，平台确认发表后即返回成功，不等待审核。HTML/TXT 输入不需要 Node.js，也不使用 `--theme`。大鱼号视频参数和图文格式限制分别见 [视频说明](./docs/dayu.md)、[图文说明](./docs/dayu-article.md)。
+
 补充说明：
 
 - `creator` 之类的名字只是示例值，真正含义是 `account_name`
@@ -230,7 +248,8 @@ sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title
 - 抖音视频发布若触发短信二次验证，程序会优先读取项目根目录下的 `verify_code.txt`；如果你是在本地交互式终端手动运行 CLI，也可以直接按终端提示输入验证码
 - 浏览器平台统一约定：
 - 视频使用 `title + desc + tags`
-- 图文使用 `title + note + tags`
+- 抖音、快手、小红书的图片笔记使用 `title + note + tags`
+- 大鱼号文章使用 `title + content-file + source`，正文保存在 HTML、Markdown 或 TXT 文件中
 - Bilibili CLI 不要求用户手动安装 `biliup`
 - 首次运行相关命令时，程序会自动下载 `biliup`
 - 后续运行会自动检查上游 release 并更新

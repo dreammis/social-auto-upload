@@ -160,6 +160,8 @@ cython_debug/
 .idea/
 
 .DS_Store
+.superpowers/
+/.local/
 
 # ignore cookie file
 tencent_uploader/*.json
@@ -179,6 +181,7 @@ cookies
 dist/
 node_modules/
 package-lock.json
+!utils/article_renderer/package-lock.json
 
 # database
 db/database.db
@@ -189,3 +192,6 @@ uploadFile
 videoFile
 
 /uploader/bilibili_uploader/qrcode.png
+
+# 本地个人使用的浏览器自动化开发 Skill，不随开源仓库发布
+/skills/browser-automation-dev/

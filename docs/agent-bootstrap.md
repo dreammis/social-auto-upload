@@ -10,6 +10,7 @@
 - `douyin`
 - `kuaishou`
 - `xiaohongshu`
+- `dayu`
 
 ## 这份文档解决什么问题
 
@@ -42,6 +43,7 @@
 - douyin
 - kuaishou
 - xiaohongshu
+- dayu
 
 你的第一目标不是通读全部源码，也不是优先运行历史 examples，而是先把项目安装到“可运行、可验证、可继续执行任务”的状态。
 
@@ -59,6 +61,7 @@
    - `skills/kuaishou-upload/`
    - `skills/xiaohongshu-upload/`
    - `skills/bilibili-upload/`
+   - `skills/dayu-upload/`
 6. 不要默认走历史 `examples/` 和旧 Web 路径，除非当前 CLI 主线不可用。
 7. 如果登录流程生成二维码图片，不要只返回图片路径；请直接展示图片，或者明确告诉我该打开哪个本地图片文件扫码。
 8. 如果是 Bilibili 登录，不要在非交互环境里强行代跑；应改为指导我在本地真实终端执行。

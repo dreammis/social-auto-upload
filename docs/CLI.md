@@ -12,6 +12,9 @@
 - `weibo`
 - `hupu`
 - `youtube`
+- `dayu`
+
+文章本地处理命令为 `sau article`，支持主题列表、环境准备和 Markdown/HTML 文件渲染，见 [文章文件与主题渲染](./article.md)。
 
 实现说明：
 
@@ -46,6 +49,7 @@ sau alipay --help
 sau weibo --help
 sau hupu --help
 sau youtube --help
+sau dayu --help
 ```
 
 ## 安装 patchright 浏览器
@@ -55,6 +59,22 @@ Windows 下推荐先指定镜像，再安装 Chromium：
 ```powershell
 $env:PLAYWRIGHT_DOWNLOAD_HOST="https://npmmirror.com/mirrors/playwright"; patchright install chromium
 ```
+
+## 大鱼号 CLI 子命令
+
+登录、分类和来源选项见 [视频发布](./dayu.md)；正文文件、格式和图片路径见 [图文发布](./dayu-article.md)。Markdown 主题及独立本地渲染命令见 [文章文件与主题渲染](./article.md)。
+
+```powershell
+sau dayu upload-article --account creator --title "如何阅读作品数据面板" --content-file examples/dayu_article.html --source "无需标注" --cover-indices 1
+
+# Markdown 首次使用需要 Node.js 22+，先安装渲染依赖
+sau article setup
+sau dayu upload-article --account creator --title "如何阅读作品数据面板" --content-file examples/article.md --theme modern --source "无需标注" --cover-indices 1
+```
+
+Markdown 默认主题为 `default`，可选 `default/grace/simple/modern/plain`；HTML/TXT 不使用 `--theme`。主题会自动转换为大鱼号兼容排版，保留文字颜色、背景和近似字号，圆角、字体和间距等效果可能与本地预览不同。确认发表前会检查服务端预览；平台确认最终发表后即返回成功，不等待审核。
+
+视频和文章均支持 `--schedule "YYYY-MM-DD HH:MM"`：北京时间 2 小时后至 7 天内，分钟为 5 的倍数。平台确认原作品和定时安排后即成功，不等待到点。使用结果文件执行 `sau dayu verify --account creator --result "本次结果文件.json"` 可只读核对原作品与时间，勿重新上传。Agent 可使用仓库的 [大鱼号 Skill](../skills/dayu-upload/SKILL.md)。
 
 ## 抖音 CLI 子命令
 
@@ -111,7 +131,8 @@ sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --titl
 - 一个 `account_name` 对应一个账号文件，可以准备多个账号并发使用
 - 浏览器平台统一元数据约定：
 - 视频使用 `title + desc + tags`
-- 图文使用 `title + note + tags`
+- 抖音、快手、小红书的图片笔记使用 `title + note + tags`
+- 大鱼号文章使用 `title + content-file + source`，正文从 UTF-8 文件读取
 - `sau bilibili ...` 会自动准备 `biliup`
 - 如果本地没有 `biliup`，第一次运行会自动下载
 - 如果上游 GitHub Release 有更新，运行时会先自动更新
@@ -194,7 +215,7 @@ sau hupu upload-video --account <account_name> --file videos/demo.mp4 --title "�
 
 ## 定时发布
 
-抖音、快手、小红书、视频号的图文或视频上传，以及 Bilibili 的视频上传支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到对应平台的定时发布策略；不传则默认立即发布。百家号、支付宝生活号、微博和虎扑当前不支持 `--schedule`。
+抖音、快手、小红书、视频号的图文或视频上传、Bilibili 的视频上传，以及大鱼号的视频和文章上传支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到对应平台的定时发布策略；不传则默认立即发布。大鱼号时间固定为北京时间，范围为 2 小时后至 7 天内、5 分钟一档。百家号、支付宝生活号、微博和虎扑当前不支持 `--schedule`。
 
 ```bash
 sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --schedule "2026-03-24 21:30"
@@ -265,7 +286,7 @@ Bilibili 额外要求：
 - `--tags` 会映射到 `biliup upload --tag`
 - `--schedule` 会映射到 Bilibili 所需的时间戳参数
 
-## 图文上传参数
+## 图片笔记上传参数
 
 ```bash
 --images videos/1.png videos/2.png videos/3.png
@@ -274,10 +295,12 @@ Bilibili 额外要求：
 --tags 图文,测试
 ```
 
-图文上传当前限制：
+图片笔记上传当前限制：
 
 - 抖音：最多 35 张图片，不支持 GIF
 - 快手：支持多张图片，建议传真实不同文件，不要把同一路径重复多次
 - 小红书：支持多张图片，正文 `--note` 可选，但 `--title` 建议始终显式传入
+
+大鱼号文章使用 `--content-file` 提供 HTML、Markdown 或 TXT 正文文件，支持本地图片和图文混排，正文最多 2 万字；来源与封面等参数见 [大鱼号图文发布](./dayu-article.md)。
 
 后续维护 CLI 时，优先看 `sau_cli.py`、`uploader/` 和 `skills/`。
