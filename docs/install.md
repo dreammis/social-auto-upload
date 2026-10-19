@@ -114,6 +114,7 @@ sau douyin upload-note --account <account_name> --images videos/demo1.png videos
 
 抖音短信验证码补充说明：
 
+- 使用网页发布中心时，发布界面会自动弹出验证码输入窗口，提交后原发布任务会继续执行
 - 视频发布过程中如果触发短信二次验证，程序会优先读取项目根目录下的 `verify_code.txt`
 - 如果当前是你手动运行的交互式终端，没提供 `verify_code.txt` 时，CLI 会直接提示你在终端输入验证码
 - 如果是 agent 或自动化桥接场景，仍然可以继续通过写入 `verify_code.txt` 来提供验证码

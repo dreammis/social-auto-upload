@@ -6,6 +6,7 @@ from uploader.douyin_uploader.main import DouYinVideo
 from uploader.ks_uploader.main import KSVideo
 from uploader.tencent_uploader.main import TencentVideo
 from uploader.xiaohongshu_uploader.main import XiaoHongShuVideo
+from utils import verify_codes
 from utils.constant import TencentZoneTypes
 from utils.files_times import generate_schedule_time_next_day
 
@@ -46,8 +47,12 @@ def post_video_DouYin(title,files,tags,account_file,category=TencentZoneTypes.LI
             print(f"视频文件名：{file}")
             print(f"标题：{title}")
             print(f"Hashtag：{tags}")
-            app = DouYinVideo(title, str(file), tags, publish_datetimes[index], cookie, thumbnail_path, productLink, productTitle)
-            asyncio.run(app.douyin_upload_video(), debug=False)
+            verify_codes.set_context(title=title, platform="抖音", file_name=Path(file).name)
+            try:
+                app = DouYinVideo(title, str(file), tags, publish_datetimes[index], cookie, thumbnail_path, productLink, productTitle)
+                asyncio.run(app.douyin_upload_video(), debug=False)
+            finally:
+                verify_codes.clear_context()
 
 
 def post_video_ks(title,files,tags,account_file,category=TencentZoneTypes.LIFESTYLE.value,enableTimer=False,videos_per_day = 1, daily_times=None,start_days = 0):
