@@ -12,6 +12,7 @@ from typing import Iterable, Sequence
 from patchright.async_api import async_playwright
 
 from conf import BASE_DIR, LOCAL_CHROME_PATH
+from uploader.base_video import BaseVideoUploader
 from utils.article_render import ARTICLE_THEMES, render_article_file, setup_article_renderer
 from uploader.xueqiu_uploader.article import XueqiuArticle
 from uploader.xueqiu_uploader.constants import XUEQIU_DECLARATIONS, XUEQIU_VISIBILITY
@@ -88,6 +89,21 @@ from uploader.youtube_uploader.main import (
     cookie_auth as youtube_cookie_auth,
     youtube_setup,
 )
+from uploader.meta_uploader.facebook_uploader.main import (
+    DEFAULT_FACEBOOK_PROXY,
+    FacebookVideo,
+    FacebookPost,
+    facebook_cookie_auth,
+    facebook_setup,
+)
+from uploader.meta_uploader.facebook_page_uploader.main import (
+    META_PROXY,
+    MetaBusinessUploader,
+    meta_cookie_auth,
+    meta_setup,
+)
+from uploader.meta_uploader.facebook_uploader.posts import facebook_post_action
+from uploader.meta_uploader.facebook_page_uploader.posts import meta_post_action
 
 SCHEDULE_FORMAT = "%Y-%m-%d %H:%M"
 
@@ -274,8 +290,38 @@ class YouTubeVideoUploadRequest:
     thumbnail_file: Path | None = None
     playlist: str | None = None
     visibility: str = "public"
+    schedule: datetime | int = 0
     debug: bool = True
     headless: bool = False
+
+
+@dataclass(slots=True)
+class FacebookVideoUploadRequest:
+    account_name: str
+    video_file: Path
+    title: str
+    description: str
+    tags: list[str]
+    proxy: str = DEFAULT_FACEBOOK_PROXY
+    debug: bool = True
+    headless: bool = True
+
+
+@dataclass(slots=True)
+class MetaUploadRequest:
+    platform: str
+    account_name: str
+    title: str
+    description: str
+    tags: list[str]
+    video_file: Path | None = None
+    image_files: list[Path] | None = None
+    schedule: datetime | int = 0
+    page_name: str | None = None
+    proxy: str = META_PROXY
+    debug: bool = True
+    headless: bool = False
+    result_file: Path | None = None
 
 
 def has_interactive_terminal() -> bool:
@@ -404,6 +450,28 @@ async def check_youtube_account(account_name: str) -> bool:
     return await youtube_cookie_auth(str(account_file))
 
 
+async def login_facebook_account(
+    account_name: str, *, headless: bool = False, proxy: str | None = DEFAULT_FACEBOOK_PROXY
+) -> dict:
+    account_file = resolve_account_file("facebook", account_name)
+    return await facebook_setup(
+        account_file,
+        handle=True,
+        return_detail=True,
+        headless=headless,
+        proxy=proxy,
+    )
+
+
+async def check_facebook_account(
+    account_name: str, *, proxy: str | None = DEFAULT_FACEBOOK_PROXY
+) -> bool:
+    account_file = resolve_account_file("facebook", account_name)
+    if not account_file.exists():
+        return False
+    return await facebook_cookie_auth(account_file, proxy=proxy)
+
+
 async def upload_youtube_video(request: YouTubeVideoUploadRequest) -> Path:
     account_file = resolve_account_file("youtube", request.account_name)
     is_ready = await youtube_setup(str(account_file), handle=False)
@@ -424,8 +492,75 @@ async def upload_youtube_video(request: YouTubeVideoUploadRequest) -> Path:
         debug=request.debug,
         headless=request.headless,
     )
+    app.set_publish_date(request.schedule)
     await app.main()
     return account_file
+
+
+async def upload_facebook_video(request: FacebookVideoUploadRequest) -> Path:
+    account_file = resolve_account_file("facebook", request.account_name)
+    is_ready = await facebook_setup(
+        account_file,
+        handle=False,
+        proxy=request.proxy,
+    )
+    if not is_ready:
+        raise RuntimeError(
+            f"Facebook 登录态不存在或已失效: {account_file}. "
+            f"请先执行 `sau facebook login --account {request.account_name}`。"
+        )
+
+    app = FacebookVideo(
+        title=request.title,
+        file_path=request.video_file,
+        description=request.description,
+        tags=request.tags,
+        account_file=account_file,
+        proxy=request.proxy,
+        headless=request.headless,
+    )
+    await app.main()
+    return account_file
+
+
+async def login_meta_account(platform: str, account_name: str, *, headless: bool = False, proxy: str | None = META_PROXY) -> dict:
+    account_file = resolve_account_file(platform, account_name)
+    return await meta_setup(
+        account_file,
+        handle=True,
+        return_detail=True,
+        headless=headless,
+        proxy=proxy,
+    )
+
+
+async def check_meta_account(platform: str, account_name: str, *, proxy: str | None = META_PROXY) -> bool:
+    account_file = resolve_account_file(platform, account_name)
+    return await meta_cookie_auth(account_file, proxy=proxy)
+
+
+async def upload_meta_content(request: MetaUploadRequest) -> dict:
+    account_file = resolve_account_file(request.platform, request.account_name)
+    if not await meta_cookie_auth(account_file, proxy=request.proxy):
+        raise RuntimeError(
+            f"{request.platform} Business Suite 登录态不存在或已失效: {account_file}. "
+            f"请先执行 `sau {request.platform} login --account {request.account_name}`。"
+        )
+    app = MetaBusinessUploader(
+        request.platform,
+        account_file,
+        title=request.title,
+        description=request.description,
+        tags=request.tags,
+        video_file=request.video_file,
+        image_files=request.image_files,
+        schedule=request.schedule,
+        page_name=request.page_name,
+        proxy=request.proxy,
+        headless=request.headless,
+        result_file=request.result_file,
+    )
+    return await app.upload()
 
 
 async def upload_video(request: DouyinVideoUploadRequest) -> Path:
@@ -1024,6 +1159,115 @@ def build_parser() -> argparse.ArgumentParser:
     hupu_upload_video_parser.add_argument("--thumbnail", type=existing_file_path, help="Optional cover image path")
     add_runtime_flags(hupu_upload_video_parser)
 
+    facebook_parser = platform_parsers.add_parser("facebook", help="Facebook personal post operations")
+    facebook_actions = facebook_parser.add_subparsers(dest="action", required=True)
+
+    for action in ("verify", "delete"):
+        post_parser = facebook_actions.add_parser(action, help="核对原作品" if action == "verify" else "核对原作品后移至垃圾箱（30 天后平台删除）")
+        post_parser.add_argument("--account", required=True)
+        post_parser.add_argument("--post-url", required=True, help="原作品的 Facebook 链接")
+        post_parser.add_argument("--owner-id", required=True, help="原作品所属个人主页的数字 ID")
+        post_parser.add_argument("--expected-text", required=True, help="原作品中用于交叉核验的正文")
+        post_parser.add_argument("--result", type=Path, help="保存查询或删除结果 JSON")
+        post_parser.add_argument("--from-trash", action="store_true", help="原作品已在垃圾箱，从垃圾箱核验")
+        if action == "delete":
+            post_parser.add_argument("--permanent", action="store_true", help="将核实的原作品从垃圾箱永久删除（无法恢复）")
+        else:
+            post_parser.add_argument("--deleted", action="store_true", help="只查询垃圾箱原 ID 是否已删除，不执行删除")
+        post_parser.add_argument("--proxy", default=DEFAULT_FACEBOOK_PROXY)
+        add_runtime_flags(post_parser)
+        post_parser.set_defaults(headless=False)
+
+    for action_name in ("login", "check"):
+        action_parser = facebook_actions.add_parser(action_name, help=f"Facebook {action_name}")
+        action_parser.add_argument("--account", required=True, help="Facebook user-defined account_name")
+        action_parser.add_argument(
+            "--proxy",
+            default=DEFAULT_FACEBOOK_PROXY,
+            help="浏览器代理地址；默认使用 http://127.0.0.1:10808，传空字符串表示直连",
+        )
+        if action_name == "login":
+            add_runtime_flags(action_parser)
+            # Facebook 登录必须在可见 Chrome 中完成，避免无头模式下用户看不到登录挑战。
+            action_parser.set_defaults(headless=False)
+
+    facebook_upload_video_parser = facebook_actions.add_parser(
+        "upload-video", help="Upload one video to a Facebook personal post"
+    )
+    facebook_upload_video_parser.add_argument("--account", required=True, help="Facebook user-defined account_name")
+    facebook_upload_video_parser.add_argument("--file", required=True, type=existing_file_path, help="Video file path")
+    facebook_upload_video_parser.add_argument("--title", required=True, help="Post title, merged into Facebook caption")
+    facebook_upload_video_parser.add_argument("--desc", default="", help="Optional post description")
+    facebook_upload_video_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
+    facebook_upload_video_parser.add_argument(
+        "--proxy",
+        default=DEFAULT_FACEBOOK_PROXY,
+        help="浏览器代理地址；默认使用 http://127.0.0.1:10808，传空字符串表示直连",
+    )
+    add_runtime_flags(facebook_upload_video_parser)
+
+    facebook_note = facebook_actions.add_parser("upload-note", help="向个人主页发布图片及正文")
+    facebook_note.add_argument("--account", required=True)
+    facebook_note.add_argument("--images", required=True, nargs="+", type=existing_file_path)
+    facebook_note.add_argument("--title", required=True)
+    facebook_note.add_argument("--note", default="")
+    facebook_note.add_argument("--tags", default="")
+    facebook_note.add_argument("--proxy", default=DEFAULT_FACEBOOK_PROXY)
+    add_runtime_flags(facebook_note)
+    facebook_note.set_defaults(headless=False)
+
+    for meta_platform, meta_help in (
+        ("facebook-page", "Facebook Page Business Suite operations"),
+    ):
+        meta_parser = platform_parsers.add_parser(meta_platform, help=meta_help)
+        meta_actions = meta_parser.add_subparsers(dest="action", required=True)
+        if meta_platform == "facebook-page":
+            for action in ("verify", "delete"):
+                post_parser = meta_actions.add_parser(action, help="按编号核对原作品" if action == "verify" else "核对编号后删除：定时作品永久删除，已发布作品移至垃圾箱")
+                post_parser.add_argument("--account", required=True)
+                post_parser.add_argument("--page-id", required=True)
+                post_parser.add_argument("--page", required=True)
+                post_parser.add_argument("--content-id", required=True)
+                post_parser.add_argument("--expected-text", required=True)
+                post_parser.add_argument("--scheduled", action="store_true", help="在已定时列表查询或取消定时作品")
+                post_parser.add_argument("--result", type=Path)
+                post_parser.add_argument("--proxy", default=META_PROXY)
+                add_runtime_flags(post_parser)
+                post_parser.set_defaults(headless=False)
+        for action_name in ("login", "check"):
+            action_parser = meta_actions.add_parser(action_name, help=f"{meta_platform} {action_name}")
+            action_parser.add_argument("--account", required=True, help="Meta account name")
+            action_parser.add_argument("--proxy", default=META_PROXY, help="代理地址，默认 http://127.0.0.1:10808")
+            if action_name == "login":
+                add_runtime_flags(action_parser)
+                action_parser.set_defaults(headless=False)
+
+        upload_video_parser = meta_actions.add_parser("upload-video", help=f"Upload a video to {meta_platform}")
+        upload_video_parser.add_argument("--account", required=True)
+        upload_video_parser.add_argument("--file", required=True, type=existing_file_path)
+        upload_video_parser.add_argument("--title", required=True)
+        upload_video_parser.add_argument("--desc", default="")
+        upload_video_parser.add_argument("--tags", default="")
+        upload_video_parser.add_argument("--page", default=None, help="Business Suite 发布主体名称；不传使用当前主体")
+        upload_video_parser.add_argument("--schedule", type=schedule_value, help=f"定时发布时间，格式 {schedule_help}")
+        upload_video_parser.add_argument("--proxy", default=META_PROXY)
+        upload_video_parser.add_argument("--result", type=Path, help="保存内容编号和发布结果 JSON")
+        add_runtime_flags(upload_video_parser)
+        upload_video_parser.set_defaults(headless=False)
+
+        upload_note_parser = meta_actions.add_parser("upload-note", help=f"Upload images to {meta_platform}")
+        upload_note_parser.add_argument("--account", required=True)
+        upload_note_parser.add_argument("--images", required=True, nargs="+", type=existing_file_path)
+        upload_note_parser.add_argument("--title", required=True)
+        upload_note_parser.add_argument("--note", default="")
+        upload_note_parser.add_argument("--tags", default="")
+        upload_note_parser.add_argument("--page", default=None, help="Business Suite 发布主体名称；不传使用当前主体")
+        upload_note_parser.add_argument("--schedule", type=schedule_value, help=f"定时发布时间，格式 {schedule_help}")
+        upload_note_parser.add_argument("--proxy", default=META_PROXY)
+        upload_note_parser.add_argument("--result", type=Path, help="保存内容编号和发布结果 JSON")
+        add_runtime_flags(upload_note_parser)
+        upload_note_parser.set_defaults(headless=False)
+
     youtube_parser = platform_parsers.add_parser("youtube", help="YouTube operations")
     youtube_actions = youtube_parser.add_subparsers(dest="action", required=True)
 
@@ -1043,6 +1287,7 @@ def build_parser() -> argparse.ArgumentParser:
     youtube_upload_video_parser.add_argument("--playlist", help="Optional playlist name to add the video to (for series)")
     youtube_upload_video_parser.add_argument(
         "--visibility", default="public", choices=["public", "unlisted", "private"], help="Video visibility")
+    youtube_upload_video_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
     add_runtime_flags(youtube_upload_video_parser)
 
     baijiahao_parser = platform_parsers.add_parser("baijiahao", help="Baidu Baijiahao operations")
@@ -1612,6 +1857,7 @@ async def dispatch(args: argparse.Namespace) -> int:
                 thumbnail_file=args.thumbnail,
                 playlist=args.playlist,
                 visibility=args.visibility,
+                schedule=args.schedule or 0,
                 debug=args.debug,
                 headless=args.headless,
             )
@@ -1620,6 +1866,107 @@ async def dispatch(args: argparse.Namespace) -> int:
             return 0
 
         raise RuntimeError(f"Unsupported YouTube action: {args.action}")
+
+    if args.platform == "facebook":
+        if args.action == "upload-note":
+            for image in args.images:
+                BaseVideoUploader.validate_image_file(image)
+            app = FacebookPost(args.title, args.images, args.note, parse_tags(args.tags),
+                               resolve_account_file("facebook", args.account), proxy=args.proxy, headless=args.headless)
+            await app.main()
+            print("Facebook image post submitted")
+            return 0
+        if args.action in {"verify", "delete"}:
+            result = await facebook_post_action(
+                resolve_account_file("facebook", args.account), post_url=args.post_url,
+                owner_id=args.owner_id, expected_text=args.expected_text,
+                delete=args.action == "delete", proxy=args.proxy, headless=args.headless,
+                permanent=getattr(args, "permanent", False), from_trash=args.from_trash,
+                deleted=getattr(args, "deleted", False),
+            )
+            if args.result:
+                args.result.parent.mkdir(parents=True, exist_ok=True)
+                args.result.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+
+        if args.action == "login":
+            result = await login_facebook_account(
+                args.account, headless=args.headless, proxy=args.proxy
+            )
+            if not result["success"]:
+                raise RuntimeError(result["message"])
+            print(f"Facebook login flow completed: {result['account_file']}")
+            return 0
+
+        if args.action == "check":
+            is_valid = await check_facebook_account(args.account, proxy=args.proxy)
+            print("valid" if is_valid else "invalid")
+            return 0 if is_valid else 1
+
+        if args.action == "upload-video":
+            request = FacebookVideoUploadRequest(
+                account_name=args.account,
+                video_file=args.file,
+                title=args.title,
+                description=args.desc,
+                tags=parse_tags(args.tags),
+                proxy=args.proxy,
+                debug=args.debug,
+                headless=args.headless,
+            )
+            await upload_facebook_video(request)
+            print(f"Facebook video upload submitted: {request.video_file}")
+            return 0
+
+        raise RuntimeError(f"Unsupported Facebook action: {args.action}")
+
+    if args.platform == "facebook-page":
+        if args.platform == "facebook-page" and args.action in {"verify", "delete"}:
+            result = await meta_post_action(
+                resolve_account_file(args.platform, args.account), page_id=args.page_id, page_name=args.page,
+                content_id=args.content_id, expected_text=args.expected_text, scheduled=args.scheduled,
+                delete=args.action == "delete", proxy=args.proxy, headless=args.headless,
+            )
+            if args.result:
+                args.result.parent.mkdir(parents=True, exist_ok=True)
+                args.result.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+
+        if args.action == "login":
+            result = await login_meta_account(args.platform, args.account, headless=args.headless, proxy=args.proxy)
+            if not result["success"]:
+                raise RuntimeError(result.get("message", f"{args.platform} login failed"))
+            print(f"{args.platform} login flow completed: {result['account_file']}")
+            return 0
+
+        if args.action == "check":
+            is_valid = await check_meta_account(args.platform, args.account, proxy=args.proxy)
+            print("valid" if is_valid else "invalid")
+            return 0 if is_valid else 1
+
+        if args.action in {"upload-video", "upload-note"}:
+            request = MetaUploadRequest(
+                platform=args.platform,
+                account_name=args.account,
+                title=args.title,
+                description=args.desc if args.action == "upload-video" else args.note,
+                tags=parse_tags(args.tags),
+                video_file=args.file if args.action == "upload-video" else None,
+                image_files=parse_image_files(args.images) if args.action == "upload-note" else None,
+                schedule=args.schedule or 0,
+                page_name=args.page,
+                result_file=args.result,
+                proxy=args.proxy,
+                debug=args.debug,
+                headless=args.headless,
+            )
+            result = await upload_meta_content(request)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+
+        raise RuntimeError(f"Unsupported {args.platform} action: {args.action}")
 
     if args.platform == "baijiahao":
         if args.action == "login":

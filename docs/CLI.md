@@ -12,6 +12,8 @@
 - `weibo`
 - `hupu`
 - `youtube`
+- `facebook`：Facebook 个人主页视频/图文立即发布、查询和删除（默认代理 `http://127.0.0.1:10808`）
+- `facebook-page`：Meta Business Suite 的 Facebook Page 视频/图文立即或定时发布
 - `dayu`
 - `xueqiu`：HTML/Markdown/TXT 长文、原位置配图及封面，默认实际发表，支持按原作品 ID 查询结果；见 [雪球使用说明](./xueqiu.md)，已实测正式 CLI 发表及后台核验
 
@@ -27,6 +29,8 @@
   - `skills/xiaohongshu-upload/`
   - `skills/bilibili-upload/`
   - `skills/xueqiu-upload/`
+  - `skills/facebook-upload/`
+  - `skills/meta-upload/`
 
 视频号、百家号和支付宝生活号目前只有 CLI 入口，暂未提供对应的 skill。
 
@@ -51,6 +55,8 @@ sau alipay --help
 sau weibo --help
 sau hupu --help
 sau youtube --help
+sau facebook --help
+sau facebook-page --help
 sau dayu --help
 sau xueqiu --help
 ```
@@ -184,9 +190,46 @@ sau alipay upload-video --account <account_name> --file videos/demo.mp4 --title 
 sau youtube login --account <account_name>
 sau youtube check --account <account_name>
 sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2 --playlist "我的系列" --visibility public
+sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title "定时视频" --schedule "2026-10-21 10:30"
 ```
 
-YouTube 登录需要在浏览器中完成 Google 账号登录，不使用二维码。`--visibility` 可选 `public`、`unlisted` 或 `private`，`--playlist` 可选。
+YouTube 登录需要在浏览器中完成 Google 账号登录，不使用二维码。`--visibility` 可选 `public`、`unlisted` 或 `private`，`--playlist` 可选；传 `--schedule` 时使用 YouTube Studio 的 Schedule 状态并核对日期/时间控件，不传则立即按 `--visibility` 发布。
+
+## Facebook CLI 子命令
+
+个人主页使用 `facebook`，Page 使用 `facebook-page`。默认代理为 `http://127.0.0.1:10808`；个人主页也可通过 `SAU_FACEBOOK_PROXY` 配置，`--proxy ""` 明确关闭代理。账号文件分别保存，首次使用先登录对应入口。
+
+```powershell
+sau facebook login --account creator
+sau facebook check --account creator
+sau facebook upload-video --account creator --file videos/demo.mp4 --title "视频标题" --desc "正文"
+sau facebook upload-note --account creator --images images/1.jpg --title "图文标题" --note "正文"
+sau facebook-page login --account creator
+sau facebook-page upload-note --account creator --page "我的 Page" --images images/1.jpg --title "图文标题" --note "正文" --schedule "2026-10-21 10:30" --result .local/page-result.json
+sau facebook-page upload-video --account creator --page "我的 Page" --file videos/demo.mp4 --title "视频标题" --desc "正文" --schedule "2026-10-21 10:30" --result .local/reel-result.json
+```
+
+个人主页支持视频、图片及正文立即发布，目前未接入个人主页定时。Page 视频和图文支持 `--schedule "YYYY-MM-DD HH:MM"`，使用北京时间，要求至少提前 2 小时；不传即立即提交。当前实现核对 `Asia/Shanghai` 浏览器时区、页面日期/时间及原作品列表安排。`--page` 应填写准确 Page 名称。
+
+Page 发布结果默认保存在 `.local/meta-results/`，也可用 `--result` 指定 JSON 文件。结果包含 `page_id`、`page_name`、`content_id`（视频处理中可能暂时没有）和状态。`scheduled` 表示平台已确认排期并核对原记录；`published` 表示图文已发布并核对原记录；立即发布视频在创建响应无错误且完成弹窗出现后返回 `processing`，表示平台已受理并正在处理，不能当成已经公开播放，后续作品编号由平台生成时再查询。`submission_unknown` 仅表示提交响应或完成证据没有确认，必须先查原记录，禁止直接重发。
+
+### 查询与删除
+
+```powershell
+sau facebook verify --account creator --post-url "https://www.facebook.com/reel/作品编号/" --owner-id "作者数字ID" --expected-text "原作品正文"
+sau facebook delete --account creator --post-url "原作品链接" --owner-id "作者数字ID" --expected-text "原作品正文"
+sau facebook delete --account creator --post-url "原作品链接" --owner-id "作者数字ID" --expected-text "原作品正文" --from-trash --permanent
+sau facebook-page verify --account creator --page "我的 Page" --page-id "Page数字ID" --content-id "内容编号" --expected-text "原作品正文" --scheduled
+sau facebook-page delete --account creator --page "我的 Page" --page-id "Page数字ID" --content-id "内容编号" --expected-text "原作品正文" --scheduled --result .local/delete-result.json
+```
+
+个人主页删除默认移至垃圾箱；加 `--permanent` 可永久删除，已经在垃圾箱中的作品再加 `--from-trash`。查询垃圾箱同样使用 `verify --from-trash`。`verify --deleted` 仅查询原编号是否已不在垃圾箱，返回 `absent_from_trash`，不凭“没找到”证明曾经永久删除。
+
+Page 的 `--scheduled` 选择定时列表，删除会取消排期并永久移除。已发布作品不加该参数，当前平台执行移至垃圾箱，返回 `trashed`，30 天后由平台删除；CLI 尚未接入 Page 垃圾箱的提前永久删除。定时作品发布后编号可能变化，管理已发布作品请使用已发布列表中的编号。
+
+所有删除动作先核对作者或 Page、原作品编号和正文。正文相同且无法唯一定位时明确失败。当前查询覆盖列表已加载的近期作品，不保证自动翻页检索全部历史作品。删除之后重新查询服务器列表；若结果未知，先查询，不自动重删。删除远端作品不会删除本地素材。
+
+Instagram 按用户要求暂停；后续走独立 Instagram 网页发布，不使用 Business Suite 绑定方式。本轮不增加前后端页面或接口。
 
 ## 微博 CLI 子命令
 

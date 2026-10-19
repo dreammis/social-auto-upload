@@ -1,7 +1,7 @@
 # social-auto-upload
 
 `social-auto-upload` 帮助内容创作者和运营者将视频、图片笔记和文章发布到多个国内外社交媒体平台。
-项目支持 `抖音`、`Bilibili`、`小红书`、`快手`、`视频号`、`百家号`、`大鱼号`、`支付宝生活号`、`微博`、`虎扑`、`TikTok` 以及 `YouTube` 等平台，各平台的上传类型和定时发布能力见下表。
+项目支持 `抖音`、`Bilibili`、`小红书`、`快手`、`视频号`、`百家号`、`大鱼号`、`支付宝生活号`、`微博`、`虎扑`、`TikTok`、`YouTube` 以及 `Facebook` 等平台，各平台的上传类型和定时发布能力见下表。
 结合各平台 `uploader` 模块，您可以轻松配置和扩展支持的平台，并通过示例脚本快速上手。
 
 <img src="media/show/tkupload.gif" alt="tiktok show" width="800"/>
@@ -84,7 +84,10 @@
 | 虎扑 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，标题 4–40 字 |
 | TikTok | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 当前示例走 Chrome 版实现 |
 | 雪球 | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | [长文与图片](./docs/xueqiu.md)：HTML/Markdown/TXT、原位置配图及封面，已实测正式 CLI 发表和后台原作品查询 |
-| YouTube | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化（Studio），支持加入播放列表/可见性 |
+| YouTube | ✅ | ✅ | ❌ | 待验收 | ✅ | ❌ | Studio 定时实现开发中，尚未真实排期验收 |
+| Facebook | ✅ | ✅ | ✅ | 未接入 | ✅ | ✅ | 个人主页视频/图文已实测，支持查询、移至垃圾箱及永久删除；默认 `10808` 代理 |
+| Facebook Page | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 视频与图文定时已实测；支持查询、取消定时及已发布作品移至垃圾箱，详见 CLI 文档 |
+| Instagram | 暂停 | 暂停 | 暂停 | 暂停 | ❌ | ❌ | 后续接独立网页发布，不使用 Business Suite 绑定方式 |
 
 文章主题预览及 Markdown 转 HTML：见 [文章文件与主题渲染](./docs/article.md)。内置 `default/grace/simple/modern/plain` 主题；大鱼号可直接接收 Markdown，并将主题转换为保留文字颜色、背景和近似字号的兼容排版，圆角和精确间距等效果可能与本地预览不同。
 
@@ -224,6 +227,12 @@ sau hupu upload-video --account <account_name> --file videos/demo.mp4 --title "�
 sau youtube login --account <account_name>
 sau youtube check --account <account_name>
 sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2 --playlist "我的系列" --visibility public
+
+sau facebook login --account <account_name> --proxy http://127.0.0.1:10808
+sau facebook check --account <account_name> --proxy http://127.0.0.1:10808
+sau facebook upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags Facebook,测试 --proxy http://127.0.0.1:10808
+sau facebook-page upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --page Coldnox --proxy http://127.0.0.1:10808
+sau facebook-page upload-note --account <account_name> --images images/1.jpg --title "Page 图文" --note "正文" --page "我的 Page" --schedule "2026-10-21 10:30" --result .local/page-result.json
 ```
 
 > YouTube 说明：登录是交互式的（Google 账号，浏览器里完成，无二维码）。这里走浏览器自动化而不是官方 API，
