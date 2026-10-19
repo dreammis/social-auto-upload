@@ -1,0 +1,24 @@
+services:
+  sau:
+    image: ghcr.io/deroino/social-auto-upload:latest
+    container_name: sau
+    restart: unless-stopped
+    ports:
+      - "5409:5409"
+    environment:
+      # 抖音 Cookie 认证是否使用无头模式（默认 true，容器内通常保持 true）
+      - DOUYIN_COOKIE_AUTH_HEADLESS=true
+      # 小红书创作者后台地址（默认值，一般无需修改）
+      - SAU_XHS_CREATOR_BASE_URL=https://creator.xiaohongshu.com
+    volumes:
+      # 持久化数据：数据库 / Cookie / 上传视频（避免容器重建丢数据）
+      - sau-db:/app/db
+      - sau-cookies:/app/cookiesFile
+      - sau-videos:/app/videoFile
+      # 如需自定义配置，取消下面注释并将本地 conf.py 映射进来
+      # - ./conf.py:/app/conf.py:ro
+
+volumes:
+  sau-db:
+  sau-cookies:
+  sau-videos:

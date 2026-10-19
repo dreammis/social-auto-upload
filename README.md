@@ -39,6 +39,16 @@
           ClawPower 是一家稳定可靠 AI 大模型中转服务商，提供 Claude、GPT、Gemini 60+ 大模型接入。无论是 OpenClaw、Hermes 智能体自动化场景，Claude Code、Codex 编程工具接入，还是公众号、小红书内容创作；都能获得稳定、顺滑、可长期使用的模型服务体验。低至官方价格的 30%，点击<a href="http://t.clawpower.vip/1005">免费领取 5 刀现金</a>体验券
         </td>
       </tr>
+     <tr>
+        <td width="25%" align="center" valign="middle">
+          <a href="https://resvrl.com">
+            <img src="static/resvrl.png" alt="RESVRL Sponsor" width="180">
+          </a>
+        </td>
+       <td width="75%" align="left" valign="middle">
+           <a href="https://resvrl.com">RESVRL</a> 是新一代云原生基础设施服务提供商，使用自然语言控制你的任何云资源，同时提供容器托管、虚拟机服务、托管 Kubernetes 集群以及云原生在线运行沙箱环境。以AI重构云计算架构，打造意图驱动基础设施与AI自治云平台，限时第三方OAuth登录即可领取10元平台额度。
+         </td>
+      </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
       <img src="static/wechat.png" alt="Sponsor Contact" width="150">
@@ -57,6 +67,7 @@
 
 - [💡 功能特性](#功能特性)
 - [💾 安装指南](#安装指南)
+- [云端一键部署](#云端一键部署)
 - [🤖 AI Agent](#agent)
 - [🏁 快速开始](#快速开始)
 - [🗂️ 重构计划](#%EF%B8%8F重构计划)
@@ -99,8 +110,15 @@
 - [安装说明](./docs/install.md)
 - [更新说明](./docs/update.md)
 
+## 云端一键部署
 
-### AGENT 
+### 一键部署到RESVRL
+ <a href="https://portal.resvrl.com/?openapp=container-template&templateName=Social-Auto-Upload"><img src="static/deploy-on-resvrl.png" alt="Deploy On Resvrl" width="180"></a>
+
+注意部署该项目后,为了保证访问安全性,请务必开启[平台级访问保护]选项
+
+
+## AGENT 
 
 ```
 AI的发展毋庸置疑，希望你遇到这种安装和使用，不要再怯场，而是交给各种AI Agent来协助你
