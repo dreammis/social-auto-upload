@@ -90,14 +90,14 @@ from uploader.youtube_uploader.main import (
     youtube_setup,
 )
 from uploader.meta_uploader.facebook_uploader.main import (
-    DEFAULT_FACEBOOK_PROXY,
+    FACEBOOK_PROXY,
     FacebookVideo,
     FacebookPost,
     facebook_cookie_auth,
     facebook_setup,
 )
 from uploader.meta_uploader.facebook_page_uploader.main import (
-    META_PROXY,
+    FACEBOOK_PAGE_PROXY,
     MetaBusinessUploader,
     meta_cookie_auth,
     meta_setup,
@@ -105,7 +105,7 @@ from uploader.meta_uploader.facebook_page_uploader.main import (
 from uploader.meta_uploader.facebook_uploader.posts import facebook_post_action
 from uploader.meta_uploader.facebook_page_uploader.posts import meta_post_action
 from uploader.meta_uploader.insgraph_uploader.main import (
-    DEFAULT_INSTAGRAM_PROXY,
+    INSTAGRAM_PROXY,
     InstagramUploader,
     instagram_cookie_auth,
     instagram_setup,
@@ -309,7 +309,7 @@ class FacebookVideoUploadRequest:
     title: str
     description: str
     tags: list[str]
-    proxy: str = DEFAULT_FACEBOOK_PROXY
+    proxy: str | None = FACEBOOK_PROXY
     debug: bool = True
     headless: bool = True
 
@@ -325,7 +325,7 @@ class MetaUploadRequest:
     image_files: list[Path] | None = None
     schedule: datetime | int = 0
     page_name: str | None = None
-    proxy: str = META_PROXY
+    proxy: str | None = FACEBOOK_PAGE_PROXY
     debug: bool = True
     headless: bool = False
     result_file: Path | None = None
@@ -340,7 +340,7 @@ class InstagramUploadRequest:
     video_file: Path | None = None
     image_files: list[Path] | None = None
     thumbnail: Path | None = None
-    proxy: str = DEFAULT_INSTAGRAM_PROXY
+    proxy: str | None = INSTAGRAM_PROXY
     headless: bool = False
     result_file: Path | None = None
 
@@ -472,7 +472,7 @@ async def check_youtube_account(account_name: str) -> bool:
 
 
 async def login_facebook_account(
-    account_name: str, *, headless: bool = False, proxy: str | None = DEFAULT_FACEBOOK_PROXY
+    account_name: str, *, headless: bool = False, proxy: str | None = FACEBOOK_PROXY
 ) -> dict:
     account_file = resolve_account_file("facebook", account_name)
     return await facebook_setup(
@@ -485,7 +485,7 @@ async def login_facebook_account(
 
 
 async def check_facebook_account(
-    account_name: str, *, proxy: str | None = DEFAULT_FACEBOOK_PROXY
+    account_name: str, *, proxy: str | None = FACEBOOK_PROXY
 ) -> bool:
     account_file = resolve_account_file("facebook", account_name)
     if not account_file.exists():
@@ -544,7 +544,7 @@ async def upload_facebook_video(request: FacebookVideoUploadRequest) -> Path:
     return account_file
 
 
-async def login_meta_account(platform: str, account_name: str, *, headless: bool = False, proxy: str | None = META_PROXY) -> dict:
+async def login_meta_account(platform: str, account_name: str, *, headless: bool = False, proxy: str | None = FACEBOOK_PAGE_PROXY) -> dict:
     account_file = resolve_account_file(platform, account_name)
     return await meta_setup(
         account_file,
@@ -555,7 +555,7 @@ async def login_meta_account(platform: str, account_name: str, *, headless: bool
     )
 
 
-async def check_meta_account(platform: str, account_name: str, *, proxy: str | None = META_PROXY) -> bool:
+async def check_meta_account(platform: str, account_name: str, *, proxy: str | None = FACEBOOK_PAGE_PROXY) -> bool:
     account_file = resolve_account_file(platform, account_name)
     return await meta_cookie_auth(account_file, proxy=proxy)
 
@@ -584,12 +584,12 @@ async def upload_meta_content(request: MetaUploadRequest) -> dict:
     return await app.upload()
 
 
-async def login_instagram_account(account_name: str, *, headless: bool = False, proxy: str | None = DEFAULT_INSTAGRAM_PROXY) -> dict:
+async def login_instagram_account(account_name: str, *, headless: bool = False, proxy: str | None = INSTAGRAM_PROXY) -> dict:
     account_file = resolve_account_file("instagram", account_name)
     return await instagram_setup(account_file, handle=True, return_detail=True, headless=headless, proxy=proxy)
 
 
-async def check_instagram_account(account_name: str, *, proxy: str | None = DEFAULT_INSTAGRAM_PROXY) -> bool:
+async def check_instagram_account(account_name: str, *, proxy: str | None = INSTAGRAM_PROXY) -> bool:
     account_file = resolve_account_file("instagram", account_name)
     return await instagram_cookie_auth(account_file, proxy=proxy)
 
@@ -1222,7 +1222,7 @@ def build_parser() -> argparse.ArgumentParser:
             post_parser.add_argument("--permanent", action="store_true", help="将核实的原作品从垃圾箱永久删除（无法恢复）")
         else:
             post_parser.add_argument("--deleted", action="store_true", help="只查询垃圾箱原 ID 是否已删除，不执行删除")
-        post_parser.add_argument("--proxy", default=DEFAULT_FACEBOOK_PROXY)
+        post_parser.add_argument("--proxy", default=FACEBOOK_PROXY, help="代理地址；不传时直连")
         add_runtime_flags(post_parser)
         post_parser.set_defaults(headless=False)
 
@@ -1231,8 +1231,8 @@ def build_parser() -> argparse.ArgumentParser:
         action_parser.add_argument("--account", required=True, help="Facebook user-defined account_name")
         action_parser.add_argument(
             "--proxy",
-            default=DEFAULT_FACEBOOK_PROXY,
-            help="浏览器代理地址；默认使用 http://127.0.0.1:10808，传空字符串表示直连",
+            default=FACEBOOK_PROXY,
+            help="浏览器代理地址；不传时直连，传空字符串可覆盖环境变量并直连",
         )
         if action_name == "login":
             add_runtime_flags(action_parser)
@@ -1249,8 +1249,8 @@ def build_parser() -> argparse.ArgumentParser:
     facebook_upload_video_parser.add_argument("--tags", default="", help="Comma-separated tags, such as tag1,tag2")
     facebook_upload_video_parser.add_argument(
         "--proxy",
-        default=DEFAULT_FACEBOOK_PROXY,
-        help="浏览器代理地址；默认使用 http://127.0.0.1:10808，传空字符串表示直连",
+        default=FACEBOOK_PROXY,
+        help="浏览器代理地址；不传时直连，传空字符串可覆盖环境变量并直连",
     )
     add_runtime_flags(facebook_upload_video_parser)
 
@@ -1260,7 +1260,7 @@ def build_parser() -> argparse.ArgumentParser:
     facebook_note.add_argument("--title", required=True)
     facebook_note.add_argument("--note", default="")
     facebook_note.add_argument("--tags", default="")
-    facebook_note.add_argument("--proxy", default=DEFAULT_FACEBOOK_PROXY)
+    facebook_note.add_argument("--proxy", default=FACEBOOK_PROXY, help="代理地址；不传时直连")
     add_runtime_flags(facebook_note)
     facebook_note.set_defaults(headless=False)
 
@@ -1279,13 +1279,13 @@ def build_parser() -> argparse.ArgumentParser:
                 post_parser.add_argument("--expected-text", required=True)
                 post_parser.add_argument("--scheduled", action="store_true", help="在已定时列表查询或取消定时作品")
                 post_parser.add_argument("--result", type=Path)
-                post_parser.add_argument("--proxy", default=META_PROXY)
+                post_parser.add_argument("--proxy", default=FACEBOOK_PAGE_PROXY, help="代理地址；不传时直连")
                 add_runtime_flags(post_parser)
                 post_parser.set_defaults(headless=False)
         for action_name in ("login", "check"):
             action_parser = meta_actions.add_parser(action_name, help=f"{meta_platform} {action_name}")
             action_parser.add_argument("--account", required=True, help="Meta account name")
-            action_parser.add_argument("--proxy", default=META_PROXY, help="代理地址，默认 http://127.0.0.1:10808")
+            action_parser.add_argument("--proxy", default=FACEBOOK_PAGE_PROXY, help="代理地址；不传时直连")
             if action_name == "login":
                 add_runtime_flags(action_parser)
                 action_parser.set_defaults(headless=False)
@@ -1298,7 +1298,7 @@ def build_parser() -> argparse.ArgumentParser:
         upload_video_parser.add_argument("--tags", default="")
         upload_video_parser.add_argument("--page", default=None, help="Business Suite 发布主体名称；不传使用当前主体")
         upload_video_parser.add_argument("--schedule", type=schedule_value, help=f"定时发布时间，格式 {schedule_help}")
-        upload_video_parser.add_argument("--proxy", default=META_PROXY)
+        upload_video_parser.add_argument("--proxy", default=FACEBOOK_PAGE_PROXY, help="代理地址；不传时直连")
         upload_video_parser.add_argument("--result", type=Path, help="保存内容编号和发布结果 JSON")
         add_runtime_flags(upload_video_parser)
         upload_video_parser.set_defaults(headless=False)
@@ -1311,7 +1311,7 @@ def build_parser() -> argparse.ArgumentParser:
         upload_note_parser.add_argument("--tags", default="")
         upload_note_parser.add_argument("--page", default=None, help="Business Suite 发布主体名称；不传使用当前主体")
         upload_note_parser.add_argument("--schedule", type=schedule_value, help=f"定时发布时间，格式 {schedule_help}")
-        upload_note_parser.add_argument("--proxy", default=META_PROXY)
+        upload_note_parser.add_argument("--proxy", default=FACEBOOK_PAGE_PROXY, help="代理地址；不传时直连")
         upload_note_parser.add_argument("--result", type=Path, help="保存内容编号和发布结果 JSON")
         add_runtime_flags(upload_note_parser)
         upload_note_parser.set_defaults(headless=False)
@@ -1321,7 +1321,7 @@ def build_parser() -> argparse.ArgumentParser:
     for action_name in ("login", "check"):
         action_parser = instagram_actions.add_parser(action_name, help=f"Instagram {action_name}")
         action_parser.add_argument("--account", required=True)
-        action_parser.add_argument("--proxy", default=DEFAULT_INSTAGRAM_PROXY, help="代理地址，默认 http://127.0.0.1:10808")
+        action_parser.add_argument("--proxy", default=INSTAGRAM_PROXY, help="代理地址；不传时直连")
         if action_name == "login":
             add_runtime_flags(action_parser)
             action_parser.set_defaults(headless=False)
@@ -1332,7 +1332,7 @@ def build_parser() -> argparse.ArgumentParser:
     instagram_video.add_argument("--title", required=True)
     instagram_video.add_argument("--desc", default="")
     instagram_video.add_argument("--tags", default="")
-    instagram_video.add_argument("--proxy", default=DEFAULT_INSTAGRAM_PROXY)
+    instagram_video.add_argument("--proxy", default=INSTAGRAM_PROXY, help="代理地址；不传时直连")
     instagram_video.add_argument("--result", type=Path)
     add_runtime_flags(instagram_video)
     instagram_video.set_defaults(headless=False)
@@ -1342,7 +1342,7 @@ def build_parser() -> argparse.ArgumentParser:
     instagram_note.add_argument("--title", required=True)
     instagram_note.add_argument("--note", default="")
     instagram_note.add_argument("--tags", default="")
-    instagram_note.add_argument("--proxy", default=DEFAULT_INSTAGRAM_PROXY)
+    instagram_note.add_argument("--proxy", default=INSTAGRAM_PROXY, help="代理地址；不传时直连")
     instagram_note.add_argument("--result", type=Path)
     add_runtime_flags(instagram_note)
     instagram_note.set_defaults(headless=False)
@@ -1351,7 +1351,7 @@ def build_parser() -> argparse.ArgumentParser:
         action_parser.add_argument("--account", required=True)
         action_parser.add_argument("--post-url", required=True)
         action_parser.add_argument("--expected-text", required=True)
-        action_parser.add_argument("--proxy", default=DEFAULT_INSTAGRAM_PROXY)
+        action_parser.add_argument("--proxy", default=INSTAGRAM_PROXY, help="代理地址；不传时直连")
         action_parser.add_argument("--result", type=Path)
         add_runtime_flags(action_parser)
         action_parser.set_defaults(headless=False)

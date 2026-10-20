@@ -7,7 +7,9 @@ description: 使用 sau CLI 登录 Facebook Page，发布视频或图文、设�
 
 本 Skill 调用现有 `sau facebook-page`，不重复实现浏览器逻辑。Instagram 当前暂停，后续使用独立网页方式；不使用 Business Suite 绑定 Instagram。
 
-先登录并保存账号别名，默认经 `http://127.0.0.1:10808` 代理：
+默认不配置代理，浏览器按系统网络直连；网络环境需要代理时显式传 `--proxy` 或设置 `SAU_FACEBOOK_PAGE_PROXY`。
+
+先登录并保存账号别名：
 
 ```powershell
 sau facebook-page login --account creator
@@ -16,7 +18,7 @@ sau facebook-page upload-note --account creator --page "我的 Page" --images im
 sau facebook-page upload-video --account creator --page "我的 Page" --file videos/demo.mp4 --title "标题" --desc "正文" --schedule "2026-10-21 10:30" --result .local/reel-result.json
 ```
 
-视频与图文均可传 `--schedule "YYYY-MM-DD HH:MM"`，使用北京时间、至少提前 2 小时，浏览器时区必须为 Asia/Shanghai；留空立即提交。`--page` 填准确 Page 名称。`--tags` 为英文逗号分隔标签。代理可以用 `--proxy` 覆盖。
+视频与图文均可传 `--schedule "YYYY-MM-DD HH:MM"`，使用北京时间、至少提前 2 小时，浏览器时区必须为 Asia/Shanghai；留空立即提交。`--page` 填准确 Page 名称。`--tags` 为英文逗号分隔标签。传 `--proxy ""` 可忽略环境变量并直连。
 
 结果默认保存到 `.local/meta-results/`，建议显式传 `--result`，避免手工抄写编号。`scheduled` 表示平台确认排期并核对原记录；`published` 表示图文已发布；视频立即提交在创建响应无错误且完成弹窗出现后返回 `processing`，表示平台已受理并正在处理，尚不能证明已公开播放，`content_id` 可能暂时没有。`submission_unknown` 只表示提交证据不足，必须先查询原记录，不重发。
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -17,7 +18,8 @@ from uploader.base_video import BaseVideoUploader
 
 META_BUSINESS_URL = "https://business.facebook.com/latest/composer/"
 META_PLATFORMS = {"facebook-page"}
-META_PROXY = "http://127.0.0.1:10808"
+# 未配置环境变量或 --proxy 时使用系统直连。
+FACEBOOK_PAGE_PROXY = os.environ.get("SAU_FACEBOOK_PAGE_PROXY")
 
 
 def meta_account_file(platform: str, account_name: str) -> Path:
@@ -27,7 +29,8 @@ def meta_account_file(platform: str, account_name: str) -> Path:
 
 
 def _proxy_options(proxy: str | None) -> dict[str, str] | None:
-    address = META_PROXY if proxy is None else proxy.strip()
+    address = (FACEBOOK_PAGE_PROXY if proxy is None else proxy) or ""
+    address = address.strip()
     return {"server": address} if address else None
 
 

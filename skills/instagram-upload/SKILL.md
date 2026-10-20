@@ -5,7 +5,7 @@ description: 使用 sau CLI 在 Instagram 独立网页登录、立即发布 Reel
 
 # Instagram 独立网页发布
 
-调用现有 CLI，不自行实现浏览器上传。使用工程 Patchright Chrome 和独立 Instagram 会话，不使用 Business Suite 的绑定入口。默认可见浏览器、`http://127.0.0.1:10808` 代理；使用 `--proxy` 或 `SAU_INSTAGRAM_PROXY` 修改，`--proxy ""` 明确直连。
+调用现有 CLI，不自行实现浏览器上传。使用工程 Patchright Chrome 和独立 Instagram 会话，不使用 Business Suite 的绑定入口。默认可见浏览器，未配置代理时按系统网络直连；需要代理时显式使用 `--proxy` 或设置 `SAU_INSTAGRAM_PROXY`。传 `--proxy ""` 可忽略环境变量并直连。
 
 ```powershell
 sau instagram login --account creator

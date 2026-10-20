@@ -85,9 +85,9 @@
 | TikTok | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 当前示例走 Chrome 版实现 |
 | 雪球 | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | [长文与图片](./docs/xueqiu.md)：HTML/Markdown/TXT、原位置配图及封面，已实测正式 CLI 发表和后台原作品查询 |
 | YouTube | ✅ | ✅ | ❌ | 待验收 | ✅ | ❌ | Studio 定时实现开发中，尚未真实排期验收 |
-| Facebook | ✅ | ✅ | ✅ | 未接入 | ✅ | ✅ | 个人主页视频/图文已实测，支持查询、移至垃圾箱及永久删除；默认 `10808` 代理 |
+| Facebook | ✅ | ✅ | ✅ | 未接入 | ✅ | ✅ | 个人主页视频/图文已实测，支持查询、移至垃圾箱及永久删除 |
 | Facebook Page | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 视频与图文定时已实测；支持查询、取消定时及已发布作品移至垃圾箱，详见 CLI 文档 |
-| Instagram | ✅ | ✅ | ✅ | 当前账号独立网页版无入口 | ✅ | ✅ | 独立网页发布 Reels、单图及轮播；支持原作品核验与移至最近删除，默认 `10808` 代理 |
+| Instagram | ✅ | ✅ | ✅ | 当前账号独立网页版无入口 | ✅ | ✅ | 独立网页发布 Reels、单图及轮播；支持原作品核验与移至最近删除 |
 
 文章主题预览及 Markdown 转 HTML：见 [文章文件与主题渲染](./docs/article.md)。内置 `default/grace/simple/modern/plain` 主题；大鱼号可直接接收 Markdown，并将主题转换为保留文字颜色、背景和近似字号的兼容排版，圆角和精确间距等效果可能与本地预览不同。
 
@@ -229,12 +229,14 @@ sau youtube login --account <account_name>
 sau youtube check --account <account_name>
 sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2 --playlist "我的系列" --visibility public
 
-sau facebook login --account <account_name> --proxy http://127.0.0.1:10808
-sau facebook check --account <account_name> --proxy http://127.0.0.1:10808
-sau facebook upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags Facebook,测试 --proxy http://127.0.0.1:10808
-sau facebook-page upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --page "我的 Page" --proxy http://127.0.0.1:10808
+sau facebook login --account <account_name>
+sau facebook check --account <account_name>
+sau facebook upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags Facebook,测试
+sau facebook-page upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --page "我的 Page"
 sau facebook-page upload-note --account <account_name> --images images/1.jpg --title "Page 图文" --note "正文" --page "我的 Page" --schedule "2026-10-21 10:30" --result .local/page-result.json
 ```
+
+Facebook、Facebook Page 和 Instagram 默认使用系统网络直连。网络环境需要代理时，给对应命令显式添加 `--proxy "代理地址"`，或设置 `SAU_FACEBOOK_PROXY`、`SAU_FACEBOOK_PAGE_PROXY`、`SAU_INSTAGRAM_PROXY`；传 `--proxy ""` 可忽略环境变量并直连。
 
 > YouTube 说明：登录是交互式的（Google 账号，浏览器里完成，无二维码）。这里走浏览器自动化而不是官方 API，
 > 是因为**未通过 Google 合规审核的 API 项目上传的视频会被强制锁为私享、无法改公开**，对个人/单频道不实用；

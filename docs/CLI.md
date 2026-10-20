@@ -12,7 +12,7 @@
 - `weibo`
 - `hupu`
 - `youtube`
-- `facebook`：Facebook 个人主页视频/图文立即发布、查询和删除（默认代理 `http://127.0.0.1:10808`）
+- `facebook`：Facebook 个人主页视频/图文立即发布、查询和删除
 - `facebook-page`：Meta Business Suite 的 Facebook Page 视频/图文立即或定时发布
 - `dayu`
 - `xueqiu`：HTML/Markdown/TXT 长文、原位置配图及封面，默认实际发表，支持按原作品 ID 查询结果；见 [雪球使用说明](./xueqiu.md)，已实测正式 CLI 发表及后台核验
@@ -197,7 +197,7 @@ YouTube 登录需要在浏览器中完成 Google 账号登录，不使用二维�
 
 ## Facebook CLI 子命令
 
-个人主页使用 `facebook`，Page 使用 `facebook-page`。默认代理为 `http://127.0.0.1:10808`；个人主页也可通过 `SAU_FACEBOOK_PROXY` 配置，`--proxy ""` 明确关闭代理。账号文件分别保存，首次使用先登录对应入口。
+个人主页使用 `facebook`，Page 使用 `facebook-page`。默认不配置代理，浏览器按系统网络直连。需要代理时可在命令中传 `--proxy "代理地址"`，或设置 `SAU_FACEBOOK_PROXY`、`SAU_FACEBOOK_PAGE_PROXY`；传 `--proxy ""` 可忽略环境变量并直连。账号文件分别保存，首次使用先登录对应入口。
 
 ```powershell
 sau facebook login --account creator
@@ -231,7 +231,7 @@ Page 的 `--scheduled` 选择定时列表，删除会取消排期并永久移除
 
 ## Instagram 独立网页发布
 
-Instagram 使用工程的 Patchright Chrome，不依赖 Facebook Page 或 Business Suite 绑定。默认可见浏览器，代理为 `http://127.0.0.1:10808`；可用 `SAU_INSTAGRAM_PROXY` 或 `--proxy` 修改，`--proxy ""` 明确直连。首次使用先安装依赖和 Chrome，按本文的项目环境准备步骤执行。
+Instagram 使用工程的 Patchright Chrome，不依赖 Facebook Page 或 Business Suite 绑定。默认可见浏览器，未配置代理时按系统网络直连；需要代理时可使用 `--proxy` 或 `SAU_INSTAGRAM_PROXY`。传 `--proxy ""` 可忽略环境变量并直连。首次使用先安装依赖和 Chrome，按本文的项目环境准备步骤执行。
 
 ```powershell
 sau instagram login --account creator

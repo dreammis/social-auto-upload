@@ -86,9 +86,9 @@ class FacebookPageStateTests(unittest.TestCase):
 class FacebookCliTests(unittest.TestCase):
     def test_parser_exposes_proxy_and_headed_login(self):
         args = sau_cli.build_parser().parse_args(
-            ["facebook", "login", "--account", "creator", "--proxy", "http://127.0.0.1:10808"]
+            ["facebook", "login", "--account", "creator", "--proxy", "http://proxy.example:8080"]
         )
-        self.assertEqual(args.proxy, "http://127.0.0.1:10808")
+        self.assertEqual(args.proxy, "http://proxy.example:8080")
         self.assertFalse(args.headless)
 
     def test_dispatch_upload_forwards_facebook_request(self):
@@ -107,7 +107,7 @@ class FacebookCliTests(unittest.TestCase):
                 "--tags",
                 "一个,两个",
                 "--proxy",
-                "http://127.0.0.1:10808",
+                "http://proxy.example:8080",
             ]
         )
         with patch("sau_cli.upload_facebook_video", new=AsyncMock()) as mock_upload:
@@ -118,7 +118,7 @@ class FacebookCliTests(unittest.TestCase):
         self.assertEqual(request.title, "标题")
         self.assertEqual(request.description, "正文")
         self.assertEqual(request.tags, ["一个", "两个"])
-        self.assertEqual(request.proxy, "http://127.0.0.1:10808")
+        self.assertEqual(request.proxy, "http://proxy.example:8080")
 
 
 class FacebookStorageStateTests(unittest.TestCase):

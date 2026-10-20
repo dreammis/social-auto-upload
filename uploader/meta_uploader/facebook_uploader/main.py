@@ -17,16 +17,17 @@ from utils.log import facebook_logger
 
 
 FACEBOOK_HOME_URL = "https://www.facebook.com/"
-# 用户当前环境需要代理访问 Facebook；可通过 SAU_FACEBOOK_PROXY 覆盖，设为空字符串表示直连。
-DEFAULT_FACEBOOK_PROXY = os.environ.get("SAU_FACEBOOK_PROXY", "http://127.0.0.1:10808")
+# 代理只从显式 CLI 参数或用户自行设置的环境变量读取；未设置时直连。
+FACEBOOK_PROXY = os.environ.get("SAU_FACEBOOK_PROXY")
 FACEBOOK_LOGIN_INPUT = 'input[name="email"]'
 # 首页发帖附件同时接受图片与视频，头像/封面控件不具备这组 MIME 类型。
 FACEBOOK_MEDIA_INPUT = 'input[type="file"][accept*="image/"][accept*="video/"]'
 
 
 def _proxy_options(proxy: str | None) -> dict[str, str] | None:
-    """把 CLI 的代理地址转换为浏览器启动参数；空字符串明确表示不使用代理。"""
-    address = DEFAULT_FACEBOOK_PROXY if proxy is None else proxy.strip()
+    """未传参数时使用显式环境配置，否则直连；空字符串可覆盖环境配置并直连。"""
+    address = (FACEBOOK_PROXY if proxy is None else proxy) or ""
+    address = address.strip()
     return {"server": address} if address else None
 
 

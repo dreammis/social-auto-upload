@@ -5,7 +5,7 @@ description: 使用 sau CLI 登录 Facebook 个人主页，立即发布视频或
 
 # Facebook 个人主页发布与删除
 
-本 Skill 调用现有 CLI。默认使用 `http://127.0.0.1:10808` 代理，可用 `--proxy` 或环境变量 `SAU_FACEBOOK_PROXY` 覆盖，`--proxy ""` 明确直连。
+本 Skill 调用现有 CLI。默认不配置代理，浏览器按系统网络直连；网络环境需要代理时显式传 `--proxy` 或设置 `SAU_FACEBOOK_PROXY`。传 `--proxy ""` 可忽略环境变量并直连。
 
 ```powershell
 sau facebook login --account creator

@@ -12,7 +12,8 @@ from uuid import uuid4
 from patchright.async_api import Locator, Page, Playwright, TimeoutError as BrowserTimeoutError, async_playwright, expect
 
 INSTAGRAM_HOME_URL = "https://www.instagram.com/"
-DEFAULT_INSTAGRAM_PROXY = os.environ.get("SAU_INSTAGRAM_PROXY", "http://127.0.0.1:10808")
+# 未配置环境变量或 --proxy 时使用系统直连。
+INSTAGRAM_PROXY = os.environ.get("SAU_INSTAGRAM_PROXY")
 # 创建弹窗实际 accept 同时含照片与 MP4，此属性限定素材入口，排除编辑阶段的封面 input。
 INSTAGRAM_MEDIA_INPUT = 'input[type="file"][accept*="video/mp4"]'
 # _ac76 是已观察中/英文裁剪、编辑、配文页共用的向导标题栏组件；主动作不含 SVG，返回按钮含 SVG。
@@ -32,8 +33,9 @@ async def _dismiss_optional_prompt(guide: Locator, dismiss_button: Locator) -> b
 
 
 def _proxy_options(proxy: str | None) -> dict[str, str] | None:
-    """None 使用配置代理；空字符串是调用者明确选择直连。"""
-    address = DEFAULT_INSTAGRAM_PROXY if proxy is None else proxy.strip()
+    """未传参数时使用显式环境配置，否则直连；空字符串可覆盖环境配置并直连。"""
+    address = (INSTAGRAM_PROXY if proxy is None else proxy) or ""
+    address = address.strip()
     return {"server": address} if address else None
 
 
