@@ -1,25 +1,44 @@
-# 知乎自动化（开发验收中）
+# 知乎自动化
 
-## 入口与流程
+## 入口与职责
 
-CLI 参数和分发在 `sau_commands/zhihu.py`，`sau_cli.py` 仅组装各平台入口。文章、视频、会话、定时、查询分别位于本目录的同名模块。会话文件为 `cookies/zhihu_<alias>.json`，身份绑定为相邻 `.identity.json`。
+`sau_commands/zhihu.py` 声明 CLI；本目录的 `session.py`、`article.py`、`video.py`、`schedule.py`、`verification.py` 分别处理会话、文章、视频、定时和原作品查询。使用说明见 `skills/zhihu-upload/SKILL.md`。
 
-文章复用 `utils.article_render.load_article` 的 HTML/Markdown/TXT 与原稿图片路径。`article.py::fill_article_form` 使用原生 HTML 粘贴和图片位置标记；逐张上传后 `check_article_body` 检查完整文字/图片交错顺序、基本格式与链接。恢复非空草稿时中止保护原文；自动新建独立草稿尚未确认，不删除旧稿。
+会话为 `cookies/zhihu_<alias>.json`，账号绑定为相邻 `.identity.json`。`session.py::PROFILE_IMAGE` 从页头当前用户入口读取昵称和头像路径；它们并非永久用户 ID，改名或换头像会导致绑定不一致。不要将登录超时或网络错误直接判为会话失效。
 
-视频在素材上传成功后读取领域和视频标记完整菜单。`video.py::video_options` 返回候选，`select_option` 负责编号选择与合法值校验，`--show-options` 仅导出候选后退出。公开 chunk 中新版 pin_video 组件只渲染一个“所属领域”，旧组件的二级领域必填校验不适用于此处，已删除。
+## 文章
 
-## 定位依据与边界
+`utils.article_render.load_article` 解析 HTML/Markdown/TXT。`article.py::fill_article_form` 通过 HTML 粘贴和图片位置标记导入正文；`check_article_body` 核对全文、图片交错顺序、格式和链接。恢复非空草稿时停止，不覆盖原文。
 
-文章标题 `textarea[placeholder="请输入标题（最多 100 个字）"]`、正文 `div[contenteditable="true"][role="textbox"]` 来自真实页面。2026-10-21 已在原登录会话中发布带两张段间 PNG 的文章，HTML 粘贴保留 h2、加粗、编号列表、引用与外链。PNG 通过剪贴板粘贴上传；图片按钮先打开素材面板，不能直接当作文件选择器。其他图片格式的 input 路径尚未实测。DraftJS 加粗是 styled span，链接文字可能带零宽字符。
+- 标题：`textarea[placeholder="请输入标题（最多 100 个字）"]`，使用编辑器业务提示定位。
+- 正文：`div[contenteditable="true"][role="textbox"]`，与标题 textarea 区分。
+- PNG 走剪贴板；其他格式走图片 input，后者尚需真实页面验证。图片工具栏先打开素材面板，不能把图片按钮直接当作文件选择器。
+- DraftJS 加粗可能是 styled span，链接可能带零宽字符；校验时按呈现含义读取。
 
-视频首页 `.VideoUploadButton-fileInput` 来自真实观察；上传后 `.VideoUploadForm-item` 按“所属领域”“视频标记”限域，展开 `.VideoUploadForm-selectList:visible` 读取各领域名称。弹层 `.VideoUploadForm-videoTypeModalOption` 的 role=button、确认/取消按钮来自公开 chunk。候选按菜单渲染顺序读取，不假定第一个候选是默认值。此处控件和上传成功等待仍未经过真实素材验收。
+成功必须为正式 `/p/<id>`，不能把 `/edit` 草稿地址算作发表。发表后可能出现分享与权益提示，不自动分享或开启权益。
 
-页头账号使用 `session.py::PROFILE_IMAGE` 的 `button.AppHeader-profileEntry img[alt^='点击打开'][alt$='的主页']`。展示名和头像不是唯一用户 ID，改名/换头像会导致绑定不一致；主体强校验仍待改进。
+## 视频
 
-## 验收状态
+`video.py::main` 依次完成文件校验、账号核对、上传、菜单读取、表单检查、提交与详情链接读取。
 
-2026-10-21 原登录会话的文章已真实发布，页面出现“发布成功”并进入正式文章页，两张图片位于原稿对应段间。该次由浏览器工具完成，不能算 Python CLI 端到端验收；内置会话尚无受支持的 CLI 接入点。视频文件选择器 setFiles 返回后仍在首页、文件控件为空，未进入上传后表单；领域完整候选和视频发布均未验证。尚未验证非 PNG、新建独立草稿及定时受理。此前将旧组件校验当作当前表单规则的探索结论已撤回。
+```python
+video_input = page.locator("input.VideoUploadButton-fileInput[type=file]")
+field = page.locator(".VideoUploadForm-item").filter(
+    has=page.get_by_text("所属领域", exact=True),
+)
+control = field.get_by_role("combobox")
+```
 
-文章成功条件必须是完整匹配 `/p/<id>` 的正式详情 URL 并出现文章标题；`/p/<id>/edit` 是草稿，不能据此返回 published。发布后可能出现分享面板和“送礼物”权益提示；本次未开启权益或分享。
+文件 input 的 class 来自上传首页；业务行标签限定领域、声明和原创开关，排除其他下拉框与 checkbox。领域列表为 `.VideoUploadForm-selectList:visible` 中的 `role=option`，过滤“选择领域”占位项。声明弹层使用 `.VideoUploadForm-videoTypeModal:visible`，选项为 `.VideoUploadForm-videoTypeModalOption[role=button]`，选择后确认。
 
-`--prepare-only` 不点击最终发布；页面仍可能自动保存草稿。提交只触发一次，URL未知则 `submission_unknown`，先查原作品，不自动重发。定时仍需确认实际安排，不以本地时间校验冒充平台受理。开发证据在 git ignored 的 `.local/zhihu-exploration.md`。
+完整领域与声明文案维护在 `constants.py`，供 CLI choices 使用；提交时仍与本次实时菜单核对。菜单新增或更名时同步更新常量。当前话题工具栏按钮无可访问名称，尚未接入自动选择，不提供可执行的 `--topics` 参数。
+
+视频大小必须严格大于 102400 字节。页面处理 change 后会清空 input，所以 `files=0` 不能证明未选文件；以“上传成功”、失败提示及实际表单判断上传状态。
+
+当前入口在原页显示“发布成功”，点击“查看详情”另开 `/pin/<id>`。`video.py` 先记录平台已确认发表，再读取详情链接；读取链接失败不得退回未发表状态或重新上传。`verification.py` 接受文章、pin 视频及旧版视频详情路径。
+
+## 验证边界
+
+原登录浏览器中的文章和视频均已完成真实发表及详情核对。Python CLI 整条链路、非 PNG 图片及定时受理仍需独立验证；本地测试不替代线上提交证据。排查素材、截图与账号结果保存在忽略目录 `.local/`，不纳入公开使用文档。
+
+`--prepare-only` 和候选查询可能自动保存草稿。结果未知时先查原作品，禁止自动重发。定时是实验性路径，必须核对平台实际排期后才能返回定时成功。

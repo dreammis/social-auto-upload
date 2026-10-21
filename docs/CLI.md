@@ -92,25 +92,28 @@ Markdown 默认主题为 `default`，可选 `default/grace/simple/modern/plain`�
 
 ## 知乎 CLI 子命令
 
-知乎文章已通过原登录浏览器实际发表验证，包含富文本和两张段间 PNG；该次由浏览器工具完成，Python CLI 尚未完成端到端发布验收。视频仍卡在本地文件交接，分类完整菜单及定时尚未完成真实验证。
+知乎提供文章和视频发布。文章使用 HTML/Markdown/TXT 原稿，正文图片按原稿位置导入；视频文件须大于 100KB（102400 字节）、最大 20GB、最长 4 小时。
 
 ```powershell
 sau zhihu login --account creator
 sau zhihu check --account creator
-sau zhihu upload-article --account creator --title "知乎文章标题" --content-file examples/article.md --prepare-only
+sau zhihu upload-article --account creator --title "知乎文章标题" --content-file examples/article.md
+sau zhihu upload-video --account creator --file videos/demo.mp4 --title "知乎视频标题" --desc "视频简介" --originality original --category "教育" --video-mark "含 AI 生成内容"
 # 上传素材后导出该表单的全部领域和视频标记；不发表，但可能留下草稿。
 sau zhihu upload-video --account creator --file videos/demo.mp4 --title "知乎视频标题" --originality original --show-options
-# 交互式终端：显示完整领域、视频标记列表，按编号选择。
-sau zhihu upload-video --account creator --file videos/demo.mp4 --title "知乎视频标题" --originality original --prepare-only
 ```
 
-`--account` 是本地会话别名，用于区分保存的登录态，与知乎展示名无须相同。知乎登录会读取页面当前身份并保存绑定信息，不再提供没有实际用途的昵称参数。
+`--account` 是本地会话别名，与知乎展示名无须相同。登录命令读取页面当前身份并保存本地会话。
 
-领域和视频标记取自本次上传后的页面菜单。省略 `--category`、`--video-mark` 时，终端显示全部候选并按编号选择；非交互调用先用 `--show-options` 查看结果 JSON 的 `options`，再传其中的完整值。不存在的选项会列出合法值并报错。删除了未经当前表单证实的 `--category-second`；`--originality` 使用固定 `choices={original,reprint}`。
+`--category` 与 `--video-mark` 使用 CLI 可选值，完整领域清单见 `sau zhihu upload-video --help`。省略时在交互终端按编号选择；非交互调用必须指定。程序提交前仍核对实时菜单，`--show-options` 将候选写入结果 JSON 的 `options`。
 
-文章复用仓库的 HTML/Markdown/TXT 解析。图片写在原稿里，例如 `![配图](images/1.png)`，相对路径从原稿目录解析；不再提供统一追加到末尾的 `--images`。提交前核对文字、图片位置、基本格式和链接。Markdown 首次使用先执行 `sau article setup`。目前不保证知乎保留自定义主题 CSS。
+`--originality` 可选 `original`（原创）、`reprint`（转载）。`--video-mark` 可选 `内容无需标注`、`含 AI 生成内容`、`含虚构演绎内容`、`内容含营销信息`、`内容为转载`、`个人观点仅供参考`，须按实际内容选择。视频标题 5–50 字，简介最多 300 字；暂不支持自动选择话题、自定义封面、专栏和内容来源。
 
-`--prepare-only` 不点击发布，但平台可能自动保存草稿。更多输入限制和验收状态见 [知乎 Skill](../skills/zhihu-upload/SKILL.md)。
+文章标题最多 100 字。图片写在原稿里，例如 `![配图](images/1.png)`，相对路径从原稿目录解析。提交前核对文字、图片位置、基本格式和链接；恢复非空草稿时停止以保护原文。Markdown 首次使用先执行 `sau article setup`。暂不支持自定义主题 CSS、手动封面、专栏收录和文档导入。
+
+文章和视频加 `--prepare-only` 可只填写检查，平台仍可能自动保存草稿。`published` 表示平台确认发表；结果为 `submission_unknown` 时先检查创作中心原作品，勿重复上传。已有链接时用 `sau zhihu verify --account creator --result "本次结果.json"` 核对，视频详情地址可为 `/pin/<作品ID>`。
+
+`--schedule "YYYY-MM-DD HH:MM"` 为实验性选项，按北京时间限制在 30 分钟后至 48 小时内，尚不保证完整排期流程可用。更多用法见 [知乎 Skill](../skills/zhihu-upload/SKILL.md)。
 
 ## 抖音 CLI 子命令
 

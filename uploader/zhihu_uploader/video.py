@@ -16,7 +16,7 @@ from patchright.async_api import Page, async_playwright, expect
 from conf import LOCAL_CHROME_PATH
 from uploader.zhihu_uploader.constants import (
     ZHIHU_ORIGINALITY, ZHIHU_TIMEZONE, ZHIHU_VIDEO_DESCRIPTION_MAX, ZHIHU_VIDEO_EXTENSIONS,
-    ZHIHU_VIDEO_MAX_BYTES, ZHIHU_VIDEO_MAX_SECONDS, ZHIHU_VIDEO_TITLE_MAX,
+    ZHIHU_VIDEO_MAX_BYTES, ZHIHU_VIDEO_MIN_BYTES, ZHIHU_VIDEO_MAX_SECONDS, ZHIHU_VIDEO_TITLE_MAX,
     ZHIHU_VIDEO_TITLE_MIN, ZHIHU_VIDEO_URL, ZHIHU_VIDEO_TOPICS_MAX,
 )
 from uploader.zhihu_uploader.schedule import fill_zhihu_video_schedule, validate_zhihu_schedule
@@ -50,6 +50,8 @@ class ZhihuVideo:
             raise FileNotFoundError(f"知乎视频不存在: {self.file_path}")
         if self.file_path.suffix.lower() not in ZHIHU_VIDEO_EXTENSIONS:
             raise ValueError(f"知乎视频格式不受页面支持: {self.file_path.suffix}")
+        if self.file_path.stat().st_size <= ZHIHU_VIDEO_MIN_BYTES:
+            raise ValueError("知乎视频必须大于 100KB")
         if self.file_path.stat().st_size > ZHIHU_VIDEO_MAX_BYTES:
             raise ValueError("知乎视频文件不能超过 20 GB")
         capture = cv2.VideoCapture(str(self.file_path))
@@ -70,6 +72,8 @@ class ZhihuVideo:
             raise ValueError(f"知乎视频最多 {ZHIHU_VIDEO_TOPICS_MAX} 个话题")
         if any(not topic.strip() for topic in self.topics):
             raise ValueError("知乎视频话题不能为空")
+        if self.topics:
+            raise ValueError("知乎视频暂不支持自动选择话题，请使用简介描述内容")
         if self.originality not in ZHIHU_ORIGINALITY:
             raise ValueError("原创标记必须为 original 或 reprint")
         self.schedule = validate_zhihu_schedule(self.schedule)
@@ -84,13 +88,14 @@ class ZhihuVideo:
         # 所属领域标签限定业务行，visible 限定本次展开的列表，排除隐藏菜单。
         field = page.locator(".VideoUploadForm-item").filter(has=page.get_by_text("所属领域", exact=True))
         await expect(field).to_have_count(1)
-        control = field.locator(".VideoUploadForm-select")
+        control = field.get_by_role("combobox")
         await control.click()
         menu = page.locator(".VideoUploadForm-selectList:visible")
         await expect(menu).to_have_count(1)
         # 页面源码对每个领域只渲染一个 name；逐行读取完整菜单，不依赖未观察的子组件 class。
         await expect(menu).to_contain_text(re.compile(r"\S"))
-        categories = [text.strip() for text in (await menu.inner_text()).splitlines() if text.strip()]
+        categories = [text.strip() for text in await menu.get_by_role("option").all_inner_texts()
+                      if text.strip() and text.strip() != "选择领域"]
         await control.click()
         mark_field = page.locator(".VideoUploadForm-item").filter(has=page.get_by_text("视频标记", exact=True))
         await mark_field.get_by_role("button", name="选择视频标记", exact=True).click()
@@ -124,9 +129,9 @@ class ZhihuVideo:
     async def fill_video_options(self, page: Page) -> None:
         """只选择已核对的实时菜单值，选择后读回表单。"""
         field = page.locator(".VideoUploadForm-item").filter(has=page.get_by_text("所属领域", exact=True))
-        control = field.locator(".VideoUploadForm-select")
+        control = field.get_by_role("combobox")
         await control.click()
-        await page.locator(".VideoUploadForm-selectList:visible").get_by_text(self.category, exact=True).click()
+        await page.locator(".VideoUploadForm-selectList:visible").get_by_role("option", name=self.category, exact=True).click()
         await expect(control).to_contain_text(self.category)
         mark_field = page.locator(".VideoUploadForm-item").filter(has=page.get_by_text("视频标记", exact=True))
         await mark_field.get_by_role("button", name="选择视频标记", exact=True).click()
@@ -160,7 +165,10 @@ class ZhihuVideo:
         await self.fill_video_options(page)
 
         # 原创/转载是页面的独立 checkbox；按参数状态设置，不依赖控件视觉顺序。
-        originality = page.locator(".VideoUploadForm-typeContainer input[type=checkbox]")
+        # 按“原创视频”业务行限定，避免与定时发布等其它 checkbox 混淆。
+        originality = page.locator(".VideoUploadForm-item").filter(
+            has=page.get_by_text("原创视频", exact=True),
+        ).get_by_role("checkbox")
         await expect(originality).to_have_count(1)
         wanted_original = self.originality == "original"
         if await originality.is_checked() != wanted_original:
@@ -170,14 +178,6 @@ class ZhihuVideo:
         else:
             await expect(originality).not_to_be_checked()
 
-        # 页面公共编辑工具栏提供“话题”动作；选择项必须与 CLI 值精确相等。
-        topic_button = page.get_by_role("button", name="话题", exact=True)
-        await expect(topic_button).to_have_count(1)
-        for topic in self.topics:
-            await topic_button.click()
-            option = page.get_by_text(topic, exact=True)
-            await expect(option).to_have_count(1)
-            await option.click()
         await fill_zhihu_video_schedule(page, self.schedule)
 
     async def main(self) -> dict:
@@ -237,24 +237,36 @@ class ZhihuVideo:
                 if self.prepare_only:
                     return result
 
-                publish = page.locator(".VideoUploadForm-submitButton")
+                # 当前视频入口在原页显示成功弹层，“查看详情”另开 /pin/<id>。
+                # 不能等待原页跳转到旧版 /zvideo/，否则已发表也会被误判为未知。
+                publish = page.get_by_role("button", name="发布视频", exact=True)
                 await expect(publish).to_be_enabled()
                 submitted = True
                 result["status"] = "submission_unknown"
                 result_file.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
                 await publish.click()
-                await page.wait_for_url(re.compile(r"^https://www\.zhihu\.com/(?:zvideo|video)/\d+"), timeout=60000)
-                result.update(success=True, status="published", url=page.url)
+                await expect(page.get_by_text("发布成功", exact=True)).to_be_visible(timeout=60000)
+                result.update(success=True, status="published")
+                result_file.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+                async with page.expect_popup() as detail_info:
+                    await page.get_by_text("查看详情", exact=True).click()
+                detail = await detail_info.value
+                await detail.wait_for_url(re.compile(r"^https://www\.zhihu\.com/(?:pin|zvideo|video)/\d+"), timeout=60000)
+                result["url"] = detail.url
                 return result
             except Exception as exc:
                 result["error"] = str(exc)
-                result["status"] = "submission_unknown" if submitted else "failed_before_submit"
-                if submitted and page is not None and re.match(r"^https://www\.zhihu\.com/(?:zvideo|video)/\d+", page.url):
+                if result["status"] != "published":
+                    result["status"] = "submission_unknown" if submitted else "failed_before_submit"
+                if submitted and page is not None and re.match(r"^https://www\.zhihu\.com/(?:pin|zvideo|video)/\d+", page.url):
                     result["url"] = page.url
                 if self.debug and page is not None:
                     screenshot = result_file.with_suffix(".png")
                     await page.screenshot(path=str(screenshot))
                     result["screenshot"] = str(screenshot)
+                if result["status"] == "published":
+                    # 平台已经确认发表；保留详情读取错误供原作品查询，不返回可重试的发表失败。
+                    return result
                 raise RuntimeError(f"知乎视频阶段={result['status']}，结果文件={result_file}: {exc}") from exc
             finally:
                 result_file.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

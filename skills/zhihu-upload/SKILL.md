@@ -1,11 +1,23 @@
 ---
 name: zhihu-upload
-description: 使用 social-auto-upload 的 sau CLI 发布知乎文章或视频；文章支持按原稿位置导入配图，视频分类从页面实时读取。
+description: 使用 social-auto-upload 的 sau CLI 登录知乎、发布文章或视频，并按作品链接核对结果；支持原稿位置配图与视频领域、声明选项。
 ---
 
 # 知乎文章与视频
 
-通过仓库的 `sau zhihu` 命令操作。文章已用原登录浏览器验证正式发表；Python CLI 的视频文件交接和完整分类菜单仍待验收，不把本地测试当成线上发布成功。
+使用仓库的 `sau zhihu` 命令，不另写网页上传逻辑。
+
+## 功能概览
+
+| 功能 | 命令入口 | 说明 |
+| --- | --- | --- |
+| 登录 | `sau zhihu login --account <name>` | 保存指定账号的本地会话 |
+| 账号检查 | `sau zhihu check --account <name>` | 检查会话与当前账号是否一致 |
+| 文章发布 | `sau zhihu upload-article ...` | HTML/Markdown/TXT 原稿，图片保留原稿位置 |
+| 视频发布 | `sau zhihu upload-video ...` | 单视频、标题、简介、领域与内容声明 |
+| 作品核对 | `sau zhihu verify --account <name> --result <json>` | 打开结果文件中的原作品链接核对标题 |
+
+元数据约定：文章使用 `title + content-file`，视频使用 `title + desc + originality + category + video-mark`。`--account` 是本地会话别名，无须与知乎昵称相同。
 
 ## 登录
 
@@ -14,11 +26,13 @@ sau zhihu login --account creator
 sau zhihu check --account creator
 ```
 
-`--account` 是保存会话的本地别名，与昵称无须相同。登录时程序直接从页头读取当前身份并保存绑定信息；CLI 的 Chrome 与内置浏览器会话独立。
+账号密码、验证码在登录窗口输入；会话文件保存在本地，不提交到仓库。
 
 ## 文章
 
-标题最多 100 字，正文支持 UTF-8 HTML/Markdown/TXT；Markdown 首次使用先执行 `sau article setup`。图片直接写在原稿相应段落：
+标题最多 100 字。正文使用 UTF-8 HTML、Markdown 或 TXT；Markdown 首次使用先执行 `sau article setup`。
+
+图片写在原稿对应段落中，相对路径从原稿目录解析：
 
 ```markdown
 第一段正文。
@@ -28,45 +42,48 @@ sau zhihu check --account creator
 第二段正文。
 ```
 
-相对图片路径从原稿目录解析。正文通过富文本粘贴导入，再按原位置逐张上传；提交前核对全部文字、图片交错位置、基本格式及链接。平台若过滤格式或改变图片位置，校验失败即停止提交。自定义 CSS、封面、专栏收录、芝士任务、文档导入未验收。`--images` 已移除。
-
 ```powershell
-sau zhihu upload-article --account creator --title "文章标题" --content-file "文章.md" --prepare-only
+sau zhihu upload-article --account creator --title "文章标题" --content-file "文章.md"
 ```
 
-恢复出非空草稿时仍中止保护原文；自动新建独立草稿的行为尚未在当前账号验收，不要求用户删除已有草稿。
+提交前核对文字、图片顺序、基本格式和链接。编辑器恢复出非空草稿时会停止，避免覆盖已有内容。暂不支持自定义主题 CSS、手动封面、专栏收录、芝士任务和文档导入。
 
 ## 视频
 
-单文件最大 20GB、最长 4 小时。当前代码检查标题 5–50 字、简介最多 300 字；相关新表单限制仍需实际素材核对。
+文件必须大于 100KB（102400 字节）、最大 20GB、最长 4 小时。标题 5–50 字，简介最多 300 字；默认使用平台生成的封面。
 
 ```powershell
-# 上传后读取该账号、该素材表单的全部候选，不发表。
-sau zhihu upload-video --account creator --file "视频.mp4" --title "视频标题示例" --originality original --show-options
-# 终端显示完整菜单，用户按编号选领域和视频标记；只验收到提交前。
-sau zhihu upload-video --account creator --file "视频.mp4" --title "视频标题示例" --originality original --prepare-only
+sau zhihu upload-video --account creator --file "视频.mp4" --title "视频标题示例" --desc "视频简介" --originality original --category "教育" --video-mark "含 AI 生成内容"
 ```
 
-`--originality` 固定可选 `original`、`reprint`。非交互调用先从 `--show-options` 的 JSON 结果读取 `options.category`、`options.video_mark`，再以 `--category`、`--video-mark` 传入其中完整值；不接受菜单不存在的值。分类来自实时菜单，尚未获得当前账号完整清单，不编造固定枚举。
+- `--originality`：`original`（原创）或 `reprint`（转载）。
+- `--category`：领域选项见 `sau zhihu upload-video --help`；省略时显示实时菜单，按编号选择。
+- `--video-mark`：`内容无需标注`、`含 AI 生成内容`、`含虚构演绎内容`、`内容含营销信息`、`内容为转载`、`个人观点仅供参考`；声明须与内容一致。
 
-新版公开页面代码只渲染一个“所属领域”；已删除未经证实的二级领域参数及其必填校验。话题为动态搜索，`--topics` 选填，搜索选择流程仍待验收。默认使用平台生成的封面。
+非交互调用应指定领域和声明。程序提交前仍会核对实时菜单。仅获取当前页面的候选时使用：
 
-## 定时与结果
+```powershell
+sau zhihu upload-video --account creator --file "视频.mp4" --title "视频标题示例" --originality original --show-options
+```
 
-`--schedule "YYYY-MM-DD HH:MM"` 代码按北京时间、30 分钟后至 48 小时内校验，排期读回与最终受理仍待真实验证。
+候选写入结果 JSON 的 `options.category`、`options.video_mark`。暂不支持自动选择话题、自定义封面、专栏和内容来源。
 
-`--show-options` 和 `--prepare-only` 都可能留下远端草稿。`prepared` 只表示代码完成表单检查，不表示发表成功。结果为 `submission_unknown` 时先在创作中心核查原作品，不直接重新上传。结果文件已有作品 URL 时可只读查询：
+## 提交与结果
+
+文章和视频均可加 `--prepare-only`，填写并检查后结束；`--prepare-only`、`--show-options` 都可能留下远端草稿。
+
+`published` 表示平台确认发表，详情链接写入结果文件的 `url`；视频地址可为 `/pin/<作品ID>`。若详情读取失败，保留 `published` 和 `error`，到创作中心查原作品，勿重发。`prepared` 不表示发表成功。若为 `submission_unknown`，也先按标题和提交时间检查原作品。已有 URL 时可执行：
 
 ```powershell
 sau zhihu verify --account creator --result "本次结果.json"
 ```
 
-原登录浏览器已实际发表富文本文章并保留两张段间 PNG。该次由浏览器工具完成，尚不能算 Python CLI 发布验收。视频文件选择器返回后页面仍未收到文件，未取得完整领域菜单；视频发布和排期尚未验证。
+`--schedule "YYYY-MM-DD HH:MM"` 为实验性选项，按北京时间限制在 30 分钟后至 48 小时内；尚不保证完整排期流程可用。
 
 ## 示例脚本
 
-`scripts/examples/` 下的文件是复制用示例，不是运行时依赖。执行前先查看当前 CLI 的 `--help`，替换账号、素材和正文；这些命令可能创建真实作品。
+以下文件提供登录、检查、表单预填及候选查询模板；移除 `--prepare-only` 会真实发布文章。
 
-- `zhihu_commands.ps1`：PowerShell
-- `zhihu_commands.sh`：Bash
-- `zhihu_cli_template.py`：Python subprocess
+- [PowerShell](scripts/examples/zhihu_commands.ps1)
+- [Bash](scripts/examples/zhihu_commands.sh)
+- [Python subprocess](scripts/examples/zhihu_cli_template.py)

@@ -28,7 +28,7 @@ async def verify_zhihu_result(account_file, result_file, headless=False) -> dict
     parsed = urlsplit(url)
     if parsed.scheme != "https" or parsed.hostname not in {"www.zhihu.com", "zhuanlan.zhihu.com"}:
         raise ValueError("结果文件中的知乎作品 URL 不受支持")
-    if not re.search(r"/(?:p|zvideo|video)/\d+/?$", parsed.path):
+    if not re.search(r"/(?:p|pin|zvideo|video)/\d+/?$", parsed.path):
         raise ValueError("结果文件 URL 未包含知乎文章或视频作品 ID")
 
     async with async_playwright() as playwright:
@@ -46,7 +46,8 @@ async def verify_zhihu_result(account_file, result_file, headless=False) -> dict
             title = result.get("title")
             if not title:
                 raise ValueError("结果文件缺少标题，无法核对原作品")
-            await expect(page.get_by_text(title, exact=True)).to_be_visible(timeout=30000)
+            # 新版视频详情把标题与简介放在同一正文区，标题后还带分隔符。
+            await expect(page.locator("main")).to_contain_text(title, timeout=30000)
             result.update(success=True, status="published", verified=True)
             result_file.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
             return result

@@ -64,13 +64,13 @@ async def fill_zhihu_article_schedule(page: Page, value: datetime | None) -> Non
     await time_selects.nth(0).click()
     hour = page.get_by_role("option", name=f"{target.hour:02d}", exact=True)
     await expect(hour).to_have_count(1)
-    if not await hour.isEnabled():
+    if not await hour.is_enabled():
         raise RuntimeError("知乎定时小时选项当前不可选，请检查时间范围")
     await hour.click()
     await time_selects.nth(1).click()
     minute = page.get_by_role("option", name=f"{target.minute:02d}", exact=True)
     await expect(minute).to_have_count(1)
-    if not await minute.isEnabled():
+    if not await minute.is_enabled():
         raise RuntimeError("知乎定时分钟选项当前不可选，请检查时间范围")
     await minute.click()
     await expect(time_selects.nth(0)).to_have_text(f"{target.hour:02d}")
@@ -118,13 +118,13 @@ async def fill_zhihu_video_schedule(page: Page, value: datetime | None) -> None:
     await time_selects.nth(0).click()
     hour = page.get_by_role("option", name=f"{target.hour:02d}", exact=True)
     await expect(hour).to_have_count(1)
-    if not await hour.isEnabled():
+    if not await hour.is_enabled():
         raise RuntimeError("知乎定时小时选项当前不可选，请检查时间范围")
     await hour.click()
     await time_selects.nth(1).click()
     minute = page.get_by_role("option", name=f"{target.minute:02d}", exact=True)
     await expect(minute).to_have_count(1)
-    if not await minute.isEnabled():
+    if not await minute.is_enabled():
         raise RuntimeError("知乎定时分钟选项当前不可选，请检查时间范围")
     await minute.click()
     await expect(time_selects.nth(0)).to_have_text(f"{target.hour:02d}")

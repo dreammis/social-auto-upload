@@ -6,6 +6,8 @@ from uploader.zhihu_uploader.constants import (
     ZHIHU_SCHEDULE_MAX_HOURS,
     ZHIHU_SCHEDULE_MINUTES,
     ZHIHU_ORIGINALITY,
+    ZHIHU_VIDEO_CATEGORIES,
+    ZHIHU_VIDEO_MARKS,
 )
 from uploader.zhihu_uploader.session import check_zhihu_account, login_zhihu_account
 from uploader.zhihu_uploader.verification import verify_zhihu_result
@@ -41,24 +43,25 @@ def register(platform_parsers):
     zhihu_article.add_argument("--title", required=True, help="文章标题，最多 100 字")
     zhihu_article.add_argument("--content-file", required=True, type=existing_file_path, help="UTF-8 HTML/Markdown/TXT，图片路径写在原稿对应段落中")
     zhihu_article.add_argument("--schedule", type=schedule_value,
-                               help=f"定时发布时间，格式 {schedule_help}，北京时间 {ZHIHU_SCHEDULE_MINUTES} 分钟后至 {ZHIHU_SCHEDULE_MAX_HOURS} 小时内")
+                               help=f"实验性定时发布，格式 {schedule_help}，北京时间 {ZHIHU_SCHEDULE_MINUTES} 分钟后至 {ZHIHU_SCHEDULE_MAX_HOURS} 小时内")
     zhihu_article.add_argument("--prepare-only", action="store_true", help="填写并检查编辑器后结束，不点击发布")
     zhihu_article.add_argument("--upload-timeout", type=int, default=600, help="每张正文图片上传等待秒数")
     add_runtime_flags(zhihu_article)
     zhihu_article.set_defaults(headless=False)
     zhihu_video = zhihu_actions.add_parser("upload-video", help="上传并发布一个知乎视频")
     zhihu_video.add_argument("--account", required=True, help="本地会话别名")
-    zhihu_video.add_argument("--file", required=True, type=existing_file_path)
+    zhihu_video.add_argument("--file", required=True, type=existing_file_path, help="视频文件，大于 100KB、最大 20GB、最长 4 小时")
     zhihu_video.add_argument("--title", required=True, help="视频标题，5–50 字")
     zhihu_video.add_argument("--desc", default="", help="可选视频简介，最多 300 字")
-    zhihu_video.add_argument("--category", help="所属领域；省略时在终端显示完整实时菜单，按编号选择；先用 --show-options 查看")
-    zhihu_video.add_argument("--topics", default=[], nargs="+", help="可选话题；话题为搜索结果，当前尚待实测")
-    zhihu_video.add_argument("--video-mark", help="省略时显示实时视频标记菜单，按编号选择")
+    zhihu_video.add_argument("--category", choices=ZHIHU_VIDEO_CATEGORIES,
+                             help="所属领域；省略时在终端按编号选择，提交前核对实时菜单")
+    zhihu_video.add_argument("--video-mark", choices=ZHIHU_VIDEO_MARKS,
+                             help="视频声明；省略时在终端按编号选择")
     zhihu_video.add_argument("--show-options", action="store_true", help="上传素材后列出全部领域和视频标记，保存到结果 JSON 后退出，不发布")
     zhihu_video.add_argument("--originality", choices=ZHIHU_ORIGINALITY, required=True,
                              help="内容为原创或转载")
     zhihu_video.add_argument("--schedule", type=schedule_value,
-                             help=f"定时发布时间，格式 {schedule_help}，北京时间 {ZHIHU_SCHEDULE_MINUTES} 分钟后至 {ZHIHU_SCHEDULE_MAX_HOURS} 小时内")
+                             help=f"实验性定时发布，格式 {schedule_help}，北京时间 {ZHIHU_SCHEDULE_MINUTES} 分钟后至 {ZHIHU_SCHEDULE_MAX_HOURS} 小时内")
     zhihu_video.add_argument("--prepare-only", action="store_true", help="上传并填写后结束，不点击发布")
     zhihu_video.add_argument("--upload-timeout", type=int, default=1200, help="视频上传等待秒数")
     add_runtime_flags(zhihu_video)
@@ -87,7 +90,7 @@ async def run(args):
         app = ZhihuVideo(
             title=args.title, file_path=args.file, account_file=account_file,
             description=args.desc, category=args.category,
-            topics=args.topics, video_mark=args.video_mark, show_options=args.show_options,
+            topics=[], video_mark=args.video_mark, show_options=args.show_options,
             originality=args.originality, schedule=args.schedule,
             prepare_only=args.prepare_only, upload_timeout=args.upload_timeout,
             headless=args.headless, debug=args.debug,

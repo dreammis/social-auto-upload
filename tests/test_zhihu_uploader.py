@@ -17,6 +17,16 @@ from utils.article_render import load_article
 
 
 class ZhihuCLITests(unittest.TestCase):
+    def test_video_at_or_below_100kb_is_rejected_before_browser_launch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            video = Path(folder) / "video.mp4"
+            for size in (84693, 102400):
+                with self.subTest(size=size):
+                    video.write_bytes(b"\0" * size)
+                    app = ZhihuVideo("视频标题示例", video, "account.json", "", None, [], None, "original")
+                    with self.assertRaisesRegex(ValueError, "必须大于 100KB"):
+                        app.validate_upload_args()
+
     def test_video_can_preview_runtime_choices_without_guessing_category(self):
         with tempfile.TemporaryDirectory() as folder:
             video = Path(folder) / "video.mp4"
@@ -27,13 +37,28 @@ class ZhihuCLITests(unittest.TestCase):
             ])
         self.assertTrue(args.show_options)
         self.assertIsNone(args.category)
-        self.assertEqual(args.topics, [])
+        self.assertFalse(hasattr(args, "topics"))
         self.assertFalse(hasattr(args, "category_second"))
 
     def test_unknown_menu_value_returns_all_legal_choices(self):
         app = ZhihuVideo("标题", "video.mp4", "account.json", "", None, [], None, "original")
         with self.assertRaisesRegex(ValueError, "科学、生活"):
             asyncio.run(app.select_option("所属领域", "不存在", ["科学", "生活"]))
+
+    def test_cli_rejects_unknown_category_and_video_mark(self):
+        with tempfile.TemporaryDirectory() as folder:
+            video = Path(folder) / "video.mp4"
+            video.touch()
+            command = ["zhihu", "upload-video", "--account", "creator", "--file", str(video),
+                       "--title", "视频标题示例", "--originality", "original"]
+            parser = build_parser()
+            args = parser.parse_args(command + ["--category", "教育", "--video-mark", "含 AI 生成内容"])
+            self.assertEqual(args.category, "教育")
+            for flag in ("--category", "--video-mark"):
+                with self.subTest(flag=flag), contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as error:
+                        parser.parse_args(command + [flag, "不存在"])
+                    self.assertEqual(error.exception.code, 2)
 
     def test_interactive_menu_accepts_index_and_shows_all_choices(self):
         app = ZhihuVideo("标题", "video.mp4", "account.json", "", None, [], None, "original")
