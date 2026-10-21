@@ -62,3 +62,11 @@ sau zhihu verify --account creator --result "本次结果.json"
 ```
 
 原登录浏览器已实际发表富文本文章并保留两张段间 PNG。该次由浏览器工具完成，尚不能算 Python CLI 发布验收。视频文件选择器返回后页面仍未收到文件，未取得完整领域菜单；视频发布和排期尚未验证。
+
+## 示例脚本
+
+`scripts/examples/` 下的文件是复制用示例，不是运行时依赖。执行前先查看当前 CLI 的 `--help`，替换账号、素材和正文；这些命令可能创建真实作品。
+
+- `zhihu_commands.ps1`：PowerShell
+- `zhihu_commands.sh`：Bash
+- `zhihu_cli_template.py`：Python subprocess

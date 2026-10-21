@@ -35,3 +35,11 @@ sau xueqiu upload-article --account <别名> --title "用户标题" --content-fi
 若记录为 `submission_unknown`，执行 `sau xueqiu verify --account <别名> --result "本次结果文件.json"`，按已保存的原作品 ID 只读查询，并用原稿重查后台正文和图片。保留发表时的原稿、图片及路径，内容改变会报错；旧版缺少原稿路径的成功结果仅核查作品身份和分享范围。没有 ID 时进入“内容管理”按标题、账号及时间核查。未查明前不要重跑上传或再次点击发布，避免重复作品。
 
 默认使用可见 Chrome，`--headless` 为显式选项；本机无头访问曾被平台拦截。网络超时、403 或主体不一致应保留具体错误，不据此断言 Cookie 失效。`--debug` 保存失败截图。
+
+## 示例脚本
+
+`scripts/examples/` 下的文件是复制用示例，不是运行时依赖。执行前先查看当前 CLI 的 `--help`，替换账号、素材和正文；这些命令可能创建真实作品。
+
+- `xueqiu_commands.ps1`：PowerShell
+- `xueqiu_commands.sh`：Bash
+- `xueqiu_cli_template.py`：Python subprocess

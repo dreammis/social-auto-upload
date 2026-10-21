@@ -32,3 +32,11 @@ sau facebook-page delete --account creator --page "我的 Page" --page-id "Page�
 `--scheduled` 选择定时列表；删除会取消排期并永久移除，返回 `deleted`。管理已发布作品时不加它，当前平台会移至垃圾箱，返回 `trashed`，30 天后自动删除；未接入 Page 垃圾箱提前永久删除。已定时作品实际发布后编号可能变化，需使用已发布列表中的编号。
 
 只覆盖已加载的近期列表，不保证自动查找全部历史作品。同文案不能唯一定位、Page 或编号不符时不删除。删除后超时或浏览器断开时先核对原记录，不自动重删；本地素材保留。完整参数见仓库 `docs/CLI.md`。
+
+## 示例脚本
+
+`scripts/examples/` 下的文件是复制用示例，不是运行时依赖。执行前先查看当前 CLI 的 `--help`，替换账号、素材和正文；这些命令可能创建真实作品。
+
+- `facebook_page_commands.ps1`：PowerShell
+- `facebook_page_commands.sh`：Bash
+- `facebook_page_cli_template.py`：Python subprocess

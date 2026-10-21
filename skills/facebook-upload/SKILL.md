@@ -29,3 +29,11 @@ sau facebook delete --account creator --post-url "原作品链接" --owner-id "�
 `verify --from-trash` 查询垃圾箱原记录；`verify --deleted` 仅确认编号不在垃圾箱，返回 `absent_from_trash`，不能单凭缺席证明过去发生过永久删除。当前仅检索有限滚动范围的近期作品；没有找到或同文案无法唯一定位时明确失败。
 
 只有平台出现本次提交的成功提示才认为发表已确认。点击后超时或浏览器断开应视为结果未知：先在同一账号个人主页或垃圾箱核对原作品，不重复上传或重复删除。本地素材不会被删除。完整参数见仓库 `docs/CLI.md`。
+
+## 示例脚本
+
+`scripts/examples/` 下的文件是复制用示例，不是运行时依赖。执行前先查看当前 CLI 的 `--help`，替换账号、素材和正文；这些命令可能创建真实作品。
+
+- `facebook_commands.ps1`：PowerShell
+- `facebook_commands.sh`：Bash
+- `facebook_cli_template.py`：Python subprocess

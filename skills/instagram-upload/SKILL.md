@@ -30,3 +30,11 @@ sau instagram delete --account creator --post-url "原作品链接" --expected-t
 结果未知但没有链接时，先在同一账号主页按素材、配文和发布时间找原作品，复制链接再运行 `verify`；未找到不证明失败，不重复上传。链接支持 `/p/编号/`、`/reel/编号/` 和带作者名的形式。核对登录用户、作者、作品编号和正文后才允许删除。删除返回 `deleted`，作品进入“最近删除”；批量删除和提前永久清空不在范围内。本地素材不会删除。`deletion_unknown` 须先查询原作品和“最近删除”，不重复提交删除。
 
 完整参数和能力边界见 `docs/CLI.md`，失败时根据结果文件中的错误及本地证据分析；不得把账号状态、截图或页面记录提交到 Git。
+
+## 示例脚本
+
+`scripts/examples/` 下的文件是复制用示例，不是运行时依赖。执行前先查看当前 CLI 的 `--help`，替换账号、素材和正文；这些命令可能创建真实作品。
+
+- `instagram_commands.ps1`：PowerShell
+- `instagram_commands.sh`：Bash
+- `instagram_cli_template.py`：Python subprocess

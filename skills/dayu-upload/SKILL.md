@@ -46,3 +46,11 @@ sau dayu verify --account <本地账号名> --result "本次结果文件.json" -
 结果文件会帮助核对标题、主体、作品及定时时间。也可按 ID 查询：`sau dayu verify --account <本地账号名> --type article --content-id "作品ID"`（视频用 `--type video`）。无可查询 ID 时告知具体错误，请用户核查后台；不要猜测失败并重发。
 
 只有用户明确要求核对公开内容/播放时才在查询命令添加 `--public`；主题或完整正文核对应使用原结果文件。公开检查可能等待审核或定时到点，不属于默认发表完成条件。
+
+## 示例脚本
+
+`scripts/examples/` 下的文件是复制用示例，不是运行时依赖。执行前先查看当前 CLI 的 `--help`，替换账号、素材和正文；这些命令可能创建真实作品。
+
+- `dayu_commands.ps1`：PowerShell
+- `dayu_commands.sh`：Bash
+- `dayu_cli_template.py`：Python subprocess
