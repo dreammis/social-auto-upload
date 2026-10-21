@@ -55,13 +55,13 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成快手登录、c
 - 如果登录流程生成了本地二维码图片，不要只把图片路径告诉用户
 - 二维码图片本身就是给用户扫码的，优先直接把本地图片展示/发送给用户
 
-## 模板文件
+## 示例脚本
 
-当你需要稳定的命令模板时，使用 `scripts/examples/` 下的文件：
+这些文件只是可复制的命令示例，不是 `sau` 的运行时依赖，也不会被主程序自动调用。它们包含登录、校验和发布命令；执行前必须把账号、素材、标题和参数替换成真实值，并先查看当前 CLI 的 `--help`。不要直接运行整份脚本，以免用示例素材创建真实作品。
 
-- `kuaishou_commands.ps1`
-- `kuaishou_commands.sh`
-- `kuaishou_cli_template.py`
+- `scripts/examples/kuaishou_commands.ps1`：PowerShell 命令示例
+- `scripts/examples/kuaishou_commands.sh`：Bash 命令示例
+- `scripts/examples/kuaishou_cli_template.py`：Python `subprocess` 示例
 
 ## 参考文档
 
