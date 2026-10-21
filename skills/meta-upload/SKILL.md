@@ -37,6 +37,6 @@ sau facebook-page delete --account creator --page "我的 Page" --page-id "Page�
 
 `scripts/examples/` 下的文件是复制用示例，不是运行时依赖。执行前先查看当前 CLI 的 `--help`，替换账号、素材和正文；这些命令可能创建真实作品。
 
-- `facebook_page_commands.ps1`：PowerShell
-- `facebook_page_commands.sh`：Bash
-- `facebook_page_cli_template.py`：Python subprocess
+- `meta_commands.ps1`：PowerShell
+- `meta_commands.sh`：Bash
+- `meta_cli_template.py`：Python subprocess

@@ -278,4 +278,3 @@ class FacebookPost:
 
 # 保留原视频调用方的类名；视频和图文实际共用同一发帖表单，无额外包装层。
 FacebookVideo = FacebookPost
-

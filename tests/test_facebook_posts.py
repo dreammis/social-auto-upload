@@ -60,4 +60,3 @@ class MetaPostIdentityTests(unittest.TestCase):
                 finally:
                     await browser.close()
         asyncio.run(scenario())
-

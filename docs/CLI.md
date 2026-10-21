@@ -29,9 +29,12 @@
   - `skills/kuaishou-upload/`
   - `skills/xiaohongshu-upload/`
   - `skills/bilibili-upload/`
+  - `skills/dayu-upload/`
   - `skills/xueqiu-upload/`
+  - `skills/zhihu-upload/`
   - `skills/facebook-upload/`
   - `skills/meta-upload/`
+  - `skills/instagram-upload/`
 
 视频号、百家号和支付宝生活号目前只有 CLI 入口，暂未提供对应的 skill。
 

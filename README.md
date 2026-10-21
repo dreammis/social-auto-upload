@@ -8,9 +8,7 @@
 
 项目按内容形态组织能力：**视频、文章、图文**。平台之间的表单差异仍由各自 uploader 处理，调用者只需要准备账号会话、素材和平台参数。每个平台的“已接入”与“已真实验收”分开记录，避免把本地测试误当成线上发布成功。
 
-当前主线正在进行一次结构重构：CLI 入口已从单个大文件拆成按平台的命令模块，文章渲染、平台会话和发布结果核验也分别归位。日常变更记录见 [CHANGELOG.md](./CHANGELOG.md)，版本发布使用 GitHub Release。
-项目支持 `抖音`、`Bilibili`、`小红书`、`快手`、`视频号`、`百家号`、`大鱼号`、`雪球`、`知乎`、`支付宝生活号`、`微博`、`虎扑`、`TikTok`、`YouTube` 以及 `Facebook`、`Instagram` 等平台。各平台按内容形态的支持情况见下表。
-结合各平台 `uploader` 模块，您可以轻松配置和扩展支持的平台，并通过示例脚本快速上手。
+CLI 命令按平台维护在 `sau_commands/`，发布流程位于 `uploader/`。日常变更记录见 [CHANGELOG.md](./CHANGELOG.md)，稳定版本通过 GitHub Release 发布。
 
 <img src="media/show/tkupload.gif" alt="tiktok show" width="800"/>
 
@@ -65,12 +63,9 @@
 
 - [💡 功能特性](#功能特性)
 - [💾 安装指南](#安装指南)
-- [🤖 AI Agent](#agent)
+- [🤖 AI Agent](#ai-agent)
 - [🏁 快速开始](#快速开始)
-- [🗂️ 重构计划](#%EF%B8%8F重构计划)
-- [📣 近况说明](#近况说明)
 - [📝 更新日志](./CHANGELOG.md)
-- [🐇 项目背景](#项目背景)
 - [📃 详细文档](#详细文档)
 - [🐾 交流与支持](#交流与支持)
 - [🤝 贡献指南](#贡献指南)
@@ -111,31 +106,18 @@
 
 文章主题预览及 Markdown 转 HTML：见 [文章文件与主题渲染](./docs/article.md)。内置 `default/grace/simple/modern/plain` 主题；大鱼号可直接接收 Markdown，并将主题转换为保留文字颜色、背景和近似字号的兼容排版，圆角和精确间距等效果可能与本地预览不同。
 
-### AI这么强，为什么还需要这个项目
-在你使用AI的能力，browser agent等等，每次都让 agent 重新解析网页、截图理解, 临场判断
-该项目经过大量验证，上传这种 高频，重复，无聊的工作交给脚本和程序去执行
-
-
 ## 💾安装指南
 
 ### 自己上手使用
-如果你只是普通用户，不准备借助 agent 客户端，直接看
-
-安装、更新、环境准备已经统一收敛到文档：
+普通用户可按以下文档安装和更新：
 
 - [安装说明](./docs/install.md)
 - [更新说明](./docs/update.md)
 
 
-### AGENT 
+### AI Agent
 
-```
-AI的发展毋庸置疑，希望你遇到这种安装和使用，不要再怯场，而是交给各种AI Agent来协助你
-```
-
-如果你准备把这个仓库直接交给 `OpenClaw`、`Codex`、`Claude Code` 来安装和使用
-
-先把仓库给 agent，再把这份启动提示词一起发给它：
+若使用 `OpenClaw`、`Codex` 或 `Claude Code` 安装和操作本项目，可将仓库与启动提示词一并交给 Agent：
 
 - [Agent Bootstrap Prompt](./docs/agent-bootstrap.md)
 
@@ -148,18 +130,10 @@ AI的发展毋庸置疑，希望你遇到这种安装和使用，不要再怯场
 
 相关入口：
 
-- CLI 使用请看：[CLI 使用说明](./docs/CLI.md)
-- 如果你准备在 `OpenClaw`、`Codex`、`Claude Code / cc` 里使用本项目，先看：[Agent Bootstrap Prompt](./docs/agent-bootstrap.md)
-- agent / skill 请看：[Douyin Upload Skill](./skills/douyin-upload/SKILL.md)
-- agent / skill 请看：[Kuaishou Upload Skill](./skills/kuaishou-upload/SKILL.md)
-- agent / skill 请看：[Xiaohongshu Upload Skill](./skills/xiaohongshu-upload/SKILL.md)
-- agent / skill 请看：[Bilibili Upload Skill](./skills/bilibili-upload/SKILL.md)
-- agent / skill 请看：[Dayu Upload Skill](./skills/dayu-upload/SKILL.md)
-- agent / skill 请看：[Xueqiu Upload Skill](./skills/xueqiu-upload/SKILL.md)
-- 历史 Web 说明请看：[历史 Web 版本说明](./docs/legacy-web.md)
-- agent / skill 请看：[Instagram Upload Skill](./skills/instagram-upload/SKILL.md)
-- 其他单平台 skill 与整合型 skill 仍在开发中
-- `requirements.txt` 目前主要用于历史兼容路径，普通用户不需要优先使用它
+- [CLI 使用说明](./docs/CLI.md)
+- [Agent Bootstrap Prompt](./docs/agent-bootstrap.md)
+- 平台 Skills：[抖音](./skills/douyin-upload/SKILL.md)、[快手](./skills/kuaishou-upload/SKILL.md)、[小红书](./skills/xiaohongshu-upload/SKILL.md)、[Bilibili](./skills/bilibili-upload/SKILL.md)、[大鱼号](./skills/dayu-upload/SKILL.md)、[雪球](./skills/xueqiu-upload/SKILL.md)、[知乎](./skills/zhihu-upload/SKILL.md)、[Facebook](./skills/facebook-upload/SKILL.md)、[Facebook Page](./skills/meta-upload/SKILL.md)、[Instagram](./skills/instagram-upload/SKILL.md)
+- [历史 Web 版本说明](./docs/legacy-web.md)
 
 
 ## 🏁快速开始
@@ -292,17 +266,9 @@ sau dayu upload-article --account <account_name> --title "如何阅读作品数�
 - `examples/upload_video_to_tiktok.py`
 - `examples/upload_video_to_xiaohongshu.py`
 
-## 🐇项目背景
-
-该项目最初是我个人用于自动化管理社交媒体视频发布的工具。我的主要发布策略是提前一天设置定时发布，因此项目中很多定时发布相关的逻辑是基于“第二天”的时间进行计算的。
-
-如果您需要立即发布或其他定制化的发布策略，欢迎研究源码或在社区提问。
-
 ## 📃详细文档
 
-已落后，目前在快速重构该项目，当下，你需要做的是把这个仓库，发给你的AI agent：qwen code，codex cc，openclaw等等，让他们帮你安装和使用
-
-更详细的文档和说明，请查看：[social-auto-upload 官方文档](https://sap-doc.nasdaddy.com/)
+安装、更新和平台参数见仓库内对应文档：[安装说明](./docs/install.md)、[更新说明](./docs/update.md)、[CLI 使用说明](./docs/CLI.md)。产品介绍与社区信息见 [social-auto-upload 文档站](https://sap-doc.nasdaddy.com/)。
 
 ## 🐾交流与支持
 
