@@ -31,11 +31,8 @@
   - `sau bilibili ...` 命令契约
 - `skills/bilibili-upload/references/troubleshooting.md`
   - 常见问题与排障
-- `skills/bilibili-upload/scripts/examples/bilibili_commands.ps1`
   - PowerShell 示例命令
-- `skills/bilibili-upload/scripts/examples/bilibili_commands.sh`
   - shell 示例命令
-- `skills/bilibili-upload/scripts/examples/bilibili_cli_template.py`
   - Python 调用模板
 
 ### Modified files
@@ -307,9 +304,6 @@ git commit -m "feat: add bilibili cli commands"
 - Create: `skills/bilibili-upload/references/runtime-requirements.md`
 - Create: `skills/bilibili-upload/references/cli-contract.md`
 - Create: `skills/bilibili-upload/references/troubleshooting.md`
-- Create: `skills/bilibili-upload/scripts/examples/bilibili_commands.ps1`
-- Create: `skills/bilibili-upload/scripts/examples/bilibili_commands.sh`
-- Create: `skills/bilibili-upload/scripts/examples/bilibili_cli_template.py`
 - Modify: `examples/get_bilibili_cookie.py`
 - Modify: `examples/upload_video_to_bilibili.py`
 

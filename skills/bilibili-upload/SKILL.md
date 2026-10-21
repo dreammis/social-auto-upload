@@ -41,12 +41,6 @@ description: 当 agent 需要通过已安装的 `sau` CLI 完成 Bilibili 登录
 - 正确做法是让用户自己在本地终端执行 `sau bilibili login --account <name>`
 - 如果终端里的二维码显示不完整，提醒用户直接打开当前目录下的 `qrcode.png` 扫码
 
-## 模板文件
-
-- `scripts/examples/bilibili_commands.ps1`
-- `scripts/examples/bilibili_commands.sh`
-- `scripts/examples/bilibili_cli_template.py`
-
 ## 参考文档
 
 - 运行前提：`references/runtime-requirements.md`

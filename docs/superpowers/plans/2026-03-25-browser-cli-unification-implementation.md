@@ -24,11 +24,8 @@
   - 小红书 CLI 契约
 - `skills/xiaohongshu-upload/references/troubleshooting.md`
   - 小红书排障文档
-- `skills/xiaohongshu-upload/scripts/examples/xiaohongshu_commands.ps1`
   - PowerShell 示例命令
-- `skills/xiaohongshu-upload/scripts/examples/xiaohongshu_commands.sh`
   - shell 示例命令
-- `skills/xiaohongshu-upload/scripts/examples/xiaohongshu_cli_template.py`
   - Python 命令模板
 
 ### Modified files
@@ -54,14 +51,8 @@
   - 补小红书检查项与 skill 路径
 - `skills/douyin-upload/SKILL.md`
 - `skills/douyin-upload/references/cli-contract.md`
-- `skills/douyin-upload/scripts/examples/douyin_commands.ps1`
-- `skills/douyin-upload/scripts/examples/douyin_commands.sh`
-- `skills/douyin-upload/scripts/examples/douyin_cli_template.py`
 - `skills/kuaishou-upload/SKILL.md`
 - `skills/kuaishou-upload/references/cli-contract.md`
-- `skills/kuaishou-upload/scripts/examples/kuaishou_commands.ps1`
-- `skills/kuaishou-upload/scripts/examples/kuaishou_commands.sh`
-- `skills/kuaishou-upload/scripts/examples/kuaishou_cli_template.py`
 - `examples/get_xiaohongshu_cookie.py`
 - `examples/upload_video_to_xiaohongshu.py`
 
@@ -421,19 +412,10 @@ git commit -m "feat: align browser uploader metadata fields"
 - Create: `skills/xiaohongshu-upload/references/runtime-requirements.md`
 - Create: `skills/xiaohongshu-upload/references/cli-contract.md`
 - Create: `skills/xiaohongshu-upload/references/troubleshooting.md`
-- Create: `skills/xiaohongshu-upload/scripts/examples/xiaohongshu_commands.ps1`
-- Create: `skills/xiaohongshu-upload/scripts/examples/xiaohongshu_commands.sh`
-- Create: `skills/xiaohongshu-upload/scripts/examples/xiaohongshu_cli_template.py`
 - Modify: `skills/douyin-upload/SKILL.md`
 - Modify: `skills/douyin-upload/references/cli-contract.md`
-- Modify: `skills/douyin-upload/scripts/examples/douyin_commands.ps1`
-- Modify: `skills/douyin-upload/scripts/examples/douyin_commands.sh`
-- Modify: `skills/douyin-upload/scripts/examples/douyin_cli_template.py`
 - Modify: `skills/kuaishou-upload/SKILL.md`
 - Modify: `skills/kuaishou-upload/references/cli-contract.md`
-- Modify: `skills/kuaishou-upload/scripts/examples/kuaishou_commands.ps1`
-- Modify: `skills/kuaishou-upload/scripts/examples/kuaishou_commands.sh`
-- Modify: `skills/kuaishou-upload/scripts/examples/kuaishou_cli_template.py`
 
 - [ ] **Step 1: 复制现有 skill 目录结构作为小红书骨架**
 

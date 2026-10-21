@@ -236,7 +236,6 @@ sau <platform> upload-note \
 - `skills/douyin-upload/...`
 - `skills/kuaishou-upload/...`
 - 新增 `skills/xiaohongshu-upload/...`
-- `scripts/examples/...`
 
 都会在同一轮里切换到新契约，避免出现：
 
@@ -256,9 +255,6 @@ sau <platform> upload-note \
 - `skills/xiaohongshu-upload/references/cli-contract.md`
 - `skills/xiaohongshu-upload/references/runtime-requirements.md`
 - `skills/xiaohongshu-upload/references/troubleshooting.md`
-- `skills/xiaohongshu-upload/scripts/examples/xiaohongshu_commands.ps1`
-- `skills/xiaohongshu-upload/scripts/examples/xiaohongshu_commands.sh`
-- `skills/xiaohongshu-upload/scripts/examples/xiaohongshu_cli_template.py`
 
 并同步更新：
 
