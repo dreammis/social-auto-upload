@@ -1,7 +1,15 @@
 # social-auto-upload
 
-`social-auto-upload` 帮助内容创作者和运营者将视频、图片笔记和文章发布到多个国内外社交媒体平台。
-项目支持 `抖音`、`Bilibili`、`小红书`、`快手`、`视频号`、`百家号`、`大鱼号`、`支付宝生活号`、`微博`、`虎扑`、`TikTok`、`YouTube` 以及 `Facebook`、`Instagram` 等平台，各平台的上传类型和定时发布能力见下表。
+![Python](https://img.shields.io/badge/Python-3.10--3.12-3776AB?logo=python&logoColor=white)
+![License](https://img.shields.io/github/license/dreammis/social-auto-upload)
+![Release](https://img.shields.io/github/v/release/dreammis/social-auto-upload?display_name=tag)
+
+`social-auto-upload` 是一个面向内容创作者和运营者的多平台发布工具。它把重复的登录、素材上传、表单填写、定时设置和结果核验收敛成统一的 CLI，并为 Codex、OpenClaw、Claude Code 等 Agent 提供可复用的 Skill。
+
+项目按内容形态组织能力：**视频、文章、图文**。平台之间的表单差异仍由各自 uploader 处理，调用者只需要准备账号会话、素材和平台参数。每个平台的“已接入”与“已真实验收”分开记录，避免把本地测试误当成线上发布成功。
+
+当前主线正在进行一次结构重构：CLI 入口已从单个大文件拆成按平台的命令模块，文章渲染、平台会话和发布结果核验也分别归位。日常变更记录见 [CHANGELOG.md](./CHANGELOG.md)，版本发布使用 GitHub Release。
+项目支持 `抖音`、`Bilibili`、`小红书`、`快手`、`视频号`、`百家号`、`大鱼号`、`雪球`、`知乎`、`支付宝生活号`、`微博`、`虎扑`、`TikTok`、`YouTube` 以及 `Facebook`、`Instagram` 等平台。各平台按内容形态的支持情况见下表。
 结合各平台 `uploader` 模块，您可以轻松配置和扩展支持的平台，并通过示例脚本快速上手。
 
 <img src="media/show/tkupload.gif" alt="tiktok show" width="800"/>
@@ -61,6 +69,7 @@
 - [🏁 快速开始](#快速开始)
 - [🗂️ 重构计划](#%EF%B8%8F重构计划)
 - [📣 近况说明](#近况说明)
+- [📝 更新日志](./CHANGELOG.md)
 - [🐇 项目背景](#项目背景)
 - [📃 详细文档](#详细文档)
 - [🐾 交流与支持](#交流与支持)
@@ -70,24 +79,35 @@
 
 ## 💡功能特性
 
-| 平台 | 登录/账号准备 | 视频上传 | 图文上传 | 定时发布 | CLI | Skill | 说明 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 抖音 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 当前主线重构最完整 |
-| Bilibili | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | 运行时自动准备 `biliup` |
-| 小红书（浏览器版） | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 浏览器自动化，CLI/Skill 已接入 |
-| 快手 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 浏览器自动化，CLI/Skill 初版已接入 |
-| 视频号 | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | 浏览器自动化，对应 `tencent_uploader` |
-| 百家号 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化 |
-| 大鱼号 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | [视频发布](./docs/dayu.md)、[图文发布](./docs/dayu-article.md)均支持定时；文章支持 HTML/Markdown/TXT、主题兼容排版、本地图片及单/三封面 |
-| 支付宝生活号 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，支持生活号视频 |
-| 微博 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，标题最多 30 字 |
-| 虎扑 | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，标题 4–40 字 |
-| TikTok | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | 当前示例走 Chrome 版实现 |
-| 雪球 | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | [长文与图片](./docs/xueqiu.md)：HTML/Markdown/TXT、原位置配图及封面，已实测正式 CLI 发表和后台原作品查询 |
-| YouTube | ✅ | ✅ | ❌ | 待验收 | ✅ | ❌ | Studio 定时实现开发中，尚未真实排期验收 |
-| Facebook | ✅ | ✅ | ✅ | 未接入 | ✅ | ✅ | 个人主页视频/图文已实测，支持查询、移至垃圾箱及永久删除 |
-| Facebook Page | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 视频与图文定时已实测；支持查询、取消定时及已发布作品移至垃圾箱，详见 CLI 文档 |
-| Instagram | ✅ | ✅ | ✅ | 当前账号独立网页版无入口 | ✅ | ✅ | 独立网页发布 Reels、单图及轮播；支持原作品核验与移至最近删除 |
+| 平台 | 登录/账号准备 | 视频 | 文章 | 图文 | 定时发布 | CLI | Skill | 说明 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 抖音 | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | 当前主线重构最完整 |
+| Bilibili | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | 运行时自动准备 `biliup` |
+| 小红书（浏览器版） | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | 浏览器自动化，CLI/Skill 已接入 |
+| 快手 | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | 浏览器自动化，CLI/Skill 初版已接入 |
+| 视频号 | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | 浏览器自动化，对应 `tencent_uploader` |
+| 百家号 | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化 |
+| 大鱼号 | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | [视频发布](./docs/dayu.md)、[文章发布](./docs/dayu-article.md)均支持定时；文章支持 HTML/Markdown/TXT、主题兼容排版、本地图片及单/三封面 |
+| 支付宝生活号 | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，支持生活号视频 |
+| 微博 | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，标题最多 30 字 |
+| 虎扑 | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | 浏览器自动化，标题 4–40 字 |
+| TikTok | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | 当前示例走 Chrome 版实现 |
+| 雪球 | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | [长文与配图](./docs/xueqiu.md)：HTML/Markdown/TXT、原位置配图及封面，已实测正式 CLI 发表和后台原作品查询 |
+| YouTube | ✅ | ✅ | ❌ | ❌ | 待验收 | ✅ | ❌ | Studio 定时实现开发中，尚未真实排期验收 |
+| 知乎 | 开发中 | 实际浏览器已验收文章 | CLI/视频待验收 | ❌ | 待验收 | ✅ | ✅ | 原登录浏览器已发表带两张段间 PNG 的文章；Python CLI 会话接入和视频文件上传仍待验收 |
+| Facebook | ✅ | ✅ | ❌ | ✅ | 未接入 | ✅ | ✅ | 个人主页视频/图片已实测，支持查询、移至垃圾箱及永久删除 |
+| Facebook Page | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | 视频与图片定时已实测；支持查询、取消定时及已发布作品移至垃圾箱，详见 CLI 文档 |
+| Instagram | ✅ | ✅ | ❌ | ✅ | 当前账号独立网页版无入口 | ✅ | ✅ | 独立网页发布 Reels、单图及轮播；支持原作品核验与移至最近删除 |
+
+表中“图文”指图片帖或图片笔记；“文章”指平台的文章编辑器。文章正文支持插图，不等于平台另有图片笔记发布形态。`✅` 表示入口已接入，不代表每个平台的真实素材端到端发布都已验收；具体限制见平台说明。知乎的“实际浏览器已验收文章”特指原登录内置浏览器操作，不等于 Python CLI 已完成端到端验收。
+
+### 按内容形态
+
+| 内容形态 | 平台与入口 |
+| --- | --- |
+| 视频 | 抖音、快手、小红书、Bilibili、视频号、百家号、大鱼号、知乎、YouTube 等；CLI 示例见下方和[CLI 使用说明](./docs/CLI.md) |
+| 文章 | 大鱼号[文章发布](./docs/dayu-article.md)、雪球[长文与配图](./docs/xueqiu.md)、知乎[文章与视频 Skill](./skills/zhihu-upload/SKILL.md) |
+| 图文 | 抖音、快手、小红书、Facebook、Facebook Page、Instagram；CLI 示例见[CLI 使用说明](./docs/CLI.md) |
 
 文章主题预览及 Markdown 转 HTML：见 [文章文件与主题渲染](./docs/article.md)。内置 `default/grace/simple/modern/plain` 主题；大鱼号可直接接收 Markdown，并将主题转换为保留文字颜色、背景和近似字号的兼容排版，圆角和精确间距等效果可能与本地预览不同。
 
@@ -119,14 +139,14 @@ AI的发展毋庸置疑，希望你遇到这种安装和使用，不要再怯场
 
 - [Agent Bootstrap Prompt](./docs/agent-bootstrap.md)
 
-这份提示词会引导 agent：
+它会引导 Agent：
 
 - 优先按当前主线安装项目
 - 优先使用 `uv`、`sau` CLI 和 `skills/`
 - 先验证 `bilibili`、`douyin`、`kuaishou`、`xiaohongshu` 四个平台入口是否可用
 
 
-### 补充说明：
+相关入口：
 
 - CLI 使用请看：[CLI 使用说明](./docs/CLI.md)
 - 如果你准备在 `OpenClaw`、`Codex`、`Claude Code / cc` 里使用本项目，先看：[Agent Bootstrap Prompt](./docs/agent-bootstrap.md)
@@ -142,99 +162,81 @@ AI的发展毋庸置疑，希望你遇到这种安装和使用，不要再怯场
 - `requirements.txt` 目前主要用于历史兼容路径，普通用户不需要优先使用它
 
 
-## 📣近况说明
-
-`2026.03.24`
-
-最近我的重心一直都在创业上，而且手里还有一些项目没完全跑通，所以这个仓库前面有很长一段时间，我确实没有办法投入特别多精力去持续维护。
-
-这个项目不知不觉已经 `9k+ star` 了，社群里也已经有 `2000+` 小伙伴了。看到它真的在持续帮到大家，我心里还是挺开心的，也是真的很感谢大家一直以来的支持、反馈。
-
-所以我想，决定先停一下，抽一段时间出来，把这个项目好好重构和优化一轮。
-
-接下来这段时间，这个仓库应该会进入一个相对密集更新的阶段。我现在最想先做的事情主要有这几件：
-
-1. 使用更隐蔽、更稳定的自动化方案，尽量降低平台检测风险
-2. 补齐一些常用平台的图文能力，并逐步完成 CLI 化、Skill 化
-3. 陆续测试并上架到更多 skill 平台，让大家的龙虾、螃蟹、毛毛虫都能打通 AI 自媒体的最后一道关
-
-所以如果你之前觉得这个项目更新有点慢，哈哈哈，后面大概率会快很多。也欢迎大家继续关注，最近应该会是一段持续修、持续更、持续重构的阶段。
-
-## 🗂️重构计划
-
-项目正在进行一轮整体重构，当前重构重点是：
-
-- 各平台 uploader 的结构收敛
-- CLI 统一接入
-- 面向 OpenClaw、Codex、 Claude Code 等工具的 skill 化
-- 更换为 `patchright` 驱动，提升兼容性与隐蔽性
-- 主线优先围绕无头模式推进
-
-“无头模式（headless）”，指的是浏览器在后台运行，不弹出可见窗口，但自动化流程仍然会照常执行。这样更适合 CLI、服务端、自动任务和 agent 场景。
-
-Web 端相关代码仍然保留，但已经不是当前主线，不保证可直接运行，也不保证与当前 uploader/CLI 完全同步。
-
-
 ## 🏁快速开始
 
 ### 方式 1：使用 CLI
 
-当前抖音、快手、小红书、Bilibili、视频号、百家号、大鱼号、支付宝生活号、微博、虎扑和 YouTube 已经接入 CLI：
+先按上方平台能力表确认支持范围，再选择下面的内容类型。视频、文章和图文分别使用独立发布命令；文章中的配图仍属于文章正文。
+
+#### 账号准备
+
+每个平台先登录一次，再检查会话。`--account` 是你给本地会话取的名字，例如 `creator`，用于区分多个账号。
 
 ```bash
-sau douyin login --account <account_name>
-sau douyin check --account <account_name>
+sau douyin login --account creator
+sau douyin check --account creator
+# 换成 dayu、xueqiu、zhihu 等平台名称即可；具体登录要求见对应文档。
+```
+
+#### 视频
+
+按平台选择 `upload-video`：
+
+| 平台 | 平台参数 | 发布说明 |
+| --- | --- | --- |
+| 抖音、快手、小红书 | `douyin`、`kuaishou`、`xiaohongshu` | [CLI 参数](./docs/CLI.md) |
+| Bilibili、视频号 | `bilibili`、`tencent` | [CLI 参数](./docs/CLI.md) |
+| 百家号、大鱼号 | `baijiahao`、`dayu` | [大鱼号视频](./docs/dayu.md)、[CLI 参数](./docs/CLI.md) |
+| 支付宝生活号、微博、虎扑 | `alipay`、`weibo`、`hupu` | [CLI 参数](./docs/CLI.md) |
+| YouTube | `youtube` | [CLI 参数](./docs/CLI.md) |
+| Facebook、Facebook Page、Instagram | `facebook`、`facebook-page`、`instagram` | [CLI 参数](./docs/CLI.md) |
+| 知乎 | `zhihu` | [知乎说明与验收范围](./skills/zhihu-upload/SKILL.md)，文章浏览器实测已完成，CLI 视频仍在验收 |
+
+```bash
 sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介"
-sau douyin upload-note --account <account_name> --images videos/1.png videos/2.png --title "图文标题" --note "图文正文"
-
-sau kuaishou login --account <account_name>
-sau kuaishou check --account <account_name>
 sau kuaishou upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介"
-sau kuaishou upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文正文"
-
-sau xiaohongshu login --account <account_name>
-sau xiaohongshu check --account <account_name>
 sau xiaohongshu upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介"
-sau xiaohongshu upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文正文"
-
-sau bilibili login --account <account_name>
-sau bilibili check --account <account_name>
 sau bilibili upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tid 249
-
-sau tencent login --account <account_name>
-sau tencent check --account <account_name>
 sau tencent upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2
-
-sau baijiahao login --account <account_name>
-sau baijiahao check --account <account_name>
 sau baijiahao upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2
-
-sau dayu login --account <account_name> --expected-name "你的大鱼号名称"
-sau dayu check --account <account_name>
-sau dayu upload-article --account <account_name> --title "如何阅读作品数据面板" --content-file examples/dayu_article.html --source "无需标注" --cover-indices 1
-
-sau alipay login --account <account_name>
-sau alipay check --account <account_name>
 sau alipay upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2
-
-sau weibo login --account <account_name>
-sau weibo check --account <account_name>
 sau weibo upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2
-
-sau hupu login --account <account_name>
-sau hupu check --account <account_name>
 sau hupu upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2
-
-sau youtube login --account <account_name>
-sau youtube check --account <account_name>
 sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags tag1,tag2 --playlist "我的系列" --visibility public
-
-sau facebook login --account <account_name>
-sau facebook check --account <account_name>
 sau facebook upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --tags Facebook,测试
 sau facebook-page upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --page "我的 Page"
-sau facebook-page upload-note --account <account_name> --images images/1.jpg --title "Page 图文" --note "正文" --page "我的 Page" --schedule "2026-10-21 10:30" --result .local/page-result.json
 ```
+
+#### 文章
+
+文章使用 `upload-article`，正文来自文件，图片应写在原稿对应段落中。支持平台分别如下：
+
+| 平台 | 正文与说明 |
+| --- | --- |
+| 大鱼号 | HTML / Markdown / TXT、正文插图及封面，见[文章发布](./docs/dayu-article.md) |
+| 雪球 | HTML / Markdown / TXT、正文原位置配图及独立封面，见[长文发布](./docs/xueqiu.md) |
+| 知乎 | 文章编辑器，原登录浏览器已验证富文本与段间 PNG 发表；CLI 端到端仍待验证，见[知乎说明与验收范围](./skills/zhihu-upload/SKILL.md) |
+
+```bash
+sau dayu upload-article --account creator --title "如何阅读作品数据面板" --content-file examples/dayu_article.html --source "无需标注" --cover-indices 1
+sau xueqiu upload-article --help
+sau zhihu upload-article --help
+```
+
+#### 图文
+
+图文指独立图片帖、轮播或图片笔记，使用 `upload-note`；支持抖音、快手、小红书、Facebook、Facebook Page 和 Instagram。
+
+```bash
+sau douyin upload-note --account <account_name> --images videos/1.png videos/2.png --title "图文标题" --note "图文正文"
+sau kuaishou upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文正文"
+sau xiaohongshu upload-note --account <account_name> --images videos/1.png videos/2.png videos/3.png --title "图文标题" --note "图文正文"
+sau facebook-page upload-note --account <account_name> --images images/1.jpg --title "Page 图文" --note "正文" --page "我的 Page" --schedule "2026-10-21 10:30" --result .local/page-result.json
+sau facebook upload-note --account creator --images images/1.jpg images/2.jpg --title "图片帖" --note "正文"
+sau instagram upload-note --account creator --images images/1.jpg images/2.jpg --title "图片轮播" --note "正文"
+```
+
+知乎的 `--account` 是本地会话别名，不要求和展示名一致；登录时程序直接读取页面当前身份并保存绑定信息。
 
 Facebook、Facebook Page 和 Instagram 默认使用系统网络直连。网络环境需要代理时，给对应命令显式添加 `--proxy "代理地址"`，或设置 `SAU_FACEBOOK_PROXY`、`SAU_FACEBOOK_PAGE_PROXY`、`SAU_INSTAGRAM_PROXY`；传 `--proxy ""` 可忽略环境变量并直连。
 
@@ -253,7 +255,7 @@ sau article render --content-file examples/article.md --theme modern --output ou
 sau dayu upload-article --account <account_name> --title "如何阅读作品数据面板" --content-file examples/article.md --theme modern --source "无需标注" --cover-indices 1
 ```
 
-`sau article render` 只生成本地 HTML；`sau dayu upload-article` 会实际发表，平台确认发表后即返回成功，不等待审核。HTML/TXT 输入不需要 Node.js，也不使用 `--theme`。大鱼号视频参数和图文格式限制分别见 [视频说明](./docs/dayu.md)、[图文说明](./docs/dayu-article.md)。
+`sau article render` 只生成本地 HTML；`sau dayu upload-article` 会实际发表，平台确认发表后即返回成功，不等待审核。HTML/TXT 输入不需要 Node.js，也不使用 `--theme`。大鱼号视频参数和文章格式限制分别见 [视频说明](./docs/dayu.md)、[文章说明](./docs/dayu-article.md)。
 
 补充说明：
 
@@ -264,6 +266,7 @@ sau dayu upload-article --account <account_name> --title "如何阅读作品数�
 - 视频使用 `title + desc + tags`
 - 抖音、快手、小红书的图片笔记使用 `title + note + tags`
 - 大鱼号文章使用 `title + content-file + source`，正文保存在 HTML、Markdown 或 TXT 文件中
+- 知乎文章、视频仍在开发验收中，具体支持范围与限制见[知乎说明](./skills/zhihu-upload/SKILL.md)
 - Bilibili CLI 不要求用户手动安装 `biliup`
 - 首次运行相关命令时，程序会自动下载 `biliup`
 - 后续运行会自动检查上游 release 并更新

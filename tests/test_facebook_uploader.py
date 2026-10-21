@@ -1,3 +1,4 @@
+import sau_commands.facebook
 import asyncio
 import tempfile
 import unittest
@@ -110,7 +111,7 @@ class FacebookCliTests(unittest.TestCase):
                 "http://proxy.example:8080",
             ]
         )
-        with patch("sau_cli.upload_facebook_video", new=AsyncMock()) as mock_upload:
+        with patch("sau_commands.facebook.upload_facebook_video", new=AsyncMock()) as mock_upload:
             result = asyncio.run(sau_cli.dispatch(args))
 
         self.assertEqual(result, 0)

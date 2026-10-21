@@ -1,3 +1,4 @@
+import sau_commands.instagram
 """Instagram 的业务响应、账号边界和实际 DOM/事件回归。"""
 import asyncio
 import contextlib
@@ -51,7 +52,7 @@ class InstagramContractTests(unittest.TestCase):
             args = sau_cli.build_parser().parse_args(['instagram', action, '--account', 'creator',
                 '--post-url', 'https://www.instagram.com/p/ABC/', '--expected-text', 'caption'])
             operation = AsyncMock(return_value={'status': 'deleted' if action == 'delete' else 'published'})
-            with patch('sau_cli.instagram_post_action', operation), contextlib.redirect_stdout(io.StringIO()):
+            with patch('sau_commands.instagram.instagram_post_action', operation), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(asyncio.run(sau_cli.dispatch(args)), 0)
             self.assertEqual(operation.await_args.kwargs['delete'], action == 'delete')
 
@@ -66,10 +67,10 @@ class InstagramContractTests(unittest.TestCase):
             with patch.object(InstagramUploader, 'upload', uploader), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(asyncio.run(sau_cli.dispatch(args)), 0)
             # 单独核对请求到构造函数的传递，避免只测 parser 丢失后续接线。
-            request = sau_cli.InstagramUploadRequest('creator', 'caption', '', [], video_file=video, thumbnail=cover)
-            with patch('sau_cli.InstagramUploader') as constructor:
+            request = sau_commands.instagram.InstagramUploadRequest('creator', 'caption', '', [], video_file=video, thumbnail=cover)
+            with patch('sau_commands.instagram.InstagramUploader') as constructor:
                 constructor.return_value.upload = AsyncMock(return_value={})
-                asyncio.run(sau_cli.upload_instagram_content(request))
+                asyncio.run(sau_commands.instagram.upload_instagram_content(request))
                 self.assertEqual(constructor.call_args.kwargs['thumbnail'], cover)
             with self.assertRaisesRegex(ValueError, '仅用于视频'):
                 InstagramUploader('unused', title='caption', image_files=[cover], thumbnail=cover)

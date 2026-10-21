@@ -16,12 +16,13 @@
 - `facebook-page`：Meta Business Suite 的 Facebook Page 视频/图文立即或定时发布
 - `dayu`
 - `xueqiu`：HTML/Markdown/TXT 长文、原位置配图及封面，默认实际发表，支持按原作品 ID 查询结果；见 [雪球使用说明](./xueqiu.md)，已实测正式 CLI 发表及后台核验
+- `zhihu`：文章、视频和定时发布；见仓库内 [知乎 Skill](../skills/zhihu-upload/SKILL.md)
 
 文章本地处理命令为 `sau article`，支持主题列表、环境准备和 Markdown/HTML 文件渲染，见 [文章文件与主题渲染](./article.md)。
 
 实现说明：
 
-- `sau_cli.py` 是当前 CLI 的主入口和唯一主要实现文件
+- `sau_cli.py` 负责组装命令和启动执行；`sau_commands/<平台>.py` 各自维护参数、请求数据和执行逻辑，`sau_commands/arguments.py` 维护共用参数规则
 - `sau.exe` 是安装后在 Windows 虚拟环境里自动生成的命令入口，本质上还是调用 `sau_cli.py`
 - 如果需要给 OpenClaw、Codex 等 agent 使用，可参考仓库内 skill：
   - `skills/douyin-upload/`
@@ -59,6 +60,7 @@ sau facebook --help
 sau facebook-page --help
 sau dayu --help
 sau xueqiu --help
+sau zhihu --help
 ```
 
 ## 安装 patchright 浏览器
@@ -84,6 +86,28 @@ sau dayu upload-article --account creator --title "如何阅读作品数据面�
 Markdown 默认主题为 `default`，可选 `default/grace/simple/modern/plain`；HTML/TXT 不使用 `--theme`。主题会自动转换为大鱼号兼容排版，保留文字颜色、背景和近似字号，圆角、字体和间距等效果可能与本地预览不同。确认发表前会检查服务端预览；平台确认最终发表后即返回成功，不等待审核。
 
 视频和文章均支持 `--schedule "YYYY-MM-DD HH:MM"`：北京时间 2 小时后至 7 天内，分钟为 5 的倍数。平台确认原作品和定时安排后即成功，不等待到点。使用结果文件执行 `sau dayu verify --account creator --result "本次结果文件.json"` 可只读核对原作品与时间，勿重新上传。Agent 可使用仓库的 [大鱼号 Skill](../skills/dayu-upload/SKILL.md)。
+
+## 知乎 CLI 子命令
+
+知乎文章已通过原登录浏览器实际发表验证，包含富文本和两张段间 PNG；该次由浏览器工具完成，Python CLI 尚未完成端到端发布验收。视频仍卡在本地文件交接，分类完整菜单及定时尚未完成真实验证。
+
+```powershell
+sau zhihu login --account creator
+sau zhihu check --account creator
+sau zhihu upload-article --account creator --title "知乎文章标题" --content-file examples/article.md --prepare-only
+# 上传素材后导出该表单的全部领域和视频标记；不发表，但可能留下草稿。
+sau zhihu upload-video --account creator --file videos/demo.mp4 --title "知乎视频标题" --originality original --show-options
+# 交互式终端：显示完整领域、视频标记列表，按编号选择。
+sau zhihu upload-video --account creator --file videos/demo.mp4 --title "知乎视频标题" --originality original --prepare-only
+```
+
+`--account` 是本地会话别名，用于区分保存的登录态，与知乎展示名无须相同。知乎登录会读取页面当前身份并保存绑定信息，不再提供没有实际用途的昵称参数。
+
+领域和视频标记取自本次上传后的页面菜单。省略 `--category`、`--video-mark` 时，终端显示全部候选并按编号选择；非交互调用先用 `--show-options` 查看结果 JSON 的 `options`，再传其中的完整值。不存在的选项会列出合法值并报错。删除了未经当前表单证实的 `--category-second`；`--originality` 使用固定 `choices={original,reprint}`。
+
+文章复用仓库的 HTML/Markdown/TXT 解析。图片写在原稿里，例如 `![配图](images/1.png)`，相对路径从原稿目录解析；不再提供统一追加到末尾的 `--images`。提交前核对文字、图片位置、基本格式和链接。Markdown 首次使用先执行 `sau article setup`。目前不保证知乎保留自定义主题 CSS。
+
+`--prepare-only` 不点击发布，但平台可能自动保存草稿。更多输入限制和验收状态见 [知乎 Skill](../skills/zhihu-upload/SKILL.md)。
 
 ## 抖音 CLI 子命令
 
