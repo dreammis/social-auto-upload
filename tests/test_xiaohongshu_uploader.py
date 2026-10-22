@@ -218,6 +218,21 @@ class XiaohongshuUploaderTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 asyncio.run(app.validate_upload_args())
 
+    def test_blank_repost_source_skips_declaration_without_touching_page(self):
+        class UnexpectedPage:
+            def __getattr__(self, name):
+                raise AssertionError(f"blank source must not access Page.{name}")
+
+        for source in (None, "", "  \t "):
+            app = xhs_main.XiaoHongShuBaseUploader(
+                publish_date=0,
+                account_file="synthetic-unused",
+            )
+            if source is not None:
+                app.repost_source = source
+            with self.subTest(source=source):
+                asyncio.run(app.check_original_declaration(UnexpectedPage()))
+
     def test_video_fill_meta_uses_desc_then_first_tag(self):
         app = xhs_main.XiaoHongShuVideo(
             title="标题内容",
