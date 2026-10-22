@@ -2,6 +2,10 @@
 name: zhihu-upload
 description: 使用 social-auto-upload 的 sau CLI 登录知乎、发布文章或视频，并按作品链接核对结果；支持原稿位置配图与视频领域、声明选项。
 license: MIT-0
+slug: social-auto-upload-zhihu-upload
+displayName: 知乎文章与视频发布
+version: 1.0.0
+summary: 使用 sau 登录知乎并发布文章或视频。
 ---
 
 # 知乎文章与视频

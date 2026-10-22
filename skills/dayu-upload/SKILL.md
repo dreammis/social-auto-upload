@@ -2,6 +2,10 @@
 name: dayu-upload
 description: 通过 social-auto-upload 的 sau CLI 完成大鱼号登录、账号核验、视频和文章的立即或定时发布，以及原作品结果查询。文章接收 HTML、Markdown 或 TXT 文件，Markdown 可选择主题。适用于已安装 sau 的环境，无需先阅读上传器源码。
 license: MIT-0
+slug: social-auto-upload-dayu-upload
+displayName: 大鱼号视频与文章发布
+version: 1.0.0
+summary: 发布大鱼号视频和文章，支持定时与结果核验。
 ---
 
 # 大鱼号发布

@@ -2,6 +2,10 @@
 name: meta-upload
 description: 使用 sau CLI 登录 Facebook Page，发布视频或图文、设置北京时间排期、查询原作品并删除。
 license: MIT-0
+slug: social-auto-upload-meta-upload
+displayName: Facebook Page 发布
+version: 1.0.0
+summary: 发布 Facebook Page 视频或图文，并管理排期。
 ---
 
 # Facebook Page 发布与删除

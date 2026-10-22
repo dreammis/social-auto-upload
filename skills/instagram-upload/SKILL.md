@@ -2,6 +2,10 @@
 name: instagram-upload
 description: 使用 sau CLI 在 Instagram 独立网页登录、立即发布 Reels/单图/轮播、核验原作品并移至最近删除。
 license: MIT-0
+slug: social-auto-upload-instagram-upload
+displayName: Instagram 视频与图文发布
+version: 1.0.0
+summary: 发布 Instagram Reels、单图或轮播，并核验作品。
 ---
 
 # Instagram 独立网页发布

@@ -2,6 +2,10 @@
 name: alipay-upload
 description: 使用 social-auto-upload 的 `sau alipay` 登录支付宝生活号并发布视频。Use when 用户要向支付宝生活号发布视频或检查创作账号状态。
 license: MIT-0
+slug: social-auto-upload-alipay-upload
+displayName: 支付宝生活号视频发布
+version: 1.0.0
+summary: 登录支付宝生活号并发布视频，支持封面与合集。
 ---
 
 # 支付宝生活号视频发布

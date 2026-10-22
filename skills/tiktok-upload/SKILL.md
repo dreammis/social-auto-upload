@@ -2,6 +2,10 @@
 name: tiktok-upload
 description: 使用仓库现有 Patchright/Playwright Chrome 上传器登录并发布 TikTok 视频。Use when 用户要发布 TikTok 视频，且当前环境可访问本仓库及其本地 Chrome 配置。
 license: MIT-0
+slug: social-auto-upload-tiktok-upload
+displayName: TikTok 视频发布
+version: 1.0.0
+summary: 使用仓库 Chrome 上传器登录并发布 TikTok 视频。
 ---
 
 # TikTok 视频发布

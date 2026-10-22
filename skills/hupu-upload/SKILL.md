@@ -2,6 +2,10 @@
 name: hupu-upload
 description: 使用 social-auto-upload 的 `sau hupu` 登录虎扑并发布视频，可指定封面。Use when 用户要向虎扑发布视频或检查虎扑账号状态。
 license: MIT-0
+slug: social-auto-upload-hupu-upload
+displayName: 虎扑视频发布
+version: 1.0.0
+summary: 登录虎扑并发布视频，可指定封面。
 ---
 
 # 虎扑视频发布

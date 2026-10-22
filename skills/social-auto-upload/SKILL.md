@@ -2,6 +2,10 @@
 name: social-auto-upload
 description: 为 social-auto-upload 提供总入口，按平台和内容类型选择对应发布流程。Use when 用户要在本仓库支持的平台发布视频、文章或图文，或需要把内容分发到多个指定平台。
 license: MIT-0
+slug: social-auto-upload
+displayName: social-auto-upload 多平台发布入口
+version: 1.0.0
+summary: 按用户指定的平台和内容类型选择发布流程。
 ---
 
 # social-auto-upload 总入口

@@ -2,6 +2,10 @@
 name: baijiahao-upload
 description: 使用 social-auto-upload 的 `sau baijiahao` 登录百家号、检查账号并发布视频。Use when 用户要向百家号发布视频或核验百家号登录状态。
 license: MIT-0
+slug: social-auto-upload-baijiahao-upload
+displayName: 百家号视频发布
+version: 1.0.0
+summary: 登录百家号并发布视频，支持封面和合集。
 ---
 
 # 百家号视频发布

@@ -2,6 +2,10 @@
 name: youtube-upload
 description: 使用 social-auto-upload 的 `sau youtube` 登录 YouTube 并上传、安排定时或设置视频可见范围。Use when 用户要向 YouTube 发布或定时发布视频，或检查 Google/YouTube 登录状态。
 license: MIT-0
+slug: social-auto-upload-youtube-upload
+displayName: YouTube 视频发布
+version: 1.0.0
+summary: 使用 sau 登录 YouTube 并上传或定时发布视频。
 ---
 
 # YouTube 视频发布

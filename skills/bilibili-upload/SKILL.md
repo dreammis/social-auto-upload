@@ -2,6 +2,10 @@
 name: bilibili-upload
 description: 当 agent 需要通过已安装的 `sau` CLI 完成 Bilibili 登录、账号校验或视频上传时使用这个 skill。优先使用 `sau bilibili ...`，程序会自动准备 `biliup`，不要求用户手动安装。
 license: MIT-0
+slug: social-auto-upload-bilibili-upload
+displayName: Bilibili 视频发布
+version: 1.0.0
+summary: 登录哔哩哔哩并发布视频，支持分区选择。
 ---
 
 # Bilibili 上传 Skill

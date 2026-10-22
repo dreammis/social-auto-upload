@@ -2,6 +2,10 @@
 name: weibo-upload
 description: 使用 social-auto-upload 的 `sau weibo` 登录微博并发布视频，可指定封面。Use when 用户要向微博发布视频或检查微博账号状态。
 license: MIT-0
+slug: social-auto-upload-weibo-upload
+displayName: 微博视频发布
+version: 1.0.0
+summary: 使用 sau 登录微博并发布视频，可指定封面。
 ---
 
 # 微博视频发布

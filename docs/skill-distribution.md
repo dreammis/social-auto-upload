@@ -34,7 +34,7 @@
 | skills.sh | 直接从 GitHub 安装：`npx skills add dreammis/social-auto-upload --skill <skill-name>` | 源已公开；无单独上传表单，等待索引器更新。安装统计来自 Skills CLI，维护者不应通过自装制造安装量 |
 | SkillsMP | 从公开 GitHub 仓库索引 `SKILL.md` | 源已公开；无独立上传，等待索引器收录 |
 | SkillHub.space | 网页上传，或用 `shsc publish` 发布 | 尚未提交；需要该站点账号，发布后核对审核状态 |
-| SkillHub.cn | 网页、CLI 或 Agent 发布 | 尚未提交；个人发布需仓库所有者本人完成实名认证，再经过内容与安全审核 |
+| SkillHub.cn | 网页、CLI 或 Agent 发布 | frontmatter 需有 `slug`、`displayName`、`version`、`summary`、`license`；本仓库已补齐。尚未提交；个人发布需仓库所有者本人完成实名认证和 API Token 设置，再经过内容与安全审核 |
 | SkillHub（useskillhub.com） | 申请 Publisher 权限；按 `skillhub.json` 预检、保存草稿，再提交具体版本审核 | 这是带 API、调用权限和运行时契约的注册平台；当前 Markdown Skills 不能直接作为完整服务发布 |
 | ClawHub | 对每个 Skill 目录运行 `clawhub skill publish <path>` | 18 个唯一 slug 的本地 dry-run 已通过，正式提交等待账号设备登录。所有上架内容固定按 MIT-0 分发；根目录 MIT License 仍适用于仓库其他内容 |
 | SkillHub Registry（skillhub.fyi） | 向自己拥有的 Registry 发布 | 属于 Registry/包服务，不是面向所有用户的公共发现目录；本次不作为公共市场渠道 |
@@ -61,7 +61,7 @@ npx skills add dreammis/social-auto-upload --skill douyin-upload
 新增平台时，在同一个 PR 完成以下更新：
 
 - 新增或更新 `skills/<platform>-upload/SKILL.md`；若无 CLI，写清楚实际入口和依赖，不编造命令
-- 在 Skill frontmatter 中写明许可证；上架 ClawHub 前确认有权按 MIT-0 发布
+- 在 Skill frontmatter 中写明 `license`、唯一 `slug`、`displayName`、`version` 和 `summary`；上架 ClawHub 前确认有权按 MIT-0 发布
 - 更新 README 功能表和 17 平台 Skill 链接
 - 更新本页平台映射与渠道状态
 - 更新 `docs/CLI.md`，写清可用命令及不支持的能力

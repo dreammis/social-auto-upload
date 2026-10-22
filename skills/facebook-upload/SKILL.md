@@ -2,6 +2,10 @@
 name: facebook-upload
 description: 使用 sau CLI 登录 Facebook 个人主页，立即发布视频或图文，查询原作品、移至垃圾箱或永久删除。
 license: MIT-0
+slug: social-auto-upload-facebook-upload
+displayName: Facebook 个人主页发布
+version: 1.0.0
+summary: 管理 Facebook 个人主页登录、视频图文发布和作品核验。
 ---
 
 # Facebook 个人主页发布与删除

@@ -2,6 +2,10 @@
 name: xueqiu-upload
 description: 通过 social-auto-upload 的 sau CLI 登录和核验雪球账号，发布 HTML、Markdown 或 TXT 长文，保留原稿段间配图、原生文字结构与独立封面，并查询原作品确认结果。适用于雪球创作者平台，不支持定时或视频。
 license: MIT-0
+slug: social-auto-upload-xueqiu-upload
+displayName: 雪球长文发布
+version: 1.0.0
+summary: 发布雪球 HTML、Markdown 或 TXT 长文并核验结果。
 ---
 
 # 雪球长文
