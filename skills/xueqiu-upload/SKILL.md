@@ -1,11 +1,12 @@
 ---
 name: xueqiu-upload
 description: 通过 social-auto-upload 的 sau CLI 登录和核验雪球账号，发布 HTML、Markdown 或 TXT 长文，保留原稿段间配图、原生文字结构与独立封面，并查询原作品确认结果。适用于雪球创作者平台，不支持定时或视频。
+license: MIT-0
 ---
 
 # 雪球长文
 
-使用仓库现有 `sau xueqiu`，不另写网页上传实现。先检查 `sau xueqiu upload-article --help`。Windows 未加入 PATH 时在仓库根目录使用 `.\.venv\Scripts\sau.exe`。完整输入及结果说明见 [雪球使用说明](../../docs/xueqiu.md)。
+使用仓库现有 `sau xueqiu`，不另写网页上传实现。先检查 `sau xueqiu upload-article --help`。Windows 未加入 PATH 时在仓库根目录使用 `.\.venv\Scripts\sau.exe`。
 
 ## 账号及输入
 
@@ -22,7 +23,7 @@ sau xueqiu upload-article --account <别名> --title "用户标题" --content-fi
 
 命令默认实际发表。仅检查草稿和预览时显式增加 `--prepare-only`；雪球会自动保存远端草稿，重复运行可能创建多份草稿。编辑器若已有内容会拒绝覆盖。无需独立封面时省略 `--cover`。
 
-优先使用 Markdown 原稿；带本地段间配图的完整示例见 [examples/xueqiu_article.md](../../examples/xueqiu_article.md)。首次使用先执行 `sau article setup`。
+优先使用 Markdown 原稿；段间配图用相对原稿路径的 Markdown 图片语法，例如 `![图片说明](images/chart.png)`。首次使用先执行 `sau article setup`。
 
 正式 CLI 已实测原生结构、两张不同的段间图片、独立封面、私人发表及后台原作品查询。沿用用户的操作范围；开发或登录授权本身不等于授权发表测试内容。
 

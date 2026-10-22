@@ -20,23 +20,13 @@
 
 文章本地处理命令为 `sau article`，支持主题列表、环境准备和 Markdown/HTML 文件渲染，见 [文章文件与主题渲染](./article.md)。
 
+面向 Agent 的 Skills 包括一个跨平台总入口和与 17 个平台对应的独立入口，完整清单见 [README 的 AI Agent 区域](../README.md#ai-agent)。TikTok 使用仓库现有 Chrome 上传器，没有 `sau tiktok` 命令；见 [TikTok Skill](../skills/tiktok-upload/SKILL.md)。
+
 实现说明：
 
 - `sau_cli.py` 负责组装命令和启动执行；`sau_commands/<平台>.py` 各自维护参数、请求数据和执行逻辑，`sau_commands/arguments.py` 维护共用参数规则
 - `sau.exe` 是安装后在 Windows 虚拟环境里自动生成的命令入口，本质上还是调用 `sau_cli.py`
-- 如果需要给 OpenClaw、Codex 等 agent 使用，可参考仓库内 skill：
-  - `skills/douyin-upload/`
-  - `skills/kuaishou-upload/`
-  - `skills/xiaohongshu-upload/`
-  - `skills/bilibili-upload/`
-  - `skills/dayu-upload/`
-  - `skills/xueqiu-upload/`
-  - `skills/zhihu-upload/`
-  - `skills/facebook-upload/`
-  - `skills/meta-upload/`
-  - `skills/instagram-upload/`
-
-视频号、百家号和支付宝生活号目前只有 CLI 入口，暂未提供对应的 skill。
+- 如果需要给 OpenClaw、Codex 等 Agent 使用，可安装仓库 `skills/` 下的总入口或任一平台入口；发布渠道和安装方式见 [Skill 分发说明](./skill-distribution.md)。
 
 ## 安装 CLI 入口
 

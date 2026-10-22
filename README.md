@@ -80,15 +80,15 @@ CLI 命令按平台维护在 `sau_commands/`，发布流程位于 `uploader/`。
 | Bilibili | ✅ | ✅ | - | - | ✅ | ✅ | ✅ | 视频发布；运行时自动准备 `biliup` |
 | 小红书（浏览器版） | ✅ | ✅ | - | ✅ | ✅ | ✅ | ✅ | 视频与图文发布 |
 | 快手 | ✅ | ✅ | - | ✅ | ✅ | ✅ | ✅ | 视频与图文发布 |
-| 视频号 | ✅ | ✅ | - | - | ✅ | ✅ | - | 视频发布 |
-| 百家号 | ✅ | ✅ | - | - | - | ✅ | - | 视频发布 |
+| 视频号 | ✅ | ✅ | - | - | ✅ | ✅ | ✅ | 视频发布 |
+| 百家号 | ✅ | ✅ | - | - | - | ✅ | ✅ | 视频发布 |
 | 大鱼号 | ✅ | ✅ | ✅ | - | ✅ | ✅ | ✅ | [视频发布](./docs/dayu.md)；[文章发布](./docs/dayu-article.md)支持 HTML/Markdown/TXT、正文图片和封面 |
-| 支付宝生活号 | ✅ | ✅ | - | - | - | ✅ | - | 视频发布 |
-| 微博 | ✅ | ✅ | - | - | - | ✅ | - | 视频标题最多 30 字 |
-| 虎扑 | ✅ | ✅ | - | - | - | ✅ | - | 视频标题 4–40 字 |
-| TikTok | ✅ | ✅ | - | - | ✅ | - | - | Chrome 版实现 |
+| 支付宝生活号 | ✅ | ✅ | - | - | - | ✅ | ✅ | 视频发布 |
+| 微博 | ✅ | ✅ | - | - | - | ✅ | ✅ | 视频标题最多 30 字 |
+| 虎扑 | ✅ | ✅ | - | - | - | ✅ | ✅ | 视频标题 4–40 字 |
+| TikTok | ✅ | ✅ | - | - | ✅ | - | ✅ | Chrome 版实现；没有 `sau` CLI |
 | 雪球 | ✅ | - | ✅ | - | - | ✅ | ✅ | [长文与配图](./docs/xueqiu.md)：支持 HTML/Markdown/TXT、正文图片和封面 |
-| YouTube | ✅ | ✅ | - | - | 开发中 | ✅ | - | 视频发布 |
+| YouTube | ✅ | ✅ | - | - | 开发中 | ✅ | ✅ | 视频发布 |
 | 知乎 | ✅ | ✅ | ✅ | - | 实验性 | ✅ | ✅ | [文章与视频发布](./skills/zhihu-upload/SKILL.md)，文章支持正文位置配图 |
 | Facebook | ✅ | ✅ | - | ✅ | - | ✅ | ✅ | 支持作品查询、移至回收站及永久删除 |
 | Facebook Page | ✅ | ✅ | - | ✅ | ✅ | ✅ | ✅ | 支持视频与图文定时发布、查询和取消定时 |
@@ -132,8 +132,18 @@ CLI 命令按平台维护在 `sau_commands/`，发布流程位于 `uploader/`。
 
 - [CLI 使用说明](./docs/CLI.md)
 - [Agent Bootstrap Prompt](./docs/agent-bootstrap.md)
-- 平台 Skills：[抖音](./skills/douyin-upload/SKILL.md)、[快手](./skills/kuaishou-upload/SKILL.md)、[小红书](./skills/xiaohongshu-upload/SKILL.md)、[Bilibili](./skills/bilibili-upload/SKILL.md)、[大鱼号](./skills/dayu-upload/SKILL.md)、[雪球](./skills/xueqiu-upload/SKILL.md)、[知乎](./skills/zhihu-upload/SKILL.md)、[Facebook](./skills/facebook-upload/SKILL.md)、[Facebook Page](./skills/meta-upload/SKILL.md)、[Instagram](./skills/instagram-upload/SKILL.md)
+- 跨平台总入口：[social-auto-upload](./skills/social-auto-upload/SKILL.md)
+- 各平台 Skill：[抖音](./skills/douyin-upload/SKILL.md)、[Bilibili](./skills/bilibili-upload/SKILL.md)、[小红书](./skills/xiaohongshu-upload/SKILL.md)、[快手](./skills/kuaishou-upload/SKILL.md)、[视频号](./skills/tencent-upload/SKILL.md)、[百家号](./skills/baijiahao-upload/SKILL.md)、[大鱼号](./skills/dayu-upload/SKILL.md)、[支付宝生活号](./skills/alipay-upload/SKILL.md)、[微博](./skills/weibo-upload/SKILL.md)、[虎扑](./skills/hupu-upload/SKILL.md)、[TikTok](./skills/tiktok-upload/SKILL.md)、[雪球](./skills/xueqiu-upload/SKILL.md)、[YouTube](./skills/youtube-upload/SKILL.md)、[知乎](./skills/zhihu-upload/SKILL.md)、[Facebook](./skills/facebook-upload/SKILL.md)、[Facebook Page](./skills/meta-upload/SKILL.md)、[Instagram](./skills/instagram-upload/SKILL.md)
+- [Skill 分发渠道与发布状态](./docs/skill-distribution.md)
 - [历史 Web 版本说明](./docs/legacy-web.md)
+
+Skill 目录可从 GitHub 安装到兼容 Agent。安装单个 Skill：
+
+```bash
+npx skills add dreammis/social-auto-upload --skill douyin-upload
+```
+
+将 `douyin-upload` 换成总入口或其他平台目录名。各目录对应关系、市场上架方式和状态见 [Skill 分发说明](./docs/skill-distribution.md)；`sau skill install` 不是本项目提供的命令。
 
 
 ## 🏁快速开始
@@ -322,7 +332,9 @@ sau dayu upload-article --account <account_name> --title "如何阅读作品数�
 4.  Push到您的分支 (`git push origin feature/YourFeature`)。
 5.  创建一个 Pull Request。
 
-提交代码或文档前，请确认您有权提交相关内容，并同意这些贡献按照本项目的 MIT License 发布。提交第三方代码时，请同时说明来源及其适用的许可证。
+提交代码或常规文档前，请确认您有权提交相关内容，并同意这些贡献按照本项目的 MIT License 发布。`skills/` 下的 Skill 按各自 frontmatter 声明为 MIT-0；提交第三方内容时，请同时说明来源及其适用的许可证。
+
+新增或修改平台时，请在同一个 PR 更新 CLI 能力表、对应平台 Skill 和分发目录；缺少 CLI 的平台也要说明实际调用入口。GitHub PR 模板包含逐项检查清单，避免实现完成后漏掉 Skill 发布材料。
 
 ## 主要贡献者
 
@@ -342,7 +354,7 @@ sau dayu upload-article --account <account_name> --title "如何阅读作品数�
 
 ## 📜许可证
 
-本项目采用 [MIT License](LICENSE) 开源许可证。除第三方组件外，本项目代码可以在遵守该许可证条款的前提下用于商业软件，包括闭源软件。
+仓库主体采用 [MIT License](LICENSE)。纳入版本控制的 Agent Skills 按各自 `SKILL.md` frontmatter 中声明的许可证发布；当前 18 个产品 Skill 为 MIT-0，以便在要求该许可证的平台分发。该范围不改变仓库其余代码的 MIT License。
 
 ## ⭐Star-History
 

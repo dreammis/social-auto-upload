@@ -1,286 +1,72 @@
-# Skill 分发与发布说明
+# Skill 分发与发布
 
-这份文档是给 `social-auto-upload` 后续做独立 skill 分发时用的。
+## 目录约定
 
-当前仓库已经具备两层能力：
+`skills/` 是 Skills 的源目录，包含一个跨平台总入口和每个平台一个独立入口。CLI 平台的 Skill 使用仓库中的 `sau` 命令；TikTok 没有 CLI，使用本仓库现有的 Chrome 上传器。
 
-- 一个可安装的 CLI：`sau`
-- 一个可被安装到 Codex 的内置 skill：`douyin-cli`
+| 平台 | Skill 目录 | CLI 入口 |
+| --- | --- | --- |
+| 跨平台总入口 | `social-auto-upload` | 按用户指定的平台转到下方入口 |
+| 抖音 | `douyin-upload` | `sau douyin` |
+| Bilibili | `bilibili-upload` | `sau bilibili` |
+| 小红书 | `xiaohongshu-upload` | `sau xiaohongshu` |
+| 快手 | `kuaishou-upload` | `sau kuaishou` |
+| 视频号 | `tencent-upload` | `sau tencent` |
+| 百家号 | `baijiahao-upload` | `sau baijiahao` |
+| 大鱼号 | `dayu-upload` | `sau dayu` |
+| 支付宝生活号 | `alipay-upload` | `sau alipay` |
+| 微博 | `weibo-upload` | `sau weibo` |
+| 虎扑 | `hupu-upload` | `sau hupu` |
+| TikTok | `tiktok-upload` | 无；仓库 Chrome uploader |
+| 雪球 | `xueqiu-upload` | `sau xueqiu` |
+| YouTube | `youtube-upload` | `sau youtube` |
+| 知乎 | `zhihu-upload` | `sau zhihu` |
+| Facebook 个人主页 | `facebook-upload` | `sau facebook` |
+| Facebook Page | `meta-upload` | `sau facebook-page` |
+| Instagram | `instagram-upload` | `sau instagram` |
 
-后续当主流程和 bug 修复完成后，可以再继续做 PyPI 发布、安装优化、以及更多平台的独立 skill。
+## 分发渠道
 
-## 先说结论
+| 渠道 | 上架方式 | 状态与限制 |
+| --- | --- | --- |
+| GitHub 源仓库 | 以公开仓库的 `skills/` 为源；按目录安装 | 仓库为公开源。只有进入公开分支后，外部索引才会看到新增版本 |
+| GitHub Skills CLI | `gh skill publish skills --tag <version>` | CLI 当前为 Preview；dry-run 已通过，会创建 GitHub Release 并引导添加 `agent-skills` topic。是否发独立 Release 需与项目版本发布节奏一致 |
+| skills.sh | 直接从 GitHub 安装：`npx skills add dreammis/social-auto-upload --skill <skill-name>` | 以 GitHub 仓库为来源，无单独上传表单；安装统计来自 Skills CLI。维护者不应通过自装制造安装量 |
+| SkillsMP | 从公开 GitHub 仓库索引 `SKILL.md` | 聚合目录，不是独立上传源；公开提交后等待索引器收录 |
+| SkillHub.space | 网页上传，或用 `shsc publish` 发布 | 原生接受 `SKILL.md`；需要 SkillHub.space 账号，发布后核对审核状态 |
+| SkillHub.cn | 网页、CLI 或 Agent 发布 | 个人发布前须完成实名认证，并通过内容与安全审核；身份认证由仓库所有者本人完成 |
+| SkillHub（useskillhub.com） | 申请 Publisher 权限；按 `skillhub.json` 预检、保存草稿，再提交具体版本审核 | 这是带 API、调用权限和运行时契约的注册平台；当前 Markdown Skills 不能直接作为完整服务发布 |
+| ClawHub | 对每个 Skill 目录运行 `clawhub skill publish <path>` | 所有上架内容固定按 MIT-0 分发，不支持逐 Skill 覆盖；发布需 ClawHub 登录。根目录 MIT License 仍适用于仓库其他内容 |
+| SkillHub Registry（skillhub.fyi） | 向自己拥有的 Registry 发布 | 属于 Registry/包服务，不是面向所有用户的公共发现目录；本次不作为公共市场渠道 |
 
-`skill` 不一定必须是一个 Python 包。
+平台名称相似但账号体系和发布流程不同。本文分别记录 `skillhub.space`、`skillhub.cn`、`useskillhub.com` 与 `skillhub.fyi`，不要把一个站点的登录或 CLI 用到另一个站点。
 
-它可以是：
+当前发布目标共 18 个：跨平台总入口和 17 个平台 Skill。每个 Skill 的许可证写在对应 frontmatter；ClawHub 发布会按 MIT-0 授权。
 
-- 一个 skill 目录
-- 一个独立仓库
-- 一个安装器脚本
-- 一个 Docker 镜像
-- 一个包管理器可安装的分发物
+ClawHub 当前有 4 个同名条目由其他发布者持有：`bilibili-upload`、`douyin-upload`、`tiktok-upload`、`youtube-upload`。发布本仓库版本时，跨平台总入口使用 `social-auto-upload`，其余 Skill 使用 `social-auto-upload-<skill-directory>`，不覆盖他人条目。
 
-但从“别人最快安装和使用”的角度看，最常见、最省事的仍然是：
+## 安装示例
 
-1. 用一个安装包分发真正的运行能力
-2. 用一个 skill 安装动作把 skill 放到 AI 工具的技能目录
-
-对这个项目来说，最推荐的形式是：
-
-- Python 包负责提供 `sau` 命令
-- `sau skill install` 负责把 skill 安装到 `~/.codex/skills/`
-
-也就是：
+从 `skills.sh` CLI 安装总入口或一个平台 Skill：
 
 ```bash
-pip install social-auto-upload
-sau skill install
+npx skills add dreammis/social-auto-upload --skill social-auto-upload
+npx skills add dreammis/social-auto-upload --skill douyin-upload
 ```
 
-## skill 一定要是包吗
+将 `douyin-upload` 换成上表中的目录名。此命令用于安装 GitHub 源；不会安装 Python 项目本身，也不会创建 `sau` 命令。CLI 运行环境仍按 [安装说明](./install.md) 配置。`sau skill install` 并不存在，不要在文档或 Skill 中引用。
 
-不是。
+## 新增平台发布清单
 
-### 1. skill 只是一个目录
+新增平台时，在同一个 PR 完成以下更新：
 
-这是最原始也最常见的形式。
+- 新增或更新 `skills/<platform>-upload/SKILL.md`；若无 CLI，写清楚实际入口和依赖，不编造命令
+- 在 Skill frontmatter 中写明许可证；上架 ClawHub 前确认有权按 MIT-0 发布
+- 更新 README 功能表和 17 平台 Skill 链接
+- 更新本页平台映射与渠道状态
+- 更新 `docs/CLI.md`，写清可用命令及不支持的能力
+- 检查独立安装所需的说明和文件都在对应 Skill 目录内；不要依赖该目录之外的相对路径
+- 检查发布包没有账号文件、Cookie、截图、密钥或本机路径
+- 公开发布前核对该平台的许可、审核、账号和版本要求；记录真实提交结果，未提交或待审核不得标成已上架
 
-通常内容是：
-
-- `SKILL.md`
-- `agents/openai.yaml`
-- `references/`
-- `scripts/`
-
-这种形式本身已经是一个可用 skill 了，不一定需要打包。
-
-问题在于：
-
-- 用户要知道把它复制到哪里
-- 用户要手动安装
-- skill 如果依赖额外脚本或运行时，安装体验会比较差
-
-适合：
-
-- 内部团队
-- 仓库内开发规范
-- 还在快速迭代的 skill
-
-### 2. skill 是一个独立仓库
-
-这也完全成立。
-
-例如：
-
-- 一个仓库专门放 `SKILL.md`
-- 附带 `scripts/install.py`
-- 或者 README 教用户复制到 `~/.codex/skills/`
-
-这种模式的优点是：
-
-- skill 自己独立版本管理
-- 不依赖主业务仓库
-- 可以公开发布
-
-缺点是：
-
-- 用户还是可能要 clone
-- 或者还需要执行安装脚本
-
-适合：
-
-- 想把 skill 当产品独立维护
-- skill 和业务代码已经明显拆开
-
-### 3. skill 跟随一个包分发
-
-这是当前这个项目最适合的方向。
-
-思路是：
-
-- Python 包里内置一份 skill 资源
-- 安装包后即可执行 `sau skill install`
-- CLI 和 skill 一起发版
-
-优点是：
-
-- 用户体验最好
-- skill 和实际命令保持一致
-- 版本对应关系清晰
-- 不需要用户 clone 仓库
-
-适合：
-
-- skill 背后有真实 CLI/SDK/工具
-- 用户最终是要“使用能力”而不只是“阅读说明”
-
-### 4. skill 用 Docker 交付
-
-也可以。
-
-常见方式是：
-
-- Docker 里装好运行环境
-- skill 告诉 AI 通过 `docker run ...` 去执行命令
-
-优点是：
-
-- 环境一致性很好
-- 本地依赖复杂时特别有用
-
-缺点是：
-
-- 用户必须先装 Docker
-- 浏览器自动化、桌面登录、cookie、本地文件挂载都会更复杂
-- 对抖音这种需要本地浏览器交互的流程不一定更友好
-
-对当前项目来说，Docker 更适合：
-
-- 后端服务
-- 批处理任务
-- 服务器环境
-
-不太适合作为“普通用户首次使用抖音登录 skill”的唯一交付方式。
-
-## AI 安装环境、启动脚本、仓库，这些算不算 skill
-
-算，但要区分“skill 本体”和“skill 的安装/运行载体”。
-
-可以这样理解：
-
-- `SKILL.md` 是 skill 本体
-- 仓库、包、Docker、安装脚本，是 skill 的分发和运行载体
-
-所以：
-
-- skill 可以住在仓库里
-- skill 可以被包一起带出去
-- skill 也可以借助 Docker 运行它依赖的环境
-
-只要最终用户能：
-
-1. 安装它
-2. 让 AI 发现它
-3. 真正调用它依赖的能力
-
-那它就是成立的。
-
-## 对这个项目最合适的方案
-
-### 当前推荐方案
-
-第一阶段：
-
-- 继续在这个仓库里修主流程和 bug
-- 保持 `sau` 命令稳定
-- 保持包内 skill 与 CLI 契约一致
-
-第二阶段：
-
-- 打包并发布到 PyPI
-- 用户通过 `pip install social-auto-upload` 安装
-- 用户执行 `sau skill install`
-
-第三阶段：
-
-- 根据需要把更多平台拆成独立 skill
-- 例如 `douyin-cli`、`tencent-cli`、`tiktok-cli`
-
-### 为什么现在不优先做“独立 skill 仓库”
-
-因为当前最核心的问题还不是“skill 放哪”，而是：
-
-- 上传流程是否稳定
-- CLI 契约是否稳定
-- 实际用户安装后能不能跑通
-
-在这些都还在收敛的阶段，先让 skill 随包分发是最稳妥的。
-
-## 未来可选的三种正式发布路线
-
-### 路线 A：PyPI 包 + 包内 skill
-
-用户安装：
-
-```bash
-pip install social-auto-upload
-sau skill install
-```
-
-优点：
-
-- 最容易传播
-- 安装简单
-- 版本管理清晰
-
-这是当前首选路线。
-
-### 路线 B：独立 skill 仓库 + PyPI 包
-
-用户安装能力：
-
-```bash
-pip install social-auto-upload
-```
-
-用户安装 skill：
-
-- clone skill 仓库
-- 或跑 skill 仓库提供的安装脚本
-
-优点：
-
-- skill 可以单独演进
-- 可以给不同 AI 工具维护不同 metadata
-
-缺点：
-
-- 安装链路更长
-
-### 路线 C：Docker + skill
-
-用户：
-
-- 安装 Docker
-- 拉镜像
-- 安装 skill
-- skill 内部调用 docker 命令
-
-优点：
-
-- 依赖环境最稳定
-
-缺点：
-
-- 对本地浏览器自动化和交互式登录不够友好
-
-更适合服务端任务，不是当前首选。
-
-## 当前项目的发布建议
-
-当主流程稳定后，建议按这个顺序走：
-
-1. 先保证 `sau douyin login/check/upload` 真机可用
-2. 验证 `sau skill install` 安装后的 skill 可以被 Codex 正常识别
-3. 本地打 wheel 做一次冷启动安装测试
-4. 再发布 PyPI
-
-建议的最终用户路径是：
-
-```bash
-pip install social-auto-upload
-playwright install chromium
-sau skill install
-sau douyin login --account my-account
-```
-
-## 一句话回答
-
-`skill` 不是必须做成包，但如果你想让别人“最快安装、最少理解成本、最少手工操作”，那就最好让“运行能力”走包分发，让 `skill` 跟着包一起被安装。
-
-对这个项目来说，最佳落地方案不是“只发一个 skill 仓库”，而是：
-
-- `social-auto-upload` 作为可安装包
-- `douyin-cli` 作为包内 skill
-- `sau skill install` 作为安装桥梁
+GitHub PR 模板也包含相同的提醒清单。更改 CLI 参数、登录流程或平台限制时，同步修改对应 Skill，避免 Skill 与实现逐渐失配。
