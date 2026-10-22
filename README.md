@@ -3,6 +3,8 @@
 ![Python](https://img.shields.io/badge/Python-3.10--3.12-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/github/license/dreammis/social-auto-upload)
 ![Release](https://img.shields.io/github/v/release/dreammis/social-auto-upload?display_name=tag)
+[![Agent Skills](https://img.shields.io/badge/Agent%20Skills-18-0D9488?logo=github)](./docs/skill-distribution.md)
+[![skills.sh](https://img.shields.io/badge/skills.sh-Agent%20Skills-4B32C3?logo=github)](https://www.skills.sh/dreammis/social-auto-upload/douyin-upload)
 
 `social-auto-upload` 是一个面向内容创作者和运营者的多平台发布工具，提供统一 CLI 和供 Codex、OpenClaw、Claude Code 等 Agent 使用的 Skill。
 
@@ -134,8 +136,11 @@ CLI 命令按平台维护在 `sau_commands/`，发布流程位于 `uploader/`。
 - [Agent Bootstrap Prompt](./docs/agent-bootstrap.md)
 - 跨平台总入口：[social-auto-upload](./skills/social-auto-upload/SKILL.md)
 - 各平台 Skill：[抖音](./skills/douyin-upload/SKILL.md)、[Bilibili](./skills/bilibili-upload/SKILL.md)、[小红书](./skills/xiaohongshu-upload/SKILL.md)、[快手](./skills/kuaishou-upload/SKILL.md)、[视频号](./skills/tencent-upload/SKILL.md)、[百家号](./skills/baijiahao-upload/SKILL.md)、[大鱼号](./skills/dayu-upload/SKILL.md)、[支付宝生活号](./skills/alipay-upload/SKILL.md)、[微博](./skills/weibo-upload/SKILL.md)、[虎扑](./skills/hupu-upload/SKILL.md)、[TikTok](./skills/tiktok-upload/SKILL.md)、[雪球](./skills/xueqiu-upload/SKILL.md)、[YouTube](./skills/youtube-upload/SKILL.md)、[知乎](./skills/zhihu-upload/SKILL.md)、[Facebook](./skills/facebook-upload/SKILL.md)、[Facebook Page](./skills/meta-upload/SKILL.md)、[Instagram](./skills/instagram-upload/SKILL.md)
-- [Skill 分发渠道与发布状态](./docs/skill-distribution.md)
 - [历史 Web 版本说明](./docs/legacy-web.md)
+
+#### Skill 分发与市场
+
+仓库提供跨平台总入口和各平台独立 Skill。`skills.sh` 已收录[抖音 Skill](https://www.skills.sh/dreammis/social-auto-upload/douyin-upload)；各市场收录、上架方式和新增平台检查清单见[Skill 分发渠道与发布状态](./docs/skill-distribution.md)。
 
 Skill 目录可从 GitHub 安装到兼容 Agent。安装单个 Skill：
 

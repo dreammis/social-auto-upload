@@ -20,7 +20,7 @@
 
 文章本地处理命令为 `sau article`，支持主题列表、环境准备和 Markdown/HTML 文件渲染，见 [文章文件与主题渲染](./article.md)。
 
-面向 Agent 的 Skills 包括一个跨平台总入口和与 17 个平台对应的独立入口，完整清单见 [README 的 AI Agent 区域](../README.md#ai-agent)。TikTok 使用仓库现有 Chrome 上传器，没有 `sau tiktok` 命令；见 [TikTok Skill](../skills/tiktok-upload/SKILL.md)。
+面向 Agent 的 Skills 包括一个跨平台总入口和各已支持平台的独立入口，完整清单见 [README 的 AI Agent 区域](../README.md#ai-agent)。TikTok 使用仓库现有 Chrome 上传器，没有 `sau tiktok` 命令；见 [TikTok Skill](../skills/tiktok-upload/SKILL.md)。
 
 实现说明：
 
