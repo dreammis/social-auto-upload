@@ -1,5 +1,67 @@
 <template>
   <div class="publish-center">
+    <!-- 等待验证码提示 -->
+    <div v-if="verifyRequest && !verifyDialogVisible" class="verify-pending-banner">
+      <el-icon class="verify-pending-icon"><WarningFilled /></el-icon>
+      <span class="verify-pending-text">
+        发布任务正在等待验证码<span v-if="verifyRequest.account_name">（{{ verifyRequest.account_name }}）</span>
+      </span>
+      <el-button type="warning" size="small" @click="openVerifyDialog">输入验证码</el-button>
+    </div>
+
+    <!-- 短信验证码输入弹窗 -->
+    <el-dialog
+      v-model="verifyDialogVisible"
+      title="安全验证"
+      width="460px"
+      class="verify-dialog"
+      :close-on-click-modal="false"
+      @opened="focusVerifyInput"
+      @update:model-value="handleVerifyVisibleChange"
+    >
+      <div v-if="verifyRequest" class="verify-dialog-content">
+        <el-alert
+          v-if="verifyRequest.error"
+          :title="verifyRequest.error"
+          type="error"
+          :closable="false"
+          show-icon
+          class="verify-error"
+        />
+        <p class="verify-tip">{{ verifyRequest.message || '平台要求短信验证，请查看手机短信并输入验证码。' }}</p>
+        <div class="verify-meta">
+          <span v-if="verifyRequest.platform">平台：{{ verifyRequest.platform }}</span>
+          <span v-if="verifyRequest.account_name">账号：{{ verifyRequest.account_name }}</span>
+          <span v-if="verifyRequest.title">任务：{{ verifyRequest.title }}</span>
+        </div>
+        <el-input
+          ref="verifyInputRef"
+          v-model="verifyCode"
+          class="verify-code-input"
+          maxlength="8"
+          placeholder="请输入短信验证码"
+          inputmode="numeric"
+          clearable
+          @keyup.enter="submitVerifyCode"
+        >
+          <template #prepend>验证码</template>
+        </el-input>
+        <p class="verify-hint">验证码提交后会自动填入平台验证窗口并继续发布。</p>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button :loading="verifyResending" @click="resendVerifyCode">重新发送</el-button>
+          <el-button @click="dismissVerifyDialog">稍后输入</el-button>
+          <el-button
+            type="primary"
+            :loading="verifySubmitting"
+            :disabled="!verifyCode.trim()"
+            @click="submitVerifyCode"
+          >提交验证</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- Tab管理区域 -->
     <div class="tab-management">
       <div class="tab-header">
@@ -491,8 +553,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
-import { Upload, Plus, Close, Folder } from '@element-plus/icons-vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { Upload, Plus, Close, Folder, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
@@ -996,6 +1058,119 @@ const batchPublish = async () => {
     isCancelled.value = false
   }
 }
+
+// ---- 短信验证码弹窗 ----
+const verifyDialogVisible = ref(false)
+const verifyRequest = ref(null)
+const verifyCode = ref('')
+const verifySubmitting = ref(false)
+const verifyResending = ref(false)
+const verifyInputRef = ref(null)
+const dismissedVerifyId = ref('')
+let verifyPollTimer = null
+
+const focusVerifyInput = () => {
+  setTimeout(() => verifyInputRef.value?.focus?.(), 100)
+}
+
+const handleVerifyVisibleChange = (visible) => {
+  verifyDialogVisible.value = visible
+  if (!visible && verifyRequest.value && !verifySubmitting.value) {
+    dismissedVerifyId.value = verifyRequest.value.id
+  }
+}
+
+const dismissVerifyDialog = () => {
+  if (verifyRequest.value) {
+    dismissedVerifyId.value = verifyRequest.value.id
+  }
+  verifyDialogVisible.value = false
+}
+
+const openVerifyDialog = () => {
+  dismissedVerifyId.value = ''
+  verifyDialogVisible.value = true
+  focusVerifyInput()
+}
+
+const fetchPendingVerify = async () => {
+  try {
+    const res = await http.get('/verify/pending', null, { silent: true })
+    const pending = res.data || null
+    if (!pending) {
+      verifyRequest.value = null
+      if (verifyDialogVisible.value) verifyDialogVisible.value = false
+      return
+    }
+
+    const previous = verifyRequest.value
+    const isNew = !previous || previous.id !== pending.id
+    const errorChanged = Boolean(pending.error) && pending.error !== (previous && previous.error)
+    verifyRequest.value = pending
+
+    if (isNew || errorChanged) {
+      dismissedVerifyId.value = ''
+      verifyCode.value = ''
+      verifyDialogVisible.value = true
+      if (pending.error) ElMessage.error(pending.error)
+    } else if (!verifyDialogVisible.value && dismissedVerifyId.value !== pending.id) {
+      verifyDialogVisible.value = true
+    }
+  } catch (error) {
+    // 后端未启动或接口不可用时保持静默，避免轮询反复弹错
+  }
+}
+
+const submitVerifyCode = async () => {
+  if (!verifyRequest.value || verifySubmitting.value) return
+  const code = verifyCode.value.trim()
+  if (!/^\d{4,8}$/.test(code)) {
+    ElMessage.warning('请输入 4-8 位数字验证码')
+    return
+  }
+
+  verifySubmitting.value = true
+  try {
+    await http.post('/verify/submit', {
+      request_id: verifyRequest.value.id,
+      code
+    })
+    ElMessage.success('验证码已提交，发布任务将继续')
+    verifyDialogVisible.value = false
+    verifyRequest.value = null
+    verifyCode.value = ''
+    setTimeout(fetchPendingVerify, 2500)
+  } catch (error) {
+    console.error('验证码提交失败:', error)
+  } finally {
+    verifySubmitting.value = false
+  }
+}
+
+const resendVerifyCode = async () => {
+  if (!verifyRequest.value || verifyResending.value) return
+  verifyResending.value = true
+  try {
+    await http.post('/verify/resend', { request_id: verifyRequest.value.id })
+    ElMessage.success('已请求重新发送验证码，请稍候查收短信')
+  } catch (error) {
+    console.error('重新发送验证码失败:', error)
+  } finally {
+    verifyResending.value = false
+  }
+}
+
+onMounted(() => {
+  fetchPendingVerify()
+  verifyPollTimer = setInterval(fetchPendingVerify, 3000)
+})
+
+onUnmounted(() => {
+  if (verifyPollTimer) {
+    clearInterval(verifyPollTimer)
+    verifyPollTimer = null
+  }
+})
 </script>
 
 <style lang="scss" scoped>
@@ -1393,6 +1568,61 @@ const batchPublish = async () => {
       justify-content: flex-end;
       gap: 12px;
     }
+  }
+}
+
+// ---- 验证码提示与弹窗 ----
+.verify-pending-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  background-color: #fdf6ec;
+  border: 1px solid #f3d19e;
+  border-radius: 6px;
+  color: #b88230;
+
+  .verify-pending-icon {
+    font-size: 18px;
+    color: #e6a23c;
+  }
+
+  .verify-pending-text {
+    flex: 1;
+    font-size: 14px;
+  }
+}
+
+.verify-dialog-content {
+  .verify-error {
+    margin-bottom: 14px;
+  }
+
+  .verify-tip {
+    margin: 0 0 10px;
+    color: #303133;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .verify-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-bottom: 16px;
+    color: #909399;
+    font-size: 13px;
+  }
+
+  .verify-code-input {
+    width: 100%;
+  }
+
+  .verify-hint {
+    margin: 10px 0 0;
+    color: #909399;
+    font-size: 12px;
   }
 }
 </style>

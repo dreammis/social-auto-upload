@@ -34,11 +34,16 @@ request.interceptors.response.use(
     if (data.code === 200 || data.success) {
       return data
     } else {
-      ElMessage.error(data.msg || data.message || '请求失败')
+      if (!response.config?.silent) {
+        ElMessage.error(data.msg || data.message || '请求失败')
+      }
       return Promise.reject(new Error(data.msg || data.message || '请求失败'))
     }
   },
   (error) => {
+    if (error.config?.silent) {
+      return Promise.reject(error)
+    }
     console.error('响应错误:', error)
     
     // 处理HTTP错误状态码
@@ -71,8 +76,8 @@ request.interceptors.response.use(
 
 // 封装常用的请求方法
 export const http = {
-  get(url, params) {
-    return request.get(url, { params })
+  get(url, params, config = {}) {
+    return request.get(url, { ...config, params })
   },
   
   post(url, data, config = {}) {
