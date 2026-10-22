@@ -29,21 +29,21 @@
 
 | 渠道 | 上架方式 | 状态与限制 |
 | --- | --- | --- |
-| GitHub 源仓库 | 以公开仓库的 `skills/` 为源；按目录安装 | 仓库为公开源。只有进入公开分支后，外部索引才会看到新增版本 |
-| GitHub Skills CLI | `gh skill publish skills --tag <version>` | CLI 当前为 Preview；dry-run 已通过，会创建 GitHub Release 并引导添加 `agent-skills` topic。是否发独立 Release 需与项目版本发布节奏一致 |
-| skills.sh | 直接从 GitHub 安装：`npx skills add dreammis/social-auto-upload --skill <skill-name>` | 以 GitHub 仓库为来源，无单独上传表单；安装统计来自 Skills CLI。维护者不应通过自装制造安装量 |
-| SkillsMP | 从公开 GitHub 仓库索引 `SKILL.md` | 聚合目录，不是独立上传源；公开提交后等待索引器收录 |
-| SkillHub.space | 网页上传，或用 `shsc publish` 发布 | 原生接受 `SKILL.md`；需要 SkillHub.space 账号，发布后核对审核状态 |
-| SkillHub.cn | 网页、CLI 或 Agent 发布 | 个人发布前须完成实名认证，并通过内容与安全审核；身份认证由仓库所有者本人完成 |
+| GitHub 源仓库 | 以公开仓库的 `skills/` 为源；按目录安装 | 已发布到 `main`，提交 `404560e` |
+| GitHub Skills CLI | `gh skill publish skills --tag <version>` | Preview CLI；Release `v1.0.0-skills.1` 已发布，仓库已加 `agent-skills` topic。安装命令：`gh skill install dreammis/social-auto-upload` |
+| skills.sh | 直接从 GitHub 安装：`npx skills add dreammis/social-auto-upload --skill <skill-name>` | 源已公开；无单独上传表单，等待索引器更新。安装统计来自 Skills CLI，维护者不应通过自装制造安装量 |
+| SkillsMP | 从公开 GitHub 仓库索引 `SKILL.md` | 源已公开；无独立上传，等待索引器收录 |
+| SkillHub.space | 网页上传，或用 `shsc publish` 发布 | 尚未提交；需要该站点账号，发布后核对审核状态 |
+| SkillHub.cn | 网页、CLI 或 Agent 发布 | 尚未提交；个人发布需仓库所有者本人完成实名认证，再经过内容与安全审核 |
 | SkillHub（useskillhub.com） | 申请 Publisher 权限；按 `skillhub.json` 预检、保存草稿，再提交具体版本审核 | 这是带 API、调用权限和运行时契约的注册平台；当前 Markdown Skills 不能直接作为完整服务发布 |
-| ClawHub | 对每个 Skill 目录运行 `clawhub skill publish <path>` | 所有上架内容固定按 MIT-0 分发，不支持逐 Skill 覆盖；发布需 ClawHub 登录。根目录 MIT License 仍适用于仓库其他内容 |
+| ClawHub | 对每个 Skill 目录运行 `clawhub skill publish <path>` | 18 个唯一 slug 的本地 dry-run 已通过，正式提交等待账号设备登录。所有上架内容固定按 MIT-0 分发；根目录 MIT License 仍适用于仓库其他内容 |
 | SkillHub Registry（skillhub.fyi） | 向自己拥有的 Registry 发布 | 属于 Registry/包服务，不是面向所有用户的公共发现目录；本次不作为公共市场渠道 |
 
 平台名称相似但账号体系和发布流程不同。本文分别记录 `skillhub.space`、`skillhub.cn`、`useskillhub.com` 与 `skillhub.fyi`，不要把一个站点的登录或 CLI 用到另一个站点。
 
 当前发布目标共 18 个：跨平台总入口和 17 个平台 Skill。每个 Skill 的许可证写在对应 frontmatter；ClawHub 发布会按 MIT-0 授权。
 
-ClawHub 当前有 4 个同名条目由其他发布者持有：`bilibili-upload`、`douyin-upload`、`tiktok-upload`、`youtube-upload`。发布本仓库版本时，跨平台总入口使用 `social-auto-upload`，其余 Skill 使用 `social-auto-upload-<skill-directory>`，不覆盖他人条目。
+ClawHub 当前有 4 个同名条目由其他发布者持有：`bilibili-upload`、`douyin-upload`、`tiktok-upload`、`youtube-upload`。本仓库的跨平台总入口使用 `social-auto-upload`；其余 Skill 使用 `social-auto-upload-<skill-directory>`，不覆盖他人条目。
 
 ## 安装示例
 
