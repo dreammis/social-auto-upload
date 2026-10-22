@@ -96,17 +96,21 @@ def _get_qrcode_utils():
 
 def format_str_for_short_title(origin_title: str) -> str:
     allowed_special_chars = "《》“”:+?%°"
-    filtered_chars = [char if char.isalnum() or char in allowed_special_chars else " " if char == "," else "" for char in origin_title]
-    formatted_string = "".join(filtered_chars)
+    filtered_chars = []
+    for char in origin_title:
+        if char.isalnum() or char in allowed_special_chars:
+            filtered_chars.append(char)
+        elif char in ",，":
+            filtered_chars.append(" ")
+    formatted_string = " ".join("".join(filtered_chars).split())
 
-    # 视频号「短标题」要求 6~16 个字符/汉字；本项目按 >6 且 <16 从严控制在 7~15。
+    # 视频号「短标题」要求 6~16 个字符/汉字。
     formatted_string = formatted_string.strip()
     if len(formatted_string) > 15:
-        formatted_string = formatted_string[:15]
-    if len(formatted_string) < 7:
-        # 不足下限时补足到 7；不能用尾部空格（会被平台 trim 掉导致仍不达标）
-        filler = "，精彩内容分享"
-        formatted_string = (formatted_string + filler)[:7] if formatted_string else "精彩视频内容分享"
+        formatted_string = formatted_string[:15].strip()
+    if len(formatted_string) < 6:
+        filler = "精彩分享"
+        formatted_string = (formatted_string + filler) if formatted_string else "精彩视频内容分享"
 
     return formatted_string
 
@@ -595,10 +599,8 @@ class TencentBaseUploader(BaseVideoUploader):
             pass
         if any("open.weixin.qq.com/connect/qrconnect" in fr.url for fr in page.frames):
             raise RuntimeError("视频号 cookie 已失效（被跳转到登录页），请重新扫码登录后再发布")
-        try:
-            await page.wait_for_load_state("networkidle", timeout=15000)
-        except Exception:
-            pass
+        # 视频号页面长期保持轮询/长连接，networkidle 往往等满超时才返回。
+        # 上传表单是否就绪由 upload_video_file 轮询 input[type=file] 判断。
         # 注意：get_by_text("发表视频") 会命中一个隐藏的说明 <p>（不可点）；
         # 首页真正可点的入口是 button.weui-desktop-btn。
         publish_entry = page.locator("button.weui-desktop-btn", has_text="发表视频").first
@@ -614,12 +616,8 @@ class TencentBaseUploader(BaseVideoUploader):
             pass
 
         # 上传表单在 micro/content/post/create 这个 iframe 里，domcontentloaded 时它还是空的。
-        # 不等网络静默就去找 input[type=file]，会误报「未找到视频号文件上传框」——
-        # 失败截图上左栏渲染正常、主内容区一片空白，看起来完全不像加载没完成。
-        try:
-            await page.wait_for_load_state("networkidle", timeout=30000)
-        except Exception:
-            pass  # 静默不了就算了，下面还有重试兜底
+        # 不再等 networkidle（页面常有长连接，会白等 30 秒），交给 upload_video_file
+        # 轮询各 frame 的 input[type=file]，表单真正挂载后立即继续。
 
     async def upload_video_file(self, page: Page, file_path: str) -> None:
         async def find_file_input():
@@ -879,62 +877,95 @@ class TencentBaseUploader(BaseVideoUploader):
             except Exception:
                 await asyncio.sleep(2)
 
+    async def _visible_publish_errors(self, page: Page) -> list[str]:
+        selectors = (
+            ".weui-desktop-form__msg, .weui-desktop-form__validator, "
+            "[class*='error-msg'], [class*='error-text'], [class*='form__msg']"
+        )
+        found = []
+        for item in await page.locator(selectors).all():
+            try:
+                if await item.is_visible():
+                    text = (await item.inner_text()).strip()
+                    if text and text not in found:
+                        found.append(text)
+            except Exception:
+                continue
+        return found
+
+    async def _raise_publish_failure(self, page: Page, headline: str) -> None:
+        errors = await self._visible_publish_errors(page)
+        try:
+            shot = Path(BASE_DIR) / "debug_tencent_publish_failed.png"
+            await page.screenshot(path=str(shot), full_page=True)
+            tencent_logger.error(_msg("📸", f"发表失败现场已截图 {shot}"))
+        except Exception:
+            pass
+        detail = "；".join(errors[:3])
+        raise RuntimeError(headline + (f"：{detail}" if detail else ""))
+
     async def submit_publish(self, page: Page) -> None:
         is_draft = getattr(self, "is_draft", False)
-        # 先等待并清理遮罩/弹窗,再等发表按钮出现
-        for wait_round in range(60):
+        publish_btn = None
+        for _ in range(30):
             await self._dismiss_switch_account_dialog(page)
             try:
                 await page.evaluate("""() => document.querySelectorAll('.mask, .changeAccount-dialog, .common-dialog').forEach(e => e.remove())""")
             except Exception:
                 pass
-            publish_btn = page.get_by_role("button", name="发表", exact=True).first if not is_draft else page.get_by_role("button", name="保存草稿").first
+            candidate = page.get_by_role("button", name="发表", exact=True).first if not is_draft else page.get_by_role("button", name="保存草稿").first
             try:
-                if await publish_btn.count() and await publish_btn.is_visible():
+                if await candidate.count() and await candidate.is_visible():
+                    publish_btn = candidate
                     break
             except Exception:
                 pass
             await asyncio.sleep(1)
-        else:
-            tencent_logger.warning(_msg("😵", "60s 内未找到可见的发表/草稿按钮，尝试强制继续"))
-        # 点发表/草稿
-        for attempt in range(20):
+        if publish_btn is None:
+            await self._raise_publish_failure(page, "未找到可用的发表按钮")
+
+        # 先检查平台表单校验，避免对置灰按钮反复点击直到超时。
+        await asyncio.sleep(1)
+        button_class = await publish_btn.get_attribute("class") or ""
+        if await publish_btn.is_disabled() or "weui-desktop-btn_disabled" in button_class:
+            await self._raise_publish_failure(page, "视频号表单校验未通过")
+
+        try:
+            await publish_btn.click(timeout=4000)
+        except Exception:
+            await publish_btn.evaluate("el => el.click()")
+        tencent_logger.info(_msg("🏃", "已点击发表，等待视频号确认..."))
+
+        deadline = time.monotonic() + (30 if is_draft else 60)
+        while time.monotonic() < deadline:
+            await asyncio.sleep(1)
+            current_url = page.url
+            if is_draft and ("post/list" in current_url or "draft" in current_url):
+                tencent_logger.success(_msg("🥳", "视频草稿保存成功"))
+                return
+            if not is_draft and "/post/create" not in current_url:
+                tencent_logger.success(_msg("🥳", "视频发布成功"))
+                return
             try:
-                if await publish_btn.count():
+                if not await publish_btn.is_visible():
+                    tencent_logger.success(_msg("🥳", "视频发布成功（按钮已消失）"))
+                    return
+            except Exception:
+                tencent_logger.success(_msg("🥳", "视频发布成功（表单已关闭）"))
+                return
+            for marker in ("发表成功", "发布成功", "已发表"):
+                locator = page.get_by_text(marker)
+                for index in range(min(await locator.count(), 5)):
                     try:
-                        await publish_btn.click(timeout=4000)
-                    except Exception:
-                        await publish_btn.evaluate("el => el.click()")
-                if is_draft:
-                    await page.wait_for_url("**/post/list**", timeout=5000)
-                    tencent_logger.success(_msg("🥳", "视频草稿保存成功"))
-                else:
-                    # 发表成功后视频号可能跳 /platform（首页）、/post/list 或留在 create 页但按钮消失。
-                    # 综合判断：URL 离开 /post/create 或 发表按钮不再存在。
-                    for _ in range(10):
-                        await asyncio.sleep(1)
-                        cur = page.url
-                        if "/post/create" not in cur:
+                        if await locator.nth(index).is_visible():
                             tencent_logger.success(_msg("🥳", "视频发布成功"))
                             return
-                        if not await publish_btn.count():
-                            tencent_logger.success(_msg("🥳", "视频发布成功（按钮已消失）"))
-                            return
-                    raise Exception("发表后 10s 页面未变化")
-                return
-            except Exception as exc:
-                current_url = page.url
-                if is_draft and ("post/list" in current_url or "draft" in current_url):
-                    tencent_logger.success(_msg("🥳", "视频草稿保存成功"))
-                    return
-                if (not is_draft) and "/post/create" not in current_url:
-                    tencent_logger.success(_msg("🥳", "视频发布成功"))
-                    return
-                if attempt and attempt % 5 == 0:
-                    tencent_logger.warning(_msg("😵", f"发布仍未完成(第{attempt}次)，异常: {str(exc)[:60]}"))
-                tencent_logger.info(_msg("🏃", "视频正在发布中..."))
-                await asyncio.sleep(1)
-        raise RuntimeError("发布未在预期时间内完成，请检查发布页面")
+                    except Exception:
+                        continue
+            if await self._visible_publish_errors(page):
+                await self._raise_publish_failure(page, "视频号发表失败")
+
+        await self._raise_publish_failure(page, "视频号发表超时，请检查表单提示")
 
 
 class TencentVideo(TencentBaseUploader):
