@@ -674,9 +674,10 @@ class TencentBaseUploader(BaseVideoUploader):
         await fi.set_input_files(file_path)
 
     async def set_short_title(self, page: Page, title: str, short_title: str | None = None) -> None:
-        # 视频号「短标题」即界面上要求填写的“标题”（那个大编辑区其实是“视频描述”）。
-        # 走 format_str_for_short_title 保证长度落在 7~15，避免发布时被校验拦下。
-        value = format_str_for_short_title(short_title or title)
+        # 短标题可选，只填写调用方明确提供的值。
+        if not short_title:
+            return
+        value = format_str_for_short_title(short_title)
         # 优先用 placeholder 定位（已 dump 验证更稳），兜底旧的“短标题”相邻 input。
         field = page.locator('input[placeholder="填写短标题有机会获得更多流量"]').first
         if not await field.count():
