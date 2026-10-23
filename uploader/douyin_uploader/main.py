@@ -685,7 +685,7 @@ class DouYinVideo(DouYinBaseUploader):
                 """() => {
                     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
                     document.querySelectorAll('.shepherd-element,.shepherd-modal-overlay-container').forEach(e=>e.remove());
-                    document.querySelectorAll('[class*="mention-wrapper"]').forEach(e=>{ const p=e.closest('.semi-portal'); (p||e).remove(); });
+                    document.querySelectorAll('.mention-suggest-mount-dom').forEach(e=>{ const p=e.closest('.semi-portal'); (p||e).remove(); });
                     // 关闭残留的非模态 Semi 浮层 portal（保留模态框，如声明弹窗）
                     document.querySelectorAll('.semi-portal').forEach(e=>{ if(!e.querySelector('.semi-modal, .semi-modal-content')) e.remove(); });
                 }"""
@@ -1072,7 +1072,7 @@ class DouYinVideo(DouYinBaseUploader):
             try:
                 # 移除会拦截发布按钮点击的新手引导/话题下拉浮层
                 await page.evaluate(
-                    "() => { document.querySelectorAll('.shepherd-element, .shepherd-modal-overlay-container, [class*=\"mention-wrapper\"]').forEach(e => e.remove()); }"
+                    "() => { document.querySelectorAll('.shepherd-element, .shepherd-modal-overlay-container, .mention-suggest-mount-dom').forEach(e => e.remove()); }"
                 )
                 # 检测并处理短信验证码弹窗
                 sms_input = page.locator('input[placeholder*="验证码"], input[type="tel"], input[placeholder*="短信"], input[placeholder*="手机号"]').first

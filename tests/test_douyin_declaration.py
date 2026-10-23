@@ -1,5 +1,6 @@
 # Language: 中文
 import asyncio
+import inspect
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -92,6 +93,25 @@ class DouyinDeclarationTests(unittest.TestCase):
 
         context.close.assert_awaited_once()
         browser.close.assert_awaited_once()
+
+
+class DouyinOverlayCleanupTests(unittest.TestCase):
+    def test_cleanup_targets_only_the_topic_suggestion_mount(self):
+        video = DouYinVideo("标题", "/tmp/demo.mp4", [], 0, "/tmp/cookie.json")
+        page = MagicMock()
+        page.keyboard.press = AsyncMock()
+        page.evaluate = AsyncMock()
+        page.wait_for_timeout = AsyncMock()
+
+        asyncio.run(video._clear_blocking_overlays(page))
+
+        cleanup_script = page.evaluate.await_args.args[0]
+        self.assertIn(".mention-suggest-mount-dom", cleanup_script)
+        self.assertNotIn('[class*="mention-wrapper"]', cleanup_script)
+
+        uploader_source = inspect.getsource(DouYinVideo)
+        self.assertNotIn('[class*="mention-wrapper"]', uploader_source)
+        self.assertGreaterEqual(uploader_source.count(".mention-suggest-mount-dom"), 2)
 
 
 if __name__ == "__main__":
