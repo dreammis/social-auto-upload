@@ -8,6 +8,27 @@ from uploader.douyin_uploader.main import DouYinVideo
 
 
 class DouyinDeclarationTests(unittest.TestCase):
+    def test_title_selector_accepts_current_placeholder_variants(self):
+        video = DouYinVideo("标题", "/tmp/demo.mp4", [], 0, "/tmp/cookie.json")
+        title_input = MagicMock()
+        title_input.wait_for = AsyncMock()
+        title_input.fill = AsyncMock()
+        description_editor = MagicMock()
+        description_editor.wait_for = AsyncMock()
+        description_editor.click = AsyncMock()
+        page = MagicMock()
+        page.locator.side_effect = [
+            MagicMock(first=title_input),
+            MagicMock(first=description_editor),
+        ]
+        page.keyboard.press = AsyncMock()
+        page.keyboard.type = AsyncMock()
+
+        asyncio.run(video.fill_title_and_description(page, "标题", "正文"))
+
+        self.assertEqual(page.locator.call_args_list[0].args[0], 'input[placeholder*="作品标题"]')
+        title_input.fill.assert_awaited_once_with("标题")
+
     def test_upload_only_sets_explicit_declaration(self):
         video = DouYinVideo(
             "标题", "/tmp/demo.mp4", [], 0, "/tmp/cookie.json",
