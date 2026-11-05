@@ -974,9 +974,12 @@ class DouYinVideo(DouYinBaseUploader):
         douyin_logger.info(_msg("🥳", "上传前检查通过"))
 
         browser = await playwright.chromium.launch(headless=self.headless, channel="chromium", args=["--no-sandbox", "--disable-blink-features=AutomationControlled"])
+        # patchright 注入的脚本会以 blob worker 跑。抖音上传页的 CSP 不允许 blob，
+        # 上传线程起不来，进度停在 0%，约一分钟后页面显示「上传失败」。
         context = await browser.new_context(
             storage_state=f"{self.account_file}",
             permissions=["geolocation"],
+            bypass_csp=True,
         )
         context = await set_init_script(context)
 
@@ -1236,6 +1239,7 @@ class DouYinNote(DouYinBaseUploader):
         context = await browser.new_context(
             storage_state=f"{self.account_file}",
             permissions=["geolocation"],
+            bypass_csp=True,
         )
         context = await set_init_script(context)
 
