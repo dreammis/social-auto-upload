@@ -187,5 +187,7 @@ db/database.db
 cookiesFile
 uploadFile
 videoFile
+verify_code.txt
+browser_profiles/
 
 /uploader/bilibili_uploader/qrcode.png

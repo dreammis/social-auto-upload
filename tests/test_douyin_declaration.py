@@ -68,30 +68,29 @@ class DouyinDeclarationTests(unittest.TestCase):
         locator = MagicMock()
         locator.set_input_files = AsyncMock()
         locator.count = AsyncMock(return_value=1)
+        locator.wait_for = AsyncMock()
+        locator.first = locator
         page = MagicMock()
         page.goto = AsyncMock()
         page.wait_for_url = AsyncMock()
         page.wait_for_selector = AsyncMock()
+        page.wait_for_timeout = AsyncMock()
         page.locator.return_value = locator
 
         context = MagicMock()
+        context.pages = []
         context.new_page = AsyncMock(return_value=page)
         context.close = AsyncMock(side_effect=OSError("close failed"))
-        browser = MagicMock()
-        browser.new_context = AsyncMock(return_value=context)
-        browser.close = AsyncMock()
-        playwright = MagicMock()
-        playwright.chromium.launch = AsyncMock(return_value=browser)
 
         with (
-            patch.object(douyin_main, "set_init_script", AsyncMock(return_value=context)),
+            patch.object(douyin_main, "launch_douyin_context", AsyncMock(return_value=context)) as launch,
             patch.object(douyin_main.asyncio, "sleep", AsyncMock()),
             self.assertRaisesRegex(RuntimeError, "自主声明"),
         ):
-            asyncio.run(video.upload(playwright))
+            asyncio.run(video.upload(object()))
 
         context.close.assert_awaited_once()
-        browser.close.assert_awaited_once()
+        launch.assert_awaited_once()
 
 
 if __name__ == "__main__":

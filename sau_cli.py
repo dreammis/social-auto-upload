@@ -265,7 +265,13 @@ def resolve_runtime_home() -> Path:
 
 
 def resolve_account_file(platform: str, account_name: str) -> Path:
-    account_file = resolve_runtime_home() / "cookies" / f"{platform}_{account_name}.json"
+    # Tencent account names are sometimes supplied as the full cookie stem
+    # ("tencent_dagaju"). Reuse that profile instead of creating a second one.
+    if platform == "tencent" and account_name.startswith("tencent_"):
+        cookie_stem = account_name
+    else:
+        cookie_stem = f"{platform}_{account_name}"
+    account_file = resolve_runtime_home() / "cookies" / f"{cookie_stem}.json"
     account_file.parent.mkdir(exist_ok=True)
     return account_file
 
@@ -299,8 +305,6 @@ async def login_douyin_account(account_name: str, headless: bool = True) -> dict
 
 async def check_douyin_account(account_name: str) -> bool:
     account_file = resolve_account_file("douyin", account_name)
-    if not account_file.exists():
-        return False
     return await douyin_cookie_auth(str(account_file))
 
 
@@ -365,8 +369,6 @@ async def login_tencent_account(account_name: str, headless: bool = True) -> dic
 
 async def check_tencent_account(account_name: str) -> bool:
     account_file = resolve_account_file("tencent", account_name)
-    if not account_file.exists():
-        return False
     return await tencent_cookie_auth(str(account_file))
 
 
@@ -407,6 +409,26 @@ async def upload_youtube_video(request: YouTubeVideoUploadRequest) -> Path:
 
 
 async def upload_video(request: DouyinVideoUploadRequest) -> Path:
+    if request.account_name == "dagaju":
+        # Also guard callers bypassing the high-level daily publisher.
+        scripts = Path(__file__).resolve().parents[1] / "Scripts"
+        if str(scripts) not in sys.path:
+            sys.path.insert(0, str(scripts))
+        from dageju_autopilot.approval_gate import verify_upload_request
+
+        approved, reason = verify_upload_request(
+            account=request.account_name, video=request.video_file,
+            title=request.title, description=request.description, tags=request.tags,
+            portrait_cover=request.thumbnail_portrait_file or request.thumbnail_file,
+            landscape_cover=request.thumbnail_landscape_file,
+            declaration=request.declaration, collection=request.collection_name,
+            product_link=request.product_link, product_title=request.product_title,
+            scheduled_at=(request.publish_date.strftime(SCHEDULE_FORMAT)
+                          if request.publish_strategy == DOUYIN_PUBLISH_STRATEGY_SCHEDULED
+                          and isinstance(request.publish_date, datetime) else None),
+        )
+        if not approved:
+            raise RuntimeError(f"BLOCKED_APPROVAL_GATE: {reason}")
     account_file = resolve_account_file("douyin", request.account_name)
     is_ready = await douyin_setup(str(account_file), handle=False)
     if not is_ready:
@@ -440,6 +462,8 @@ async def upload_video(request: DouyinVideoUploadRequest) -> Path:
 
 
 async def upload_note(request: DouyinNoteUploadRequest) -> Path:
+    if request.account_name == "dagaju":
+        raise RuntimeError("BLOCKED_APPROVAL_GATE: notes_require_separate_human_approval_flow")
     account_file = resolve_account_file("douyin", request.account_name)
     is_ready = await douyin_setup(str(account_file), handle=False)
     if not is_ready:
@@ -592,6 +616,12 @@ async def upload_bilibili_video(request: BilibiliVideoUploadRequest) -> Path:
 
 
 async def upload_tencent_video(request: TencentVideoUploadRequest) -> Path:
+    if request.account_name == "dagaju":
+        scripts = Path(__file__).resolve().parents[1] / "Scripts"
+        if str(scripts) not in sys.path:
+            sys.path.insert(0, str(scripts))
+        from dageju_autopilot.channels_release_gate import require_approved_upload
+        require_approved_upload(request.account_name, Path(request.video_file).resolve().parent.parent)
     account_file = resolve_account_file("tencent", request.account_name)
     is_ready = await tencent_setup(str(account_file), handle=False)
     if not is_ready:

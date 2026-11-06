@@ -30,6 +30,12 @@ XIAOHONGSHU_PUBLISH_STRATEGY_IMMEDIATE = "immediate"
 XIAOHONGSHU_PUBLISH_STRATEGY_SCHEDULED = "scheduled"
 
 
+def _require_xhs_automation_enabled() -> None:
+    pause_file = Path.home() / ".config/CYeahhOS/xhs-automation.paused"
+    if pause_file.exists():
+        raise RuntimeError(f"小红书自动访问已暂停（平台处罚期间）：{pause_file}")
+
+
 def _build_xhs_creator_url(path: str) -> str:
     base_url = os.getenv(
         XHS_CREATOR_BASE_URL_ENV,
@@ -175,6 +181,7 @@ async def _is_xhs_login_completed(page: Page) -> bool:
 
 
 async def cookie_auth(account_file):
+    _require_xhs_automation_enabled()
     if not os.path.exists(account_file):
         return False
 
@@ -246,6 +253,7 @@ async def xiaohongshu_cookie_gen(
     max_checks: int = 100,
     headless: bool = LOCAL_CHROME_HEADLESS,
 ):
+    _require_xhs_automation_enabled()
     if headless:
         xiaohongshu_logger.info(_msg("🖼️", "小红书登录将以无头模式运行，小人会输出终端二维码并保存本地二维码图片"))
 
@@ -315,6 +323,7 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
         debug: bool = DEBUG_MODE,
         headless: bool = LOCAL_CHROME_HEADLESS,
     ):
+        _require_xhs_automation_enabled()
         self.publish_date = publish_date
         self.account_file = str(account_file)
         self.publish_strategy = publish_strategy

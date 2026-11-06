@@ -13,6 +13,8 @@ config.read('accounts.ini')
 
 
 def sign_local(uri, data=None, a1="", web_session=""):
+    if (pathlib.Path.home() / ".config/CYeahhOS/xhs-automation.paused").exists():
+        raise RuntimeError("小红书自动请求已暂停（账号处罚期间）。")
     for _ in range(10):
         try:
             with sync_playwright() as playwright:

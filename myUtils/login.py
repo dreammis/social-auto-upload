@@ -244,6 +244,8 @@ async def get_ks_cookie(id,status_queue):
 
 # 小红书登录
 async def xiaohongshu_cookie_gen(id,status_queue):
+    if (Path.home() / ".config/CYeahhOS/xhs-automation.paused").exists():
+        raise RuntimeError("小红书自动登录已暂停（账号处罚期间）。")
     url_changed_event = asyncio.Event()
 
     async def on_url_change():
