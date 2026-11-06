@@ -215,6 +215,16 @@ sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title
 
 YouTube 登录需要在浏览器中完成 Google 账号登录，不使用二维码。`--visibility` 可选 `public`、`unlisted` 或 `private`，`--playlist` 可选；传 `--schedule` 时使用 YouTube Studio 的 Schedule 状态并核对日期/时间控件，不传则立即按 `--visibility` 发布。
 
+定时时间按本机时区填写；如需指定 Studio 时区，在 `conf.py` 设置 `YT_SCHEDULE_TIMEZONE`（如 `"Shanghai"`、`"London"`，匹配 Studio 时区列表中的名称；`None` 为“Local Time”）。定时须至少晚于当前时间 15 分钟，填写后会核对 Studio 显示的日期与时间，不一致则不发布。
+
+`--ai-content yes|no` 回答 Studio “Altered or synthetic content（AI 合成或修改内容）”问题，省略则保持平台默认；`--paid-promotion yes|no` 回答付费推广声明，默认 `no`。
+
+```bash
+sau youtube upload-video --account <account_name> --file videos/demo.mp4 --title "定时视频" --schedule "2026-10-21 10:30" --ai-content yes --paid-promotion no
+```
+
+发布时会等待“发布/保存/定时”按钮可用后再点击，自动处理“Publish anyway”（检查仍在进行）和“Got it”（仍在检查内容）弹窗，只有 Studio 确认后才报告成功；否则截图到 `Local_debug/` 并报错，视频通常停留为草稿。目前按钮文字匹配和日期格式（如 `7 Nov 2026`）基于英文界面测试。
+
 ## Facebook CLI 子命令
 
 个人主页使用 `facebook`，Page 使用 `facebook-page`。默认不配置代理，浏览器按系统网络直连。需要代理时可在命令中传 `--proxy "代理地址"`，或设置 `SAU_FACEBOOK_PROXY`、`SAU_FACEBOOK_PAGE_PROXY`；传 `--proxy ""` 可忽略环境变量并直连。账号文件分别保存，首次使用先登录对应入口。
