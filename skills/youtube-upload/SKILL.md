@@ -4,7 +4,7 @@ description: 使用 social-auto-upload 的 `sau youtube` 登录 YouTube 并上�
 license: MIT-0
 slug: social-auto-upload-youtube-upload
 displayName: YouTube 视频发布
-version: 1.0.0
+version: 1.1.0
 summary: 使用 sau 登录 YouTube 并上传或定时发布视频。
 ---
 
@@ -18,6 +18,8 @@ sau youtube check --account creator
 sau youtube upload-video --account creator --file videos/demo.mp4 --title "标题" --desc "简介" --tags tag1,tag2 --visibility public
 ```
 
-标题最多 100 个字符。`--visibility` 可选 `public`、`unlisted`、`private`，默认 `public`；`--thumbnail` 指定封面，`--playlist` 指定已有播放列表。只有用户明确给出定时时间才传 `--schedule "YYYY-MM-DD HH:MM"`；该选项会使用 YouTube Studio 的 Schedule 状态，需核对页面显示的日期与时间。
+标题最多 100 个字符。`--visibility` 可选 `public`、`unlisted`、`private`，默认 `public`；`--thumbnail` 指定封面，`--playlist` 指定已有播放列表。只有用户明确给出定时时间才传 `--schedule "YYYY-MM-DD HH:MM"`；该选项会使用 YouTube Studio 的 Schedule 状态，需核对页面显示的日期与时间；时间按本机时区，或 `conf.py` 中的 `YT_SCHEDULE_TIMEZONE`，且须至少晚于当前 15 分钟。
+
+`--ai-content yes|no` 回答“AI 合成或修改内容”声明，`--paid-promotion yes|no` 回答付费推广声明（默认 `no`）。这两项须由用户决定，不要替用户推断。
 
 发布前再次核对账号、视频、标题、说明、标签、可见范围及立即/定时意图。上传或发布遇到超时时先查 YouTube Studio 中的原视频，不盲目重传。上传成功不等于审核完成或公开视频已可播放。
