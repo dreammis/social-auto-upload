@@ -13,7 +13,6 @@ from patchright.async_api import async_playwright
 
 from conf import BASE_DIR, DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
-from utils.base_social_media import set_init_script
 from utils.login_qrcode import build_login_qrcode_path
 from utils.login_qrcode import decode_qrcode_from_path
 from utils.login_qrcode import print_terminal_qrcode
@@ -120,7 +119,8 @@ async def cookie_auth(account_file):
             browser = await playwright.chromium.launch(**launch_kwargs)
             try:
                 context = await browser.new_context(storage_state=account_file)
-                context = await set_init_script(context)
+                # 注意：不能注入 stealth.min.js —— patchright 已在底层做反检测，
+                # 旧版 stealth.min.js 会干扰抖音上传器的 blob Web Worker，导致分片在 init 后卡死报「上传失败」
                 page = await context.new_page()
                 await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
                 await page.wait_for_timeout(2500)  # 等页面稳定，避免瞬时跳转误判
@@ -279,7 +279,6 @@ async def douyin_cookie_gen(
             browser = await playwright.chromium.launch(headless=headless, channel="chromium")
             context = await browser.new_context()
             should_close_context = True
-        context = await set_init_script(context)
         qrcode_path = None
         result = _build_login_result(False, "failed", "抖音登录失败", account_file)
         try:
@@ -978,7 +977,6 @@ class DouYinVideo(DouYinBaseUploader):
             storage_state=f"{self.account_file}",
             permissions=["geolocation"],
         )
-        context = await set_init_script(context)
 
         page = await context.new_page()
         await page.goto("https://creator.douyin.com/creator-micro/content/upload", wait_until="domcontentloaded", timeout=90000)
@@ -1237,7 +1235,6 @@ class DouYinNote(DouYinBaseUploader):
             storage_state=f"{self.account_file}",
             permissions=["geolocation"],
         )
-        context = await set_init_script(context)
 
         upload_success = False
         try:
