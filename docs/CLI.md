@@ -17,6 +17,7 @@
 - `dayu`
 - `xueqiu`：HTML/Markdown/TXT 长文、原位置配图及封面，默认实际发表，支持按原作品 ID 查询结果；见 [雪球使用说明](./xueqiu.md)，已实测正式 CLI 发表及后台核验
 - `zhihu`：文章、视频和定时发布；见仓库内 [知乎 Skill](../skills/zhihu-upload/SKILL.md)
+- `wechat`：微信公众号图文发布，支持摘要、作者、封面与正文原位置配图；发表末步需管理员扫码验证；见 [微信公众号 Skill](../skills/wechat-upload/SKILL.md)
 
 文章本地处理命令为 `sau article`，支持主题列表、环境准备和 Markdown/HTML 文件渲染，见 [文章文件与主题渲染](./article.md)。
 
@@ -104,6 +105,21 @@ sau zhihu upload-video --account creator --file videos/demo.mp4 --title "知乎�
 文章和视频加 `--prepare-only` 可只填写检查，平台仍可能自动保存草稿。`published` 表示平台确认发表；结果为 `submission_unknown` 时先检查创作中心原作品，勿重复上传。已有链接时用 `sau zhihu verify --account creator --result "本次结果.json"` 核对，视频详情地址可为 `/pin/<作品ID>`。
 
 `--schedule "YYYY-MM-DD HH:MM"` 为实验性选项，按北京时间限制在 30 分钟后至 48 小时内，尚不保证完整排期流程可用。更多用法见 [知乎 Skill](../skills/zhihu-upload/SKILL.md)。
+
+## 微信公众号 CLI 子命令
+
+微信公众号提供图文文章发布，使用 HTML/Markdown/TXT 原稿，正文图片按原稿位置导入。后台 token 属于会话级参数，发布时程序从当前会话重新读取，账号绑定只校验昵称。
+
+```powershell
+sau wechat login --account creator
+sau wechat check --account creator
+sau wechat upload-article --account creator --title "文章标题" --content-file examples/article.md --digest "一句话摘要" --cover "封面.png"
+sau wechat upload-article --account creator --title "文章标题" --content-file examples/article.md --prepare-only
+```
+
+标题最多 64 字，摘要最多 120 字，作者最多 8 字。`--originality` 可选 `none`（不声明，默认）或 `original`（声明原创），按实际创作方式选择。`--no-broadcast` 表示发表但不群发通知，默认开启群发。`--prepare-only` 只填写核对、不发表，会留下远端草稿。
+
+发表会依次处理创作来源声明、发表方式、群发确认弹窗，每步只点一次。公众号公开发表时要求管理员微信扫码验证身份，这一步只能由管理员本人完成；检测到二维码时程序暂停等待，`--qr-timeout` 控制等待秒数。结果状态为 `awaiting_admin_qr` 或 `submission_unknown` 时不要重发，先到后台「已发表」按标题和时间核实。更多用法见 [微信公众号 Skill](../skills/wechat-upload/SKILL.md)。
 
 ## 抖音 CLI 子命令
 

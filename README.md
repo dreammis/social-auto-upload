@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.10--3.12-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/github/license/dreammis/social-auto-upload)
 ![Release](https://img.shields.io/github/v/release/dreammis/social-auto-upload?display_name=tag)
-[![Agent Skills](https://img.shields.io/badge/Agent%20Skills-18-0D9488?logo=github)](./docs/skill-distribution.md)
+[![Agent Skills](https://img.shields.io/badge/Agent%20Skills-19-0D9488?logo=github)](./docs/skill-distribution.md)
 [![skills.sh](https://img.shields.io/badge/skills.sh-Agent%20Skills-4B32C3?logo=github)](https://www.skills.sh/dreammis/social-auto-upload/douyin-upload)
 
 `social-auto-upload` 是一个面向内容创作者和运营者的多平台发布工具，提供统一 CLI 和供 Codex、OpenClaw、Claude Code 等 Agent 使用的 Skill。
@@ -92,6 +92,7 @@ CLI 命令按平台维护在 `sau_commands/`，发布流程位于 `uploader/`。
 | 雪球 | ✅ | - | ✅ | - | - | ✅ | ✅ | [长文与配图](./docs/xueqiu.md)：支持 HTML/Markdown/TXT、正文图片和封面 |
 | YouTube | ✅ | ✅ | - | - | 开发中 | ✅ | ✅ | 视频发布 |
 | 知乎 | ✅ | ✅ | ✅ | - | 实验性 | ✅ | ✅ | [文章与视频发布](./skills/zhihu-upload/SKILL.md)，文章支持正文位置配图 |
+| 微信公众号 | ✅ | - | ✅ | - | - | ✅ | ✅ | [图文发布](./skills/wechat-upload/SKILL.md)：标题、摘要、封面、正文位置配图；发表末步需管理员扫码验证 |
 | Facebook | ✅ | ✅ | - | ✅ | - | ✅ | ✅ | 支持作品查询、移至回收站及永久删除 |
 | Facebook Page | ✅ | ✅ | - | ✅ | ✅ | ✅ | ✅ | 支持视频与图文定时发布、查询和取消定时 |
 | Instagram | ✅ | ✅ | - | ✅ | - | ✅ | ✅ | 支持 Reels、单图与轮播 |
@@ -103,7 +104,7 @@ CLI 命令按平台维护在 `sau_commands/`，发布流程位于 `uploader/`。
 | 内容形态 | 平台与入口 |
 | --- | --- |
 | 视频 | 抖音、快手、小红书、Bilibili、视频号、百家号、大鱼号、知乎、YouTube 等；CLI 示例见下方和[CLI 使用说明](./docs/CLI.md) |
-| 文章 | 大鱼号[文章发布](./docs/dayu-article.md)、雪球[长文与配图](./docs/xueqiu.md)、知乎[文章发布](./skills/zhihu-upload/SKILL.md#文章) |
+| 文章 | 大鱼号[文章发布](./docs/dayu-article.md)、雪球[长文与配图](./docs/xueqiu.md)、知乎[文章发布](./skills/zhihu-upload/SKILL.md#文章)、微信公众号[图文发布](./skills/wechat-upload/SKILL.md#图文发布) |
 | 图文 | 抖音、快手、小红书、Facebook、Facebook Page、Instagram；CLI 示例见[CLI 使用说明](./docs/CLI.md) |
 
 文章主题预览及 Markdown 转 HTML：见 [文章文件与主题渲染](./docs/article.md)。内置 `default/grace/simple/modern/plain` 主题；大鱼号可直接接收 Markdown，并将主题转换为保留文字颜色、背景和近似字号的兼容排版，圆角和精确间距等效果可能与本地预览不同。
@@ -135,7 +136,7 @@ CLI 命令按平台维护在 `sau_commands/`，发布流程位于 `uploader/`。
 - [CLI 使用说明](./docs/CLI.md)
 - [Agent Bootstrap Prompt](./docs/agent-bootstrap.md)
 - 跨平台总入口：[social-auto-upload](./skills/social-auto-upload/SKILL.md)
-- 各平台 Skill：[抖音](./skills/douyin-upload/SKILL.md)、[Bilibili](./skills/bilibili-upload/SKILL.md)、[小红书](./skills/xiaohongshu-upload/SKILL.md)、[快手](./skills/kuaishou-upload/SKILL.md)、[视频号](./skills/tencent-upload/SKILL.md)、[百家号](./skills/baijiahao-upload/SKILL.md)、[大鱼号](./skills/dayu-upload/SKILL.md)、[支付宝生活号](./skills/alipay-upload/SKILL.md)、[微博](./skills/weibo-upload/SKILL.md)、[虎扑](./skills/hupu-upload/SKILL.md)、[TikTok](./skills/tiktok-upload/SKILL.md)、[雪球](./skills/xueqiu-upload/SKILL.md)、[YouTube](./skills/youtube-upload/SKILL.md)、[知乎](./skills/zhihu-upload/SKILL.md)、[Facebook](./skills/facebook-upload/SKILL.md)、[Facebook Page](./skills/meta-upload/SKILL.md)、[Instagram](./skills/instagram-upload/SKILL.md)
+- 各平台 Skill：[抖音](./skills/douyin-upload/SKILL.md)、[Bilibili](./skills/bilibili-upload/SKILL.md)、[小红书](./skills/xiaohongshu-upload/SKILL.md)、[快手](./skills/kuaishou-upload/SKILL.md)、[视频号](./skills/tencent-upload/SKILL.md)、[百家号](./skills/baijiahao-upload/SKILL.md)、[大鱼号](./skills/dayu-upload/SKILL.md)、[支付宝生活号](./skills/alipay-upload/SKILL.md)、[微博](./skills/weibo-upload/SKILL.md)、[虎扑](./skills/hupu-upload/SKILL.md)、[TikTok](./skills/tiktok-upload/SKILL.md)、[雪球](./skills/xueqiu-upload/SKILL.md)、[YouTube](./skills/youtube-upload/SKILL.md)、[知乎](./skills/zhihu-upload/SKILL.md)、[微信公众号](./skills/wechat-upload/SKILL.md)、[Facebook](./skills/facebook-upload/SKILL.md)、[Facebook Page](./skills/meta-upload/SKILL.md)、[Instagram](./skills/instagram-upload/SKILL.md)
 - [历史 Web 版本说明](./docs/legacy-web.md)
 
 #### Skill 分发与市场
@@ -164,7 +165,7 @@ npx skills add dreammis/social-auto-upload --skill douyin-upload
 ```bash
 sau douyin login --account creator
 sau douyin check --account creator
-# 换成 dayu、xueqiu、zhihu 等平台名称即可；具体登录要求见对应文档。
+# 换成 dayu、xueqiu、zhihu、wechat 等平台名称即可；具体登录要求见对应文档。
 ```
 
 #### 视频
@@ -206,11 +207,13 @@ sau facebook-page upload-video --account <account_name> --file videos/demo.mp4 -
 | 大鱼号 | HTML / Markdown / TXT、正文插图及封面，见[文章发布](./docs/dayu-article.md) |
 | 雪球 | HTML / Markdown / TXT、正文原位置配图及独立封面，见[长文发布](./docs/xueqiu.md) |
 | 知乎 | HTML / Markdown / TXT、正文原位置配图，见[文章发布](./skills/zhihu-upload/SKILL.md#文章) |
+| 微信公众号 | HTML / Markdown / TXT、摘要、作者、独立封面与正文原位置配图，见[图文发布](./skills/wechat-upload/SKILL.md#图文发布)；发表末步需管理员扫码验证 |
 
 ```bash
 sau dayu upload-article --account creator --title "如何阅读作品数据面板" --content-file examples/dayu_article.html --source "无需标注" --cover-indices 1
 sau xueqiu upload-article --help
 sau zhihu upload-article --account creator --title "文章标题" --content-file examples/article.md
+sau wechat upload-article --account creator --title "文章标题" --content-file examples/article.md --digest "一句话摘要"
 ```
 
 #### 图文
