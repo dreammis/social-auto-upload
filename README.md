@@ -17,9 +17,19 @@ CLI 命令按平台维护在 `sau_commands/`，发布流程位于 `uploader/`。
 ## 💎 赞助商
 
 <table width="100%">
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://sublyx.org/" target="_blank">
+        <img src="static/sublyx.jpg" alt="Sublyx Sponsor" width="180">
+      </a>
+    </td>
+    <td width="75%" align="left" valign="middle">
+      <a href="https://sublyx.org/" target="_blank">Sublyx</a> 是一家稳定高效的 AI API 聚合网关，支持 OpenAI、Claude、Gemini、Grok、gpt-image-2-2.6 等主流模型，一个 API Key 即可统一接入多模型服务，兼容 Claude Code、Codex、Dsh、Workbuddy、Trae 等常用工具，适合内容创作者、开发者、团队和 Agent 工作流使用。通过 <a href="https://api.sublyx.org/register?aff=TPPJ3ZSGGXSP" target="_blank">链接注册</a>并使用优惠码 <code>SAU</code>，可额外领取 10 刀额度。
+    </td>
+  </tr>
  <tr>
     <td width="25%" align="center" valign="middle">
-      <a href="https://chilltion.com/?ref=1y5k5k">
+      <a href="https://doloffer.com/">
         <img src="static/DolOffer.png" alt="DolOffer Sponsor" width="180">
       </a>
     </td>
@@ -34,19 +44,9 @@ CLI 命令按平台维护在 `sau_commands/`，发布流程位于 `uploader/`。
       </a>
     </td>
     <td width="75%" align="left" valign="middle">
-      轻视AI：一句话生产MG动画，适合知识，科普，讲解，教程，介绍等类型视频的低成本制作，视频矩阵，养号等，成本只有seedance等1%。现在<a href="https://chilltion.com/?ref=1y5k5k">注册</a>送1500积分
+      轻现AI：一句话生产MG动画，适合知识，科普，讲解，教程，介绍等类型视频的低成本制作，视频矩阵，养号等，成本只有seedance等1%。现在<a href="https://chilltion.com/?ref=1y5k5k">注册</a>送1500积分
     </td>
   </tr>
-    <tr>
-        <td width="25%" align="center" valign="middle">
-          <a href="http://t.clawpower.vip/1005">
-            <img src="static/clawpower.png" alt="ClawPower Sponsor" width="180">
-          </a>
-        </td>
-        <td width="75%" align="left" valign="middle">
-          ClawPower 是一家稳定可靠 AI 大模型中转服务商，提供 Claude、GPT、Gemini 60+ 大模型接入。无论是 OpenClaw、Hermes 智能体自动化场景，Claude Code、Codex 编程工具接入，还是公众号、小红书内容创作；都能获得稳定、顺滑、可长期使用的模型服务体验。低至官方价格的 30%，点击<a href="http://t.clawpower.vip/1005">免费领取 5 刀现金</a>体验券
-        </td>
-      </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
       <img src="static/wechat.png" alt="Sponsor Contact" width="150">
