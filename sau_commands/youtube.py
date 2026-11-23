@@ -36,7 +36,14 @@ def register(platform_parsers):
     youtube_upload_video_parser.add_argument("--playlist", help="Optional playlist name to add the video to (for series)")
     youtube_upload_video_parser.add_argument(
         "--visibility", default="public", choices=["public", "unlisted", "private"], help="Video visibility")
-    youtube_upload_video_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help}")
+    youtube_upload_video_parser.add_argument("--schedule", type=schedule_value, help=f"Schedule time in {schedule_help} (local time or conf.YT_SCHEDULE_TIMEZONE; video goes public then)")
+    youtube_upload_video_parser.add_argument(
+        "--paid-promotion", choices=["yes", "no"], default="no",
+        help="YouTube paid promotion question. Default: no. Use yes only for sponsorship/product placement/endorsement.")
+
+    youtube_upload_video_parser.add_argument(
+        "--ai-content", choices=["yes", "no"], default=None,
+        help="Answer YouTube's 'Altered or synthetic content' question (yes = realistic AI used). Omit to leave the default.")
     add_runtime_flags(youtube_upload_video_parser)
 
 
@@ -51,6 +58,8 @@ class YouTubeVideoUploadRequest:
     playlist: str | None = None
     visibility: str = "public"
     schedule: datetime | int = 0
+    ai_content: str | None = None
+    paid_promotion: str | None = None
     debug: bool = True
     headless: bool = False
 
@@ -84,10 +93,17 @@ async def upload_youtube_video(request: YouTubeVideoUploadRequest) -> Path:
         thumbnail_path=str(request.thumbnail_file) if request.thumbnail_file else None,
         playlist=request.playlist,
         visibility=request.visibility,
+        ai_content=request.ai_content,
+        paid_promotion=request.paid_promotion,
         debug=request.debug,
         headless=request.headless,
     )
-    app.set_publish_date(request.schedule)
+    # the YouTube uploader has no set_publish_date (scheduling is unfinished
+    # upstream), so this call crashed every upload. Only schedule when asked, and fail clearly.
+    if request.schedule:
+        if not hasattr(app, "set_publish_date"):
+            raise RuntimeError("YouTube --schedule is not supported by this uploader yet; upload without it.")
+        app.set_publish_date(request.schedule)
     await app.main()
     return account_file
 
@@ -117,6 +133,8 @@ async def run(args):
             playlist=args.playlist,
             visibility=args.visibility,
             schedule=args.schedule or 0,
+            ai_content=getattr(args, "ai_content", None),
+            paid_promotion=getattr(args, "paid_promotion", None),
             debug=args.debug,
             headless=args.headless,
         )

@@ -9,3 +9,6 @@ DEBUG_MODE = True  # default debug behavior
 # connections time out and the (patchright) chromium does NOT use the system proxy.
 # Point this at your local proxy port, e.g. "http://127.0.0.1:7890". None = no proxy.
 YT_PROXY = None
+# Optional time zone for `sau youtube upload-video --schedule`, matched against the
+# names in Studio's time-zone list (e.g. "London", "Shanghai"). None = "Local Time".
+YT_SCHEDULE_TIMEZONE = None
