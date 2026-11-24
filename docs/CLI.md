@@ -17,6 +17,7 @@
 - `dayu`
 - `xueqiu`：HTML/Markdown/TXT 长文、原位置配图及封面，默认实际发表，支持按原作品 ID 查询结果；见 [雪球使用说明](./xueqiu.md)，已实测正式 CLI 发表及后台核验
 - `zhihu`：文章、视频和定时发布；见仓库内 [知乎 Skill](../skills/zhihu-upload/SKILL.md)
+- `uploadpost`：通过 Upload-Post API 发布到海外平台（无需浏览器和 cookie）；见 [Upload-Post](#uploadpost)
 
 文章本地处理命令为 `sau article`，支持主题列表、环境准备和 Markdown/HTML 文件渲染，见 [文章文件与主题渲染](./article.md)。
 
@@ -302,6 +303,52 @@ sau hupu upload-video --account <account_name> --file videos/demo.mp4 --title "�
 
 虎扑当前支持登录、账号检查和视频上传；标题长度要求为 4–40 个字，暂不支持图文上传和 `--schedule`。虎扑登录可能需要在浏览器中完成 QQ 或手机号登录，需要人工查看页面时可以加 `--headed`。
 
+<a name="uploadpost"></a>
+## Upload-Post CLI 子命令（API 版，无需浏览器）
+
+其余平台都是浏览器自动化 + cookie；海外平台还有另一条路：走
+[Upload-Post](https://upload-post.com) 的 API，不用开浏览器、不用存 cookie、
+不会因为对方改版而失效。账号只需在 Upload-Post 后台绑定一次。这是可选的第三方托管服务，
+留空凭证时不影响任何现有流程。
+
+支持平台：TikTok、Instagram、YouTube、Facebook、LinkedIn、X (Twitter)、Threads、
+Pinterest、Bluesky、Reddit、Telegram、Discord、Google Business Profile。
+
+额度（以 [官网价格页](https://upload-post.com/pricing) 为准）：
+
+- 免费版：每月 10 次上传，**按平台计**（一个视频同时发 3 个平台算 3 次），且**不能发 TikTok**。
+- 付费版（Basic 起）不限上传次数，可发 TikTok。
+
+在 `conf.py` 里填上凭证：
+
+```python
+UPLOAD_POST_API_KEY = "你的 API Key"
+UPLOAD_POST_USER = "你的 profile 名称"
+```
+
+```bash
+sau uploadpost check                 # 检查 API Key 和 profile 是否可用
+sau uploadpost platforms             # 列出支持的平台
+sau uploadpost upload-video --file videos/demo.mp4 --title "示例标题" --platforms instagram,youtube
+sau uploadpost upload-video --file videos/demo.mp4 --title "示例标题" --platforms youtube --schedule "2026-03-24 21:30" --timezone Asia/Shanghai
+sau uploadpost status --id <request_id>   # 查询某次发布在各平台的结果
+```
+
+说明：
+
+- 一次请求即可发布到多个平台，`--platforms` 用逗号分隔
+- `--title` 对 YouTube 和 Reddit 是必填，其他平台可省略
+- `--tags` 会以 `#标签` 形式追加到标题末尾
+- `--schedule` 是 `--timezone` 所指时区的当地时间（IANA 名称，如 `Asia/Shanghai`）；不传 `--timezone` 时按 UTC
+- 发布是异步的：`upload-video` 返回 `request_id` 即表示已受理，各平台的最终结果用 `status --id` 查询
+- **结果不确定时不要重发**：如果提交时遇到超时、断线或 5xx，CLI 会提示「结果不确定」并给出 `request_id`
+  （退出码 4）。此时先用 `sau uploadpost status --id <request_id>` 核对，不要重新运行 `upload-video`。
+  每次提交都会带上本地生成的 `request_id` 作为 `Idempotency-Key`，服务端 24 小时内对同一 key 只会创建一次发布
+  （见 [Upload-Post 文档](https://docs.upload-post.com/guides/rate-limits/)），但重新运行 `upload-video` 会生成新的 key
+- 与 `youtube` 子命令的区别：`youtube` 走 Studio 浏览器自动化（因为未过审的 YouTube
+  Data API 项目上传的视频会被强制锁成私有）；Upload-Post 是已过审的服务方，
+  走 API 也能直接公开发布，用户不需要自己去过 Google 的合规审核
+
 ## 登录二维码说明
 
 - 抖音、快手、小红书、视频号、百家号、支付宝生活号、微博和虎扑登录过程中，CLI / uploader 可能会生成临时二维码图片
@@ -312,7 +359,7 @@ sau hupu upload-video --account <account_name> --file videos/demo.mp4 --title "�
 
 ## 定时发布
 
-抖音、快手、小红书、视频号的图文或视频上传、Bilibili 的视频上传，以及大鱼号的视频和文章上传支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到对应平台的定时发布策略；不传则默认立即发布。大鱼号时间固定为北京时间，范围为 2 小时后至 7 天内、5 分钟一档。百家号、支付宝生活号、微博和虎扑当前不支持 `--schedule`。
+抖音、快手、小红书、视频号的图文或视频上传、Bilibili 的视频上传，以及大鱼号的视频和文章上传支持 `--schedule`。只要传了 `--schedule`，CLI 就会自动切换到对应平台的定时发布策略；不传则默认立即发布。大鱼号时间固定为北京时间，范围为 2 小时后至 7 天内、5 分钟一档。百家号、支付宝生活号、微博和虎扑当前不支持 `--schedule`。`uploadpost` 的定时由 Upload-Post 服务端排期，同样用 `--schedule`，时区用 `--timezone` 指定。
 
 ```bash
 sau douyin upload-video --account <account_name> --file videos/demo.mp4 --title "示例标题" --desc "示例简介" --schedule "2026-03-24 21:30"

@@ -95,6 +95,7 @@ CLI 命令按平台维护在 `sau_commands/`，发布流程位于 `uploader/`。
 | Facebook | ✅ | ✅ | - | ✅ | - | ✅ | ✅ | 支持作品查询、移至回收站及永久删除 |
 | Facebook Page | ✅ | ✅ | - | ✅ | ✅ | ✅ | ✅ | 支持视频与图文定时发布、查询和取消定时 |
 | Instagram | ✅ | ✅ | - | ✅ | - | ✅ | ✅ | 支持 Reels、单图与轮播 |
+| Upload-Post（API 版） | API Key | ✅ | - | - | ✅ | ✅ | - | **不用浏览器、不用 cookie**：一个 API Key 发往 TikTok/Instagram/YouTube/X/LinkedIn 等 13 个海外平台；第三方服务，免费版每月 10 次（按平台计）且不含 TikTok，见 [CLI 说明](./docs/CLI.md#uploadpost) |
 
 `✅` 表示支持，`-` 表示不适用或未提供；`开发中`、`实验性` 不计入稳定能力。文章正文可以包含图片，与独立图文发布分列。
 
