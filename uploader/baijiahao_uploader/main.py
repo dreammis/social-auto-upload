@@ -576,9 +576,11 @@ class BaiJiaHaoVideo(BaseVideoUploader):
             if BAIJIAHAO_SUCCESS_URL_PREFIX in url or "/rc/content" in url or "/rc/home" in url:
                 baijiahao_logger.success(_msg("🥳", "视频发布成功"))
                 return
-            # 检查是否出现百度安全验证
+            # 可见模式下给用户时间完成人工安全验证。
             if await page.locator('text="百度安全验证"').count():
-                raise RuntimeError("出现百度安全验证，需人工处理")
+                if await self._wait_for_security_verification(page):
+                    start = time.monotonic()
+                    continue
             # 检查是否有错误提示阻止发布
             error_toast = page.locator('.cheetah-message-error, .cheetah-message-warning').first
             if await error_toast.count() and await error_toast.is_visible():
@@ -591,6 +593,28 @@ class BaiJiaHaoVideo(BaseVideoUploader):
             baijiahao_logger.success(_msg("🥳", "视频发布成功"))
         else:
             raise RuntimeError(f"发布后未跳转到成功页面（30s），当前 URL: {page.url}")
+
+    async def _wait_for_security_verification(
+        self,
+        page: Page,
+        timeout_seconds: float = 300,
+        poll_interval_seconds: float = 1,
+    ) -> bool:
+        verification = page.locator('text="百度安全验证"').first
+        if not await verification.count() or not await verification.is_visible():
+            return False
+        if self.headless:
+            raise RuntimeError("出现百度安全验证，需使用 --headed 人工处理")
+
+        baijiahao_logger.warning(_msg("⚠️", "出现百度安全验证，请在浏览器窗口中完成验证"))
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            if not await verification.count() or not await verification.is_visible():
+                baijiahao_logger.success(_msg("🥳", "百度安全验证已完成，继续确认发布结果"))
+                return True
+            await page.wait_for_timeout(poll_interval_seconds * 1000)
+
+        raise RuntimeError(f"等待百度安全验证超时（{timeout_seconds:g}s）")
 
     async def main(self):
         async with async_playwright() as playwright:
