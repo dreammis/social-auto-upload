@@ -4,6 +4,7 @@ from datetime import datetime
 import asyncio
 import inspect
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from utils.login_qrcode import print_terminal_qrcode
 from utils.login_qrcode import remove_qrcode_file
 from utils.login_qrcode import save_data_url_image
 from utils.log import douyin_logger
+from utils import verify_codes
 
 DOUYIN_PUBLISH_STRATEGY_IMMEDIATE = "immediate"
 DOUYIN_PUBLISH_STRATEGY_SCHEDULED = "scheduled"
@@ -29,7 +31,12 @@ def _msg(emoji: str, text: str) -> str:
     return f"{emoji} {text}"
 
 
-async def _read_verify_code(code_file: str) -> str:
+async def _read_verify_code(code_file: str, request_id: str | None = None) -> str:
+    if request_id:
+        code = verify_codes.poll_code(request_id)
+        if code:
+            return code
+
     if os.path.exists(code_file):
         with open(code_file, encoding="utf-8") as file_obj:
             return file_obj.read().strip()
@@ -746,7 +753,7 @@ class DouYinVideo(DouYinBaseUploader):
                 pass
 
     async def _submit_sms_verify_code(self, page: Page, sms_input, code: str, code_file: str) -> bool:
-        douyin_logger.info(_msg("✍️", f"已获取验证码，准备填入: {code}"))
+        douyin_logger.info(_msg("✍️", "已收到验证码，准备填入验证框"))
         await sms_input.click()
         await sms_input.fill(code)
         douyin_logger.info(_msg("✅", "验证码已填入输入框"))
@@ -1068,6 +1075,8 @@ class DouYinVideo(DouYinBaseUploader):
             await self.set_schedule_time_douyin(page, self.publish_date)
 
         sms_prompt_logged = False
+        sms_request_id = None
+        sms_get_code_clicked = False
         while True:
             try:
                 # 移除会拦截发布按钮点击的新手引导/话题下拉浮层
@@ -1078,19 +1087,71 @@ class DouYinVideo(DouYinBaseUploader):
                 sms_input = page.locator('input[placeholder*="验证码"], input[type="tel"], input[placeholder*="短信"], input[placeholder*="手机号"]').first
                 if await sms_input.count() and await sms_input.is_visible():
                     douyin_logger.warning(_msg("📱", "检测到短信验证码弹窗"))
-                    # 点击「获取验证码」按钮（仅首次）
-                    get_code_btn = page.get_by_text("获取验证码").first
-                    if await get_code_btn.count() and await get_code_btn.is_visible():
-                        await get_code_btn.click()
-                        douyin_logger.info(_msg("📤", "已点击「获取验证码」，请查看手机短信"))
+                    if verify_codes.is_enabled() and not sms_request_id:
+                        request = verify_codes.create_request(
+                            platform="抖音",
+                            account_file=str(self.account_file),
+                        )
+                        sms_request_id = request["id"]
+                        sms_prompt_logged = False
+                        sms_get_code_clicked = False
+                        douyin_logger.warning(_msg("💬", "等待在发布界面输入验证码"))
+                    if sms_request_id and verify_codes.consume_resend(sms_request_id):
+                        sms_get_code_clicked = False
+
+                    # 每个请求只自动点击一次「获取验证码」，避免循环触发短信轰炸。
+                    if not sms_get_code_clicked:
+                        get_code_btn = None
+                        for label in ("重新获取", "重新发送", "再次获取", "获取验证码"):
+                            candidate = page.get_by_text(label, exact=False).first
+                            if not await candidate.count() or not await candidate.is_visible():
+                                continue
+                            candidate_text = (await candidate.inner_text()).strip()
+                            if re.search(r"\d+\s*[sS秒]", candidate_text):
+                                sms_get_code_clicked = True
+                                break
+                            if await candidate.is_enabled():
+                                get_code_btn = candidate
+                            else:
+                                sms_get_code_clicked = True
+                            break
+                        if get_code_btn is not None:
+                            await get_code_btn.click()
+                            sms_get_code_clicked = True
+                            douyin_logger.info(_msg("📤", "已点击「获取验证码」，请查看手机短信"))
+
                     code_file = os.path.join(BASE_DIR, "verify_code.txt")
-                    code = await _read_verify_code(code_file)
+                    code = await _read_verify_code(code_file, sms_request_id)
                     if code:
                         sms_prompt_logged = False
-                        await self._submit_sms_verify_code(page, sms_input, code, code_file)
+                        try:
+                            verified = await self._submit_sms_verify_code(page, sms_input, code, code_file)
+                        except Exception as exc:
+                            douyin_logger.warning(_msg("😵", f"提交验证码失败: {exc}"))
+                            verified = False
+                        if verified:
+                            if sms_request_id:
+                                verify_codes.report_result(sms_request_id, True)
+                            sms_request_id = None
+                            sms_get_code_clicked = False
+                        else:
+                            if sms_request_id:
+                                verify_codes.report_result(
+                                    sms_request_id,
+                                    False,
+                                    "验证码错误或已过期，请在弹窗中重新输入",
+                                )
+                            sms_get_code_clicked = False
                     elif not sms_prompt_logged:
-                        douyin_logger.warning(_msg("⏳", f"等待验证码输入；可在交互终端直接输入，或写入文件: {code_file}"))
+                        if sms_request_id:
+                            douyin_logger.warning(_msg("⏳", "等待网页发布界面输入验证码"))
+                        else:
+                            douyin_logger.warning(_msg("⏳", f"等待验证码输入；可在交互终端直接输入，或写入文件: {code_file}"))
                         sms_prompt_logged = True
+                elif sms_request_id:
+                    verify_codes.report_result(sms_request_id, True)
+                    sms_request_id = None
+                    sms_get_code_clicked = False
 
                 # ── 正常发布流程 ──
                 publish_button = page.get_by_role("button", name="发布", exact=True)

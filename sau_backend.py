@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -13,6 +14,7 @@ from werkzeug.utils import secure_filename
 from conf import BASE_DIR
 from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
 from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs
+from utils import verify_codes
 
 active_queues = {}
 app = Flask(__name__)
@@ -477,6 +479,83 @@ def postVideo():
             "msg": f"发布失败: {str(e)}",
             "data": None
         }), 500
+
+
+def _lookup_verify_account_name(account_file: str) -> str:
+    """Resolve a cookie filename to the account name shown in the UI."""
+    if not account_file:
+        return ""
+    try:
+        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+            row = conn.execute(
+                "SELECT userName FROM user_info WHERE filePath = ?",
+                (Path(account_file).name,),
+            ).fetchone()
+        return str(row[0]) if row and row[0] else ""
+    except Exception:
+        return ""
+
+
+def _verify_request_payload(request_data):
+    if not request_data:
+        return None
+    payload = {
+        key: value
+        for key, value in request_data.items()
+        if key not in ("account_file", "context_id", "code")
+    }
+    if not payload.get("account_name"):
+        payload["account_name"] = _lookup_verify_account_name(
+            request_data.get("account_file", "")
+        )
+    return payload
+
+
+@app.route('/verify/pending', methods=['GET'])
+def verify_pending():
+    pending = verify_codes.latest_pending()
+    return jsonify({
+        "code": 200,
+        "msg": None,
+        "data": _verify_request_payload(pending),
+    }), 200
+
+
+@app.route('/verify/submit', methods=['POST'])
+def verify_submit():
+    data = request.get_json(silent=True) or {}
+    request_id = str(data.get('request_id') or '').strip()
+    code = str(data.get('code') or '').strip()
+    if not request_id:
+        return jsonify({"code": 400, "msg": "缺少验证码请求标识", "data": None}), 400
+    if not re.fullmatch(r"\d{4,8}", code):
+        return jsonify({"code": 400, "msg": "请输入 4-8 位数字验证码", "data": None}), 400
+
+    ok, message = verify_codes.submit_code(request_id, code)
+    if not ok:
+        return jsonify({"code": 409, "msg": message, "data": None}), 409
+    return jsonify({
+        "code": 200,
+        "msg": "验证码已提交",
+        "data": {"request_id": request_id},
+    }), 200
+
+
+@app.route('/verify/resend', methods=['POST'])
+def verify_resend():
+    data = request.get_json(silent=True) or {}
+    request_id = str(data.get('request_id') or '').strip()
+    if not request_id:
+        return jsonify({"code": 400, "msg": "缺少验证码请求标识", "data": None}), 400
+
+    ok, message = verify_codes.request_resend(request_id)
+    if not ok:
+        return jsonify({"code": 409, "msg": message, "data": None}), 409
+    return jsonify({
+        "code": 200,
+        "msg": "已请求重新发送验证码",
+        "data": {"request_id": request_id},
+    }), 200
 
 
 @app.route('/updateUserinfo', methods=['POST'])
