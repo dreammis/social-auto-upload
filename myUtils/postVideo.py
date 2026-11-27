@@ -15,7 +15,7 @@ def post_video_tencent(title,files,tags,account_file,category=TencentZoneTypes.L
     account_file = [Path(BASE_DIR / "cookiesFile" / file) for file in account_file]
     files = [Path(BASE_DIR / "videoFile" / file) for file in files]
     if enableTimer:
-        publish_datetimes = generate_schedule_time_next_day(len(files), videos_per_day, daily_times,start_days)
+        publish_datetimes = generate_schedule_time_next_day(len(files), videos_per_day, daily_times,start_days=start_days)
     else:
         publish_datetimes = [0 for i in range(len(files))]
     for index, file in enumerate(files):
@@ -25,7 +25,7 @@ def post_video_tencent(title,files,tags,account_file,category=TencentZoneTypes.L
             print(f"视频文件名：{file}")
             print(f"标题：{title}")
             print(f"Hashtag：{tags}")
-            app = TencentVideo(title, str(file), tags, publish_datetimes[index], cookie, category, is_draft)
+            app = TencentVideo(title, str(file), tags, publish_datetimes[index], cookie, category, is_draft, publish_strategy="scheduled" if enableTimer else "immediate")
             asyncio.run(app.main(), debug=False)
 
 
@@ -36,7 +36,7 @@ def post_video_DouYin(title,files,tags,account_file,category=TencentZoneTypes.LI
     account_file = [Path(BASE_DIR / "cookiesFile" / file) for file in account_file]
     files = [Path(BASE_DIR / "videoFile" / file) for file in files]
     if enableTimer:
-        publish_datetimes = generate_schedule_time_next_day(len(files), videos_per_day, daily_times,start_days)
+        publish_datetimes = generate_schedule_time_next_day(len(files), videos_per_day, daily_times,start_days=start_days)
     else:
         publish_datetimes = [0 for i in range(len(files))]
     for index, file in enumerate(files):
@@ -46,7 +46,7 @@ def post_video_DouYin(title,files,tags,account_file,category=TencentZoneTypes.LI
             print(f"视频文件名：{file}")
             print(f"标题：{title}")
             print(f"Hashtag：{tags}")
-            app = DouYinVideo(title, str(file), tags, publish_datetimes[index], cookie, thumbnail_path, productLink, productTitle)
+            app = DouYinVideo(title, str(file), tags, publish_datetimes[index], cookie, thumbnail_path, productLink, productTitle, publish_strategy="scheduled" if enableTimer else "immediate")
             asyncio.run(app.douyin_upload_video(), debug=False)
 
 
@@ -55,7 +55,7 @@ def post_video_ks(title,files,tags,account_file,category=TencentZoneTypes.LIFEST
     account_file = [Path(BASE_DIR / "cookiesFile" / file) for file in account_file]
     files = [Path(BASE_DIR / "videoFile" / file) for file in files]
     if enableTimer:
-        publish_datetimes = generate_schedule_time_next_day(len(files), videos_per_day, daily_times,start_days)
+        publish_datetimes = generate_schedule_time_next_day(len(files), videos_per_day, daily_times,start_days=start_days)
     else:
         publish_datetimes = [0 for i in range(len(files))]
     for index, file in enumerate(files):
@@ -74,7 +74,7 @@ def post_video_xhs(title,files,tags,account_file,category=TencentZoneTypes.LIFES
     files = [Path(BASE_DIR / "videoFile" / file) for file in files]
     file_num = len(files)
     if enableTimer:
-        publish_datetimes = generate_schedule_time_next_day(file_num, videos_per_day, daily_times,start_days)
+        publish_datetimes = generate_schedule_time_next_day(file_num, videos_per_day, daily_times,start_days=start_days)
     else:
         publish_datetimes = 0
     for index, file in enumerate(files):
@@ -83,7 +83,7 @@ def post_video_xhs(title,files,tags,account_file,category=TencentZoneTypes.LIFES
             print(f"视频文件名：{file}")
             print(f"标题：{title}")
             print(f"Hashtag：{tags}")
-            app = XiaoHongShuVideo(title, file, tags, publish_datetimes, cookie)
+            app = XiaoHongShuVideo(title, file, tags, publish_datetimes[index] if enableTimer else 0, cookie, publish_strategy="scheduled" if enableTimer else "immediate")
             asyncio.run(app.main(), debug=False)
 
 
