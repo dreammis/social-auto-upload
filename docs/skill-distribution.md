@@ -21,6 +21,7 @@
 | 雪球 | `xueqiu-upload` | `sau xueqiu` |
 | YouTube | `youtube-upload` | `sau youtube` |
 | 知乎 | `zhihu-upload` | `sau zhihu` |
+| 微信公众号 | `wechat-upload` | `sau wechat` |
 | Facebook 个人主页 | `facebook-upload` | `sau facebook` |
 | Facebook Page | `meta-upload` | `sau facebook-page` |
 | Instagram | `instagram-upload` | `sau instagram` |
@@ -45,7 +46,7 @@
 
 平台名称相似但账号体系和发布流程不同。本文分别记录 `skillhub.space`、`skillhub.cn`、`skill.xfyun.cn`、`useskillhub.com` 与 `skillhub.fyi`，不要把一个站点的登录或 CLI 用到另一个站点。
 
-当前发布目标共 18 个：跨平台总入口和 17 个平台 Skill。每个 Skill 的许可证写在对应 frontmatter；ClawHub 发布会按 MIT-0 授权。
+当前发布目标共 19 个：跨平台总入口和 18 个平台 Skill。每个 Skill 的许可证写在对应 frontmatter；ClawHub 发布会按 MIT-0 授权。
 
 ClawHub 当前有 4 个同名条目由其他发布者持有：`bilibili-upload`、`douyin-upload`、`tiktok-upload`、`youtube-upload`。本仓库的跨平台总入口使用 `social-auto-upload`；其余 Skill 使用 `social-auto-upload-<skill-directory>`，不覆盖他人条目。
 
