@@ -119,16 +119,21 @@ async def get_tencent_cookie(id,status_queue):
         page.on('framenavigated',
                 lambda frame: asyncio.create_task(on_url_change()) if frame == page.main_frame else None)
 
-        # 等待 iframe 出现（最多等 60 秒）
-        iframe_locator = page.frame_locator("iframe").first
-
-        # 获取 iframe 中的第一个 img 元素
-        img_locator = iframe_locator.get_by_role("img").first
-
-        # 获取 src 属性值
-        src = await img_locator.get_attribute("src")
-        print("✅ 图片地址:", src)
-        status_queue.put(src)
+        try:
+            iframe_locator = page.frame_locator("iframe").first
+            img_locator = iframe_locator.get_by_role("img").first
+            src = await img_locator.evaluate("el => el.src", timeout=20000)
+            if not src:
+                raise RuntimeError("QR code src is empty")
+            print("QR code URL:", src)
+            status_queue.put(src)
+        except Exception as exc:
+            print(f"Failed to get WeChat Channels QR code: {exc}")
+            status_queue.put("500")
+            await page.close()
+            await context.close()
+            await browser.close()
+            return None
 
         try:
             # 等待 URL 变化或超时
