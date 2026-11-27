@@ -13,7 +13,7 @@ from patchright.async_api import async_playwright
 
 from conf import DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
-from utils.base_social_media import set_init_script
+from utils.base_social_media import get_select_all_shortcut, set_init_script
 from utils.files_times import get_absolute_path
 from utils.login_qrcode import build_login_qrcode_path
 from utils.login_qrcode import decode_qrcode_from_path
@@ -421,7 +421,8 @@ class KSBaseUploader(BaseVideoUploader):
         await asyncio.sleep(2)
 
         # 2. 点击 picker 打开下拉面板
-        await page.locator('input[placeholder="选择日期时间"]').click()
+        schedule_input = page.locator('input[placeholder="选择日期时间"]').first
+        await schedule_input.click()
         await asyncio.sleep(1)
 
         # 3. 用 React 兼容的方式直接设置 input 的 value
@@ -441,14 +442,19 @@ class KSBaseUploader(BaseVideoUploader):
         """
         ok = await page.evaluate(js_code, publish_date_str)
         if not ok:
-            kuaishou_logger.error("❌ 找不到时间选择器输入框")
-            return
+            raise RuntimeError("找不到快手定时发布时间输入框，已中止发布防止误发")
 
         await asyncio.sleep(1)
-        # 4. 按 Enter 确认
+        # 4. 按 Enter 确认并回读校验，防止静默退回立即发布
         await page.keyboard.press("Enter")
         await asyncio.sleep(2)
-        kuaishou_logger.info(f"✅ 定时发布时间已设置为 {publish_date_str}")
+        actual = (await schedule_input.input_value()).strip()
+        expected_prefix = publish_date.strftime("%Y-%m-%d %H:%M")
+        if expected_prefix not in actual:
+            raise RuntimeError(
+                f"快手定时发布时间设置校验失败：期望 {publish_date_str}，实际输入框为 {actual!r}，已中止发布防止误发"
+            )
+        kuaishou_logger.info(f"✅ 定时发布时间已核验为 {actual}")
 
     async def close_guide_overlay(self, page: Page) -> bool:
         """关闭快手创作者平台的 Joyride 引导遮罩。
@@ -665,7 +671,7 @@ class KSVideo(KSBaseUploader):
             await self.close_guide_overlay(page)
             await _focus_desc_editor(page)
             await page.keyboard.press("Backspace")
-            await page.keyboard.press("Control+KeyA")
+            await page.keyboard.press(get_select_all_shortcut())
             await page.keyboard.press("Delete")
             await page.keyboard.type(self.desc or self.title)
             await page.keyboard.press("Enter")
@@ -818,7 +824,7 @@ class KSNote(KSBaseUploader):
         kuaishou_logger.info(_msg("✍️", "小人开始填写图文内容和话题"))
         await _focus_desc_editor(page)
         await page.keyboard.press("Backspace")
-        await page.keyboard.press("Control+KeyA")
+        await page.keyboard.press(get_select_all_shortcut())
         await page.keyboard.press("Delete")
         await page.keyboard.type(self.note)
         await page.keyboard.press("Enter")

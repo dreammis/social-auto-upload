@@ -13,7 +13,7 @@ from patchright.async_api import async_playwright
 
 from conf import DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
-from utils.base_social_media import set_init_script
+from utils.base_social_media import get_select_all_shortcut, set_init_script
 from utils.login_qrcode import build_login_qrcode_path
 from utils.login_qrcode import decode_qrcode_from_path
 from utils.login_qrcode import print_terminal_qrcode
@@ -345,9 +345,16 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
         await page.locator('.custom-switch-card').filter(has_text="定时发布").locator('.d-switch').click()
         await asyncio.sleep(1)
         publish_date_hour = publish_date.strftime("%Y-%m-%d %H:%M")
-        time_input = page.locator('.d-datepicker-input-filter input.d-text')
+        time_input = page.locator('.d-datepicker-input-filter input.d-text').first
         await time_input.fill(str(publish_date_hour))
+        await page.keyboard.press("Enter")
         await asyncio.sleep(1)
+        actual = (await time_input.input_value()).strip()
+        if publish_date_hour not in actual:
+            raise RuntimeError(
+                f"小红书定时发布时间设置校验失败：期望 {publish_date_hour}，实际输入框为 {actual!r}，已中止发布防止误发"
+            )
+        xiaohongshu_logger.success(_msg("⏰", f"小红书定时发布时间已核验: {actual}"))
 
     async def set_location(self, page: Page, location: str = "青岛市"):
         if not location:
@@ -419,7 +426,7 @@ class XiaoHongShuBaseUploader(BaseVideoUploader):
         desc = page.locator('p[data-placeholder*="输入正文描述"]')
         await desc.click()
         await page.keyboard.press("Backspace")
-        await page.keyboard.press("Control+KeyA")
+        await page.keyboard.press(get_select_all_shortcut())
         await page.keyboard.press("Delete")
         await page.keyboard.type(self.desc)
         await page.keyboard.press("Enter")

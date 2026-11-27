@@ -18,7 +18,7 @@ from patchright.async_api import Page, Playwright, async_playwright
 
 from conf import DEBUG_MODE
 from uploader.base_video import BaseVideoUploader
-from utils.base_social_media import set_init_script
+from utils.base_social_media import get_select_all_shortcut, set_init_script
 from utils.log import youtube_logger
 
 try:
@@ -134,7 +134,7 @@ async def _fill_editable(page: Page, selector: str, text: str):
     box = page.locator(selector).first
     await box.wait_for(state="visible", timeout=30000)
     await box.click()
-    await page.keyboard.press("Control+A")
+    await page.keyboard.press(get_select_all_shortcut())
     await page.keyboard.press("Delete")
     try:
         await box.fill(text)            # 一次性灌入，不逐字触发 # 话题自动补全

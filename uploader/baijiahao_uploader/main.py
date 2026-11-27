@@ -20,6 +20,7 @@ from patchright.async_api import Page, Playwright, TimeoutError as PWTimeoutErro
 
 from conf import BASE_DIR, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
+from utils.base_social_media import get_select_all_shortcut
 from utils.log import baijiahao_logger
 from utils.login_qrcode import build_login_qrcode_path, decode_qrcode_from_path, print_terminal_qrcode, remove_qrcode_file
 
@@ -333,7 +334,7 @@ class BaiJiaHaoVideo(BaseVideoUploader):
         title = title[: self.max_title_length]
         # 清空原有内容（可能自动填了文件名），再输入标题
         await title_field.click()
-        await page.keyboard.press("Control+a")
+        await page.keyboard.press(get_select_all_shortcut())
         await page.keyboard.press("Backspace")
         await title_field.fill(title)
         baijiahao_logger.info(_msg("🏷️", f"标题已填写: {title}"))

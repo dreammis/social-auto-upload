@@ -6,7 +6,7 @@ from playwright.async_api import Playwright, async_playwright
 import os
 import asyncio
 from uploader.tk_uploader.tk_config import Tk_Locator
-from utils.base_social_media import set_init_script
+from utils.base_social_media import get_select_all_shortcut, set_init_script
 from utils.files_times import get_absolute_path
 from utils.log import tiktok_logger
 from conf import LOCAL_CHROME_HEADLESS
@@ -191,7 +191,7 @@ class TiktokVideo(object):
 
         await page.keyboard.press("End")
 
-        await page.keyboard.press("Control+A")
+        await page.keyboard.press(get_select_all_shortcut())
 
         await page.keyboard.press("Delete")
 
