@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 from typing import List
 
 from conf import BASE_DIR
@@ -8,6 +9,12 @@ SOCIAL_MEDIA_TENCENT = "tencent"
 SOCIAL_MEDIA_TIKTOK = "tiktok"
 SOCIAL_MEDIA_BILIBILI = "bilibili"
 SOCIAL_MEDIA_KUAISHOU = "kuaishou"
+
+
+def get_select_all_shortcut(platform: str | None = None) -> str:
+    """返回当前系统的全选快捷键（macOS 为 Meta+KeyA，其余为 Control+KeyA）。"""
+    current_platform = platform or sys.platform
+    return "Meta+KeyA" if current_platform == "darwin" else "Control+KeyA"
 
 
 def get_supported_social_media() -> List[str]:

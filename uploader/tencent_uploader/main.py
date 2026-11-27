@@ -16,7 +16,7 @@ from patchright.async_api import async_playwright
 
 from conf import BASE_DIR, DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
-from utils.base_social_media import set_init_script
+from utils.base_social_media import get_select_all_shortcut, set_init_script
 from utils.log import tencent_logger
 
 TENCENT_LOGIN_URL = "https://channels.weixin.qq.com"
@@ -490,6 +490,20 @@ async def weixin_setup(
     )
 
 
+def _matches_tencent_schedule(actual: str, target: datetime) -> bool:
+    """校验视频号定时输入框回读值是否包含目标月日与时分（兼容 YYYY-MM-DD / YYYY年MM月DD日）。"""
+    normalized = actual.strip()
+    date_candidates = (
+        target.strftime("%Y-%m-%d"),
+        f"{target.year}-{target.month}-{target.day}",
+        f"{target.month:02d}-{target.day:02d}",
+        f"{target.month:02d}月{target.day:02d}日",
+        f"{target.month}月{target.day}日",
+    )
+    time_str = target.strftime("%H:%M")
+    return any(date_part in normalized for date_part in date_candidates) and time_str in normalized
+
+
 class TencentBaseUploader(BaseVideoUploader):
     def __init__(
         self,
@@ -567,16 +581,38 @@ class TencentBaseUploader(BaseVideoUploader):
                 await element.click()
                 break
 
-        await page.click('input[placeholder="请选择时间"]')
-        await page.keyboard.press("Control+KeyA")
-        await page.keyboard.type(publish_date.strftime("%H"))
-        await page.keyboard.press("Enter")  # 确认小时并关闭时间下拉
+        time_str = publish_date.strftime("%H:%M")
+        time_input = page.locator('input[placeholder="请选择时间"]').first
+        await time_input.click()
+        await page.keyboard.press(get_select_all_shortcut())
+        await page.keyboard.press("Backspace")
+        await page.keyboard.type(time_str)
+        await page.keyboard.press("Enter")  # 确认时分并关闭时间下拉
         await page.wait_for_timeout(500)
         # 收起时间选择浮层：直接点描述区可能被 weui-desktop-dialog 遮挡，做容错
         try:
             await page.locator("div.input-editor").click(timeout=5000)
         except Exception:
             await page.keyboard.press("Escape")
+
+        main_schedule_input = page.locator('input[placeholder="请选择发表时间"]').first
+        actual = (await main_schedule_input.input_value()).strip()
+        if not _matches_tencent_schedule(actual, publish_date):
+            await main_schedule_input.click()
+            await time_input.fill(time_str)
+            await page.keyboard.press("Enter")
+            await page.wait_for_timeout(500)
+            try:
+                await page.locator("div.input-editor").click(timeout=5000)
+            except Exception:
+                await page.keyboard.press("Escape")
+            actual = (await main_schedule_input.input_value()).strip()
+        if not _matches_tencent_schedule(actual, publish_date):
+            expected = publish_date.strftime("%Y-%m-%d %H:%M")
+            raise RuntimeError(
+                f"视频号定时发布时间设置校验失败：期望 {expected}，实际输入框为 {actual!r}，已中止发表防止误发"
+            )
+        tencent_logger.success(_msg("⏰", f"视频号定时发表时间已核验: {actual}"))
 
     async def open_upload_page(self, page: Page) -> None:
         # 视频号已改版：直接全页加载 /platform/post/create 会被跳回 /platform 首页，

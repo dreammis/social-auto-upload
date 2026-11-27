@@ -13,7 +13,7 @@ from patchright.async_api import async_playwright
 
 from conf import BASE_DIR, DEBUG_MODE, LOCAL_CHROME_HEADLESS, LOCAL_CHROME_PATH
 from uploader.base_video import BaseVideoUploader
-from utils.base_social_media import set_init_script
+from utils.base_social_media import get_select_all_shortcut, set_init_script
 from utils.login_qrcode import build_login_qrcode_path
 from utils.login_qrcode import decode_qrcode_from_path
 from utils.login_qrcode import print_terminal_qrcode
@@ -366,12 +366,26 @@ class DouYinBaseUploader(BaseVideoUploader):
         await asyncio.sleep(1)
         publish_date_hour = publish_date.strftime("%Y-%m-%d %H:%M")
 
-        await asyncio.sleep(1)
-        await page.locator('.semi-input[placeholder="日期和时间"]').click()
-        await page.keyboard.press("Control+KeyA")
+        schedule_input = page.locator('.semi-input[placeholder="日期和时间"]').first
+        await schedule_input.wait_for(state="visible", timeout=15000)
+        await schedule_input.click()
+        await page.keyboard.press(get_select_all_shortcut())
+        await page.keyboard.press("Backspace")
         await page.keyboard.type(str(publish_date_hour))
         await page.keyboard.press("Enter")
         await asyncio.sleep(1)
+
+        actual = (await schedule_input.input_value()).strip()
+        if publish_date_hour not in actual:
+            await schedule_input.fill(str(publish_date_hour))
+            await page.keyboard.press("Enter")
+            await asyncio.sleep(1)
+            actual = (await schedule_input.input_value()).strip()
+        if publish_date_hour not in actual:
+            raise RuntimeError(
+                f"抖音定时发布时间设置校验失败：期望 {publish_date_hour}，实际输入框为 {actual!r}，已中止发布防止误发"
+            )
+        douyin_logger.success(_msg("⏰", f"抖音定时发布时间已核验: {actual}"))
 
     async def fill_title_and_description(self, page: Page, title: str, description: str, tags: list[str] | None = None):
         # 2026-06 抖音发布页 DOM：标题=input[placeholder*=填写作品标题]，描述=div.zone-container[contenteditable]
@@ -383,7 +397,7 @@ class DouYinBaseUploader(BaseVideoUploader):
         description_editor = page.locator('div.zone-container[contenteditable="true"]').first
         await description_editor.wait_for(state="visible", timeout=120000)
         await description_editor.click()
-        await page.keyboard.press("Control+KeyA")
+        await page.keyboard.press(get_select_all_shortcut())
         await page.keyboard.press("Delete")
 
         # 先填正文描述，再填 #话题（此前 description 参数未被写入，导致抖音只有标签没有正文）
